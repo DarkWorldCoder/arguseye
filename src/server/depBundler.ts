@@ -1,4 +1,4 @@
-import { createRequire } from "node:module";
+import { builtinModules, createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { rolldown } from "rolldown";
@@ -6,6 +6,10 @@ import { ResolverFactory } from "oxc-resolver";
 import { init, parse } from "es-module-lexer";
 
 const FACADE = "\0facade:";
+// CommonJS on purpose: named imports from it become `undefined` at runtime instead of a build-time missing-export error.
+const EMPTY = "\0node-builtin-empty.cjs";
+/** Node built-ins have no browser equivalent; packages that reach them get an empty module, as bundlers do. */
+const NODE_BUILTINS = new Set(builtinModules.flatMap((m) => [m, `node:${m}`]));
 const ownRequire = createRequire(import.meta.url);
 /** Packages the preview runtime itself needs; resolved from this extension, not the user's project. */
 const OWN: Record<string, string> = { "react-refresh/runtime": ownRequire.resolve("react-refresh/runtime") };
@@ -69,8 +73,8 @@ export class DepBundler {
       plugins: [
         {
           name: "facades",
-          resolveId: (id) => (id.startsWith(FACADE) ? id : null),
-          load: (id) => (id.startsWith(FACADE) ? facades.get(id.slice(FACADE.length)) : null),
+          resolveId: (id) => (id.startsWith(FACADE) ? id : NODE_BUILTINS.has(id) ? EMPTY : null),
+          load: (id) => (id.startsWith(FACADE) ? facades.get(id.slice(FACADE.length)) : id === EMPTY ? "module.exports = {};" : null),
         },
       ],
     });

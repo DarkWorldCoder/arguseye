@@ -54,4 +54,12 @@ describe("dependency pre-bundling", () => {
     expect(lib.body).not.toMatch(/export\s*\{[^}]*\bdefault\b/);
     expect(lib.body).not.toContain("export default");
   });
+
+  it("gives packages that reach Node built-ins an empty module instead of a browser import of 'fs'", async () => {
+    server = await createPreviewServer({ root });
+    const lib = await get("/@deps/uses-node-builtin.js");
+    expect(lib.status, lib.body).toBe(200);
+    expect(lib.body).not.toMatch(/from\s*["'](node:)?(fs|crypto)["']/);
+    expect(lib.body).toMatch(/export\s*\{[^}]*\binBrowser\b/);
+  });
 });

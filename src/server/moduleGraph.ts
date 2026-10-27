@@ -50,6 +50,17 @@ export class ModuleGraph {
     for (const dep of this.projectImports.get(file) ?? []) await this.crawl(dep, seen);
   }
 
+  /** Loads a generated module's project imports, so the packages behind them are known before the first paint. */
+  async crawlVirtual(asFile: string, source: string): Promise<void> {
+    try {
+      await this.loadVirtual(asFile, source);
+    } catch {
+      return;
+    }
+    const seen = new Set<string>();
+    for (const dep of this.projectImports.get(asFile) ?? []) await this.crawl(dep, seen);
+  }
+
   /** A generated module that resolves its imports as if it lived at `asFile` (e.g. next to the root layout). */
   async loadVirtual(asFile: string, source: string): Promise<string> {
     const { code, errors } = await transform(asFile, source, { sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: true } });

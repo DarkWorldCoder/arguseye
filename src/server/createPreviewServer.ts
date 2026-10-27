@@ -69,11 +69,16 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const serveErrors: ServeError[] = [];
   const errorsSince = (since: number) => serveErrors.filter((e) => e.at >= since);
 
+  /** Where the generated wrapper "lives", so its imports resolve like the layout's. */
+  const wrapperFile = (entry: string | undefined) =>
+    entry ? entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
+
   async function prepare(file: string): Promise<{ generation: number }> {
     await graph.crawl(file);
-    // The root layout's providers render around every component, so their packages belong in the same build.
-    const { entry } = detectAppContext(options.root);
-    if (entry) await graph.crawl(entry);
+    // The root layout's providers render around every component, so their packages belong in the same build
+    // (only the providers: the layout itself may import server-only code).
+    const app = detectAppContext(options.root);
+    await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
     await deps.ensureBuilt();
     return { generation: deps.generation };
   }
@@ -139,8 +144,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       }
       if (url.pathname === "/@wrapper") {
         const app = detectAppContext(options.root);
-        const asFile = app.entry ? app.entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
-        return send(res, 200, "text/javascript", await graph.loadVirtual(asFile, wrapperModule(app.wrappers)));
+        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers)));
       }
       if (url.pathname === "/@errors") {
         return send(res, 200, "application/json", JSON.stringify(errorsSince(Number(url.searchParams.get("since") ?? 0))));
