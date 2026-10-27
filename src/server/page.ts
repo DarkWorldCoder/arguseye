@@ -87,6 +87,14 @@ const explain = async (error, since) => {
   return [String(error?.stack ?? error)];
 };
 
+/** The frame is settled once fonts are ready and the component's images have loaded (or 3 s passed). */
+const settled = () => {
+  const images = [...document.getElementById("root").querySelectorAll("img")].filter((img) => !img.complete);
+  const loads = images.map((img) => new Promise((done) => { img.addEventListener("load", done, { once: true }); img.addEventListener("error", done, { once: true }); }));
+  const timeout = new Promise((done) => setTimeout(done, 3000));
+  return Promise.race([Promise.all([document.fonts.ready, ...loads]), timeout]);
+};
+
 /** The root layout's providers, loaded once per epoch; a broken layout is reported and the component still renders. */
 let wrapperEpoch = -1, wrapper;
 const appWrapper = async (since) => {
@@ -119,6 +127,7 @@ cp.show = async (target, state) => {
     if (target.fresh) mountKey++;
     const Wrapper = await appWrapper(since);
     flushSync(() => root.render(createElement(Wrapper, null, createElement(Component, { ...reviveProps(target.props), key: mountKey }))));
+    await settled();
   } catch (error) {
     cp.errors.push(...(await explain(error, since)));
   }
