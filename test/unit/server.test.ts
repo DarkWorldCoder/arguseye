@@ -27,6 +27,16 @@ describe("preview server HTTP", () => {
   });
 });
 
+describe("preview server HTTP: dynamic imports", () => {
+  it("rewrites dynamic import() specifiers with their quotes kept", async () => {
+    server = await createPreviewServer({ root });
+    const { body } = await get(server.moduleUrl(path.join(root, "components/Lazy.tsx")));
+    expect(body).toMatch(/import\("\/@fs[^"]+\/components\/ProductCard\.tsx[^"]*"\)/);
+    expect(body).toMatch(/import\("\/@fs[^"]+\/components\/format\.ts[^"]*"\)/);
+    expect(body).not.toMatch(/import\(\/@fs/);
+  });
+});
+
 describe("dependency pre-bundling", () => {
   it("serves npm packages as ESM with their named exports, sharing one React instance", async () => {
     server = await createPreviewServer({ root });

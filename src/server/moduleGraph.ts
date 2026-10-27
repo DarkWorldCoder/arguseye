@@ -109,7 +109,8 @@ export class ModuleGraph {
       if (imp.type === "import-meta" || imp.specifier === undefined) continue;
       const url = this.urlFor(file, imp.specifier);
       if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
-      out += code.slice(last, imp.start) + url;
+      // A dynamic import's span includes its quotes; a static import's does not.
+      out += code.slice(last, imp.start) + (imp.type === "dynamic" ? JSON.stringify(url) : url);
       last = imp.end;
     }
     this.projectImports.set(file, project);
