@@ -23,7 +23,7 @@ type Content = Array<{ type: string; text?: string; data?: string; mimeType?: st
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["describe_props", "list_usages", "render_component", "render_usages"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["describe_props", "list_usages", "render_component", "render_diff", "render_usages"]);
   });
 
   it("render_component returns a PNG and a compact text snapshot for a real usage, by project-relative path", async () => {
@@ -83,4 +83,16 @@ describe("MCP tools (what a coding agent calls)", () => {
     expect(text).toContain("Title");
     expect(text).toContain("props: sample");
   });
+});
+
+it("returns structured evidence without images when summary output is requested", async () => {
+  const result = await client.callTool({ name: "render_component", arguments: { file: "components/ProductCard.tsx", export: "ProductCard", usage: "app/page.tsx:9", output: "summary" } });
+  expect((result.content as Content).some((c) => c.type === "image")).toBe(false);
+  const evidence = result.structuredContent as any;
+  expect(evidence.captureId).toBeTruthy();
+  expect(evidence.target.props.title).toBe("Wireless Headphones");
+  expect(evidence.errors).toEqual([]);
+  const diff = await client.callTool({ name: "render_diff", arguments: { baselineId: evidence.captureId, output: "summary" } });
+  expect((diff.structuredContent as any).status).toBe("unchanged");
+  expect((diff.content as Content).some((c) => c.type === "image")).toBe(false);
 });

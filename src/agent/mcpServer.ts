@@ -1,4 +1,5 @@
 import path from "node:path";
+import { renderEvidence, diffEvidence } from "./renderEvidence.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createRenderer, type RenderRequest, type RenderResult } from "./createRenderer.js";
@@ -15,7 +16,9 @@ const target = {
   file: z.string().describe("Component file, relative to the project root or absolute"),
   export: z.string().optional().describe('Export to render; defaults to "default"'),
 };
+const output = z.enum(["image", "summary", "both"]).optional().describe("Return images, compact evidence, or both (default)");
 const look = {
+  output,
   viewport: z.string().optional().describe('"mobile", "tablet", "desktop" (default) or "WIDTHxHEIGHT"'),
 };
 
@@ -31,7 +34,7 @@ export async function createMcpServer(options: { root: string }) {
     if (!value) return undefined;
     if (VIEWPORTS[value]) return VIEWPORTS[value];
     const [width, height] = value.split("x").map(Number);
-    if (!width || !height) throw new Error(`Unknown viewport "${value}"`);
+    if (![width, height].every((n) => Number.isInteger(n) && n > 0 && n <= 8192) || !/^\d+x\d+$/.test(value)) throw new Error(`Unknown viewport "${value}"`);
     return { width, height };
   }
 
@@ -48,7 +51,7 @@ export async function createMcpServer(options: { root: string }) {
     const errors = result.errors.length
       ? `errors:\n${result.errors.map((e) => `- ${tidy(e)}`).join("\n")}`
       : "errors: none";
-    return `${head.join(" · ")}\n${errors}\n${result.snapshot}`;
+    return `${head.join(" · ")}\n${errors}\n${result.warnings.map((w) => "warning: " + w).join("\n")}\n${result.snapshot}`;
   }
 
   /** Short stacks with project-relative paths instead of preview-server URLs. */
@@ -62,13 +65,13 @@ export async function createMcpServer(options: { root: string }) {
       .replaceAll(root + path.sep, "");
   }
 
-  async function renderContent(request: RenderRequest) {
+  async function renderContent(request: RenderRequest, output = "both") {
     const result = await renderer.render(request);
     return {
       result,
       content: [
-        { type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" },
-        { type: "text" as const, text: describe(request, result) },
+        ...(output === "summary" ? [] : [{ type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" }]),
+        ...(output === "image" ? [] : [{ type: "text" as const, text: describe(request, result) }]),
       ],
     };
   }
@@ -93,13 +96,27 @@ export async function createMcpServer(options: { root: string }) {
     async (args) => {
       try {
         const request = { file: abs(args.file), exportName: args.export, usage: args.usage, props: args.props, viewport: viewport(args.viewport) };
-        const { result, content } = await renderContent(request);
-        return { isError: result.errors.length > 0, content };
+        const { result, content } = await renderContent(request, args.output);
+        return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
       } catch (error) {
         return failure(error);
       }
     },
   );
+
+  server.registerTool("render_diff", {
+    description: "Compare current source against an immutable captureId returned by render_component. Reuses the original resolved props and viewport; changed pixels are evidence, not a correctness verdict.",
+    inputSchema: { baselineId: z.string(), output },
+  }, async (args) => {
+    try {
+      const result = await renderer.diff(args.baselineId);
+      const content = [
+        ...(args.output === "summary" ? [] : [result.before.png, result.after.png, result.diffPng].map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }))),
+        ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels; accessibility changed: ${result.snapshotChanged}\n${result.after.warnings.join("\n")}\n${result.newErrors.join("\n")}` }]),
+      ];
+      return { isError: result.after.errors.length > 0, content, structuredContent: diffEvidence(result) };
+    } catch (error) { return failure(error); }
+  });
 
   server.registerTool(
     "describe_props",

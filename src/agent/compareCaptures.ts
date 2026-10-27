@@ -38,9 +38,10 @@ export async function compareCaptures(page: Page, before: RenderResult, after: R
     ctx.putImageData(next, 0, 0);
     return { changedPixels, changedPercent: changedPixels / (width * height) * 100, png: canvas.toDataURL("image/png").split(",")[1], dimensions: { before: { width: aImg.width, height: aImg.height }, after: { width: bImg.width, height: bImg.height } } };
   }, [before.png.toString("base64"), after.png.toString("base64")]);
+  const { png, ...metrics } = pixels;
   const snapshotChanged = before.snapshot !== after.snapshot;
   return {
-    ...pixels, diffPng: Buffer.from(pixels.png, "base64"), before, after, snapshotChanged,
+    ...metrics, diffPng: Buffer.from(png, "base64"), before, after, snapshotChanged,
     status: !before.complete || !after.complete ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
     newErrors: after.errors.filter((e) => !before.errors.includes(e)),
     resolvedErrors: before.errors.filter((e) => !after.errors.includes(e)),
