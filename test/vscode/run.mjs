@@ -14,6 +14,6 @@ await bundle.close();
 await runTests({
   extensionDevelopmentPath: repo,
   extensionTestsPath: path.join(repo, "dist-test/suite.cjs"),
-  extensionTestsEnv: { CP_FIXTURE_ROOT: path.join(repo, "test/fixtures/react-app") },
+  extensionTestsEnv: { CP_FIXTURE_ROOT: path.join(repo, "test/fixtures/react-app"), CP_HOLD_MS: process.env.CP_HOLD_MS },
   launchArgs: [path.join(repo, "test/fixtures/react-app"), "--disable-extensions", "--disable-workspace-trust"],
 });

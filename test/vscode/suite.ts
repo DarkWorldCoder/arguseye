@@ -44,4 +44,7 @@ export async function run(): Promise<void> {
   const followed = await api.waitForStatus((s) => s.file === page && s.status === "mounted", 10000);
   assert.match(followed.text, /Hi Ayush/);
   console.log("SUITE OK:", JSON.stringify({ first: shown.text.slice(0, 60), updated: updated.text.slice(0, 40), followed: followed.text.slice(0, 20) }));
+
+  // For screenshots: keep the window up after the checks (CP_HOLD_MS=15000 npm run test:vscode).
+  if (process.env.CP_HOLD_MS) await new Promise((r) => setTimeout(r, Number(process.env.CP_HOLD_MS)));
 }
