@@ -15,14 +15,22 @@ export function decodeTarget(encoded: string): PreviewTarget {
   return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 }
 
-export function previewHtml(
-  target: PreviewTarget,
-  state: { epoch: number; versions: Record<string, number>; live: boolean },
-): string {
+export type PageContext = {
+  state: { epoch: number; versions: Record<string, number>; live: boolean };
+  htmlClass?: string;
+  bodyClass?: string;
+  /** Module URLs of the app's global stylesheets, loaded before the component so the cascade matches. */
+  globalCssUrls: string[];
+};
+
+const attr = (value: string) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+export function previewHtml(target: PreviewTarget, { state, htmlClass, bodyClass, globalCssUrls }: PageContext): string {
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
+  const globals = globalCssUrls.map((u) => `<script type="module" src="${attr(u)}"></script>`).join("\n");
   return `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html${htmlClass ? ` class="${attr(htmlClass)}"` : ""}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
 window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [] };
 const fail = (message) => { window.__CP__.errors.push(String(message)); window.__CP__.status = "error"; };
@@ -30,8 +38,9 @@ addEventListener("error", (e) => fail(e.error?.stack ?? e.message));
 addEventListener("unhandledrejection", (e) => fail(e.reason?.stack ?? e.reason));
 </script>
 <script type="module" src="/@refresh-setup"></script>
+${globals}
 <script type="module" src="/@runtime"></script>
-</head><body style="margin:0"><div id="root" style="display:inline-block;min-width:1px"></div></body></html>`;
+</head><body${bodyClass ? ` class="${attr(bodyClass)}"` : ""}><div id="root" style="display:inline-block;min-width:1px"></div></body></html>`;
 }
 
 /** Installs the React Refresh hook before react-dom loads (module scripts run in document order). */

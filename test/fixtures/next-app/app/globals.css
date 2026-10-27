@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: rgb(255, 87, 34);
+}
+
+:root {
+  --radius-card: 18px;
+}
+
+body {
+  font-family: Georgia, serif;
+}

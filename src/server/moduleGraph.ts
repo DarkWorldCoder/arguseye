@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { ResolverFactory } from "oxc-resolver";
 import { transform } from "oxc-transform";
 import { init, parse } from "es-module-lexer";
+import { transform as transformCss } from "lightningcss";
 import type { DepBundler } from "./depBundler.js";
 import { createResolver } from "./resolver.js";
 
@@ -80,12 +81,23 @@ export class ModuleGraph {
   }
 }
 
-function cssModule(file: string, css: string): string {
+/** A stylesheet as a JS module: injects (or replaces) its <style>; CSS modules also export their class map. */
+function cssModule(file: string, source: string): string {
+  let css = source;
+  let classes: Record<string, string> | undefined;
+  if (/\.module\.css$/.test(file)) {
+    const result = transformCss({ filename: file, code: Buffer.from(source), cssModules: true });
+    css = result.code.toString();
+    classes = Object.fromEntries(
+      Object.entries(result.exports ?? {}).map(([name, e]) => [name, [e.name, ...e.composes.map((c) => c.name)].join(" ")]),
+    );
+  }
   const id = JSON.stringify(file);
   return [
     `let style = document.querySelector(\`style[data-file=\${JSON.stringify(${id})}]\`);`,
     `if (!style) { style = document.createElement("style"); style.dataset.file = ${id}; document.head.append(style); }`,
     `style.textContent = ${JSON.stringify(css)};`,
+    classes ? `export default ${JSON.stringify(classes)};` : "",
   ].join("\n");
 }
 

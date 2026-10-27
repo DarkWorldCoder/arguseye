@@ -3,6 +3,7 @@ import { statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
+import { detectAppContext } from "../project/appContext.js";
 import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 
 export type PreviewServerOptions = {
@@ -76,7 +77,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     try {
       if (url.pathname === "/") {
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
-        return send(res, 200, "text/html", previewHtml(decodeTarget(url.searchParams.get("t") ?? ""), state));
+        const app = detectAppContext(options.root);
+        const globalCssUrls = app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`);
+        const target = decodeTarget(url.searchParams.get("t") ?? "");
+        return send(res, 200, "text/html", previewHtml(target, { state, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
       if (url.pathname === "/@events") {
         res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
@@ -17,6 +17,9 @@ let page: Page;
 beforeAll(async () => {
   server = await createPreviewServer({ root });
   browser = await chromium.launch({ channel: "chrome" });
+});
+afterEach(() => {
+  for (const file of [card, cardCss, format]) server.updateBuffer(file, undefined);
 });
 afterAll(async () => {
   await browser?.close();
