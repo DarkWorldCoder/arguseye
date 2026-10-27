@@ -27,6 +27,8 @@ export type PreviewServer = {
   sourceRevision(): string;
   /** Per-file overlay version for incremental static analysis. */
   version(file: string): number;
+  /** Context and framework limitations observed while preparing project modules. */
+  warnings(): string[];
   /** Reads the same unsaved source as the module graph. */
   readSource(file: string): Promise<string>;
   moduleUrl(file: string): string;
@@ -69,10 +71,16 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   /** mtime of each file as last served from disk, to spot edits made outside the editor. */
   const servedMtimes = new Map<string, number>();
   const hashes = new Map<string, string>();
+  const moduleWarnings = new Map<string, string[]>();
+  const appContext = () => detectAppContext(options.root, (file) => overlay.get(file) ?? readFileSync(file, "utf8"));
   const readSource = async (file: string) => {
     const buffered = overlay.get(file);
     if (buffered === undefined) servedMtimes.set(file, statSync(file).mtimeMs);
     const source = buffered ?? await readFromDisk(file);
+    const warnings: string[] = [];
+    if (/next\/(headers|font|server)|["']use server["']/.test(source)) warnings.push(`${file}: Next.js server/font behavior requires the application runtime.`);
+    if (/useNuxtApp|useAsyncData|defineNuxtConfig/.test(source)) warnings.push(`${file}: Nuxt application context is unsupported.`);
+    moduleWarnings.set(file, warnings);
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
     return source;
   };
@@ -90,7 +98,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
     // (only the providers: the layout itself may import server-only code).
-    const app = detectAppContext(options.root);
+    const app = appContext();
     if (app.entry) await readSource(app.entry);
     if (!file.endsWith(".vue")) await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
     else deps.add("vue");
@@ -153,12 +161,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const target = decodeTarget(url.searchParams.get("t") ?? "");
         await prepare(target.file);
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
-        const app = detectAppContext(options.root);
+        const app = appContext();
         const globalCssUrls = app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`);
         return send(res, 200, "text/html", previewHtml(target, { state, env: publicEnv(options.root), globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
       if (url.pathname === "/@wrapper") {
-        const app = detectAppContext(options.root);
+        const app = appContext();
         return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers)));
       }
       if (url.pathname === "/@errors") {
@@ -208,6 +216,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   return {
     url: `http://127.0.0.1:${port}`,
+    warnings: () => [...appContext().warnings, ...[...moduleWarnings.values()].flat()],
     version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
     readSource,

@@ -13,6 +13,8 @@ export type AppContext = {
   bodyClass?: string;
   /** What the layout nests around `{children}`, outermost first: providers and host elements. */
   wrappers: Wrapper[];
+  /** Context that could not be reconstructed statically; successful pixels must not conceal these gaps. */
+  warnings: string[];
 };
 
 export type Wrapper =
@@ -29,11 +31,11 @@ const EXTS = [".tsx", ".jsx", ".ts", ".js"];
 const STYLE = /\.(css|scss|sass)$/;
 
 /** Reads the project's root layout statically, so previews get the same global styles as the app. */
-export function detectAppContext(root: string): AppContext {
+export function detectAppContext(root: string, readSource: (file: string) => string = (file) => readFileSync(file, "utf8")): AppContext {
   const entry = ENTRIES.flatMap((e) => EXTS.map((x) => path.join(root, e + x))).find((f) => existsSync(f));
-  if (!entry) return { globalCss: [], wrappers: [] };
+  if (!entry) return { globalCss: [], wrappers: [], warnings: [] };
 
-  const code = readFileSync(entry, "utf8");
+  const code = readSource(entry);
   const { program, module } = parseSync(entry, code);
   const resolver = createResolver();
   const globalCss = module.staticImports
@@ -41,7 +43,8 @@ export function detectAppContext(root: string): AppContext {
     .filter((spec) => STYLE.test(spec))
     .flatMap((spec) => resolver.resolveFileSync(entry, spec).path ?? []);
 
-  const context: AppContext = { entry, globalCss, wrappers: wrapperChain(program, code) };
+  const warnings: string[] = [];
+  const context: AppContext = { entry, globalCss, wrappers: wrapperChain(program, code, warnings), warnings };
   new Visitor({
     JSXOpeningElement(node: any) {
       if (node.name.type !== "JSXIdentifier" || (node.name.name !== "html" && node.name.name !== "body")) return;
@@ -49,6 +52,7 @@ export function detectAppContext(root: string): AppContext {
         (a: any) => a.type === "JSXAttribute" && a.name.name === "className",
       )?.value;
       const value = literalClass(className);
+      if (className && value === undefined) warnings.push(`${entry}: runtime ${node.name.name} className could not be reconstructed.`);
       if (value !== undefined) context[node.name.name === "html" ? "htmlClass" : "bodyClass"] = value;
     },
   }).visit(program);
@@ -71,7 +75,7 @@ const HOST_SKIP = new Set(["html", "body", "head"]);
  * the layout passes; props that need runtime values are dropped. Elements defined in the layout file itself
  * cannot be imported, so they are skipped.
  */
-function wrapperChain(program: any, code: string): Wrapper[] {
+function wrapperChain(program: any, code: string, warnings: string[]): Wrapper[] {
   const imports = new Map<string, { source: string; importName: string }>();
   for (const node of program.body) {
     if (node.type !== "ImportDeclaration") continue;
@@ -111,11 +115,11 @@ function wrapperChain(program: any, code: string): Wrapper[] {
     const name = el.openingElement.name;
     const props: Record<string, unknown> = {};
     for (const attr of el.openingElement.attributes) {
-      if (attr.type !== "JSXAttribute" || attr.name.type !== "JSXIdentifier") continue;
+      if (attr.type !== "JSXAttribute" || attr.name.type !== "JSXIdentifier") { warnings.push("Runtime provider input omitted: " + code.slice(attr.start, attr.end)); continue; }
       try {
         props[attr.name.name] = attr.value === null ? true : attr.value.type === "JSXExpressionContainer" ? literal(attr.value.expression) : literal(attr.value);
       } catch {
-        // depends on runtime values: left out
+        warnings.push("Runtime provider input omitted: " + code.slice(attr.start, attr.end));
       }
     }
     if (name.type === "JSXIdentifier" && /^[a-z]/.test(name.name)) {
@@ -124,7 +128,7 @@ function wrapperChain(program: any, code: string): Wrapper[] {
     }
     const rootName = name.type === "JSXMemberExpression" ? memberRoot(name) : name.type === "JSXIdentifier" ? name.name : undefined;
     const imported = rootName ? imports.get(rootName) : undefined;
-    if (!imported) continue;
+    if (!imported) { warnings.push("Local layout wrapper could not be imported: " + (rootName ?? "unknown")); continue; }
     const member = name.type === "JSXMemberExpression" ? code.slice(name.start, name.end).split(".").slice(1).join(".") : undefined;
     wrappers.push({ kind: "component", source: imported.source, importName: imported.importName, member, props });
   }

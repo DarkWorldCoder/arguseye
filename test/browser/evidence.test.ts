@@ -76,3 +76,22 @@ describe("render evidence and edit verification", () => {
     await expect(renderer.diff("expired-id")).rejects.toThrow(/expired-id.*render/i);
   });
 });
+
+it("evicts the oldest capture after 64 newer successful renders", async () => {
+  const oldest = await renderer.render(target);
+  let last = oldest;
+  for (let i = 0; i < 64; i++) last = await renderer.render(target);
+  await expect(renderer.diff(oldest.captureId!)).rejects.toThrow(/expired.*render/i);
+  expect((await renderer.diff(last.captureId!)).status).toBe("unchanged");
+}, 20000);
+
+it("reports unsettled assets and marks their comparisons incomplete", async () => {
+  const source = readFileSync(file, "utf8");
+  try {
+    renderer.server.updateBuffer(file, source.replace("<h2", '<img src="/missing-image.png"/><h2'));
+    const result = await renderer.render(target);
+    expect(result.warnings.join()).toContain("Assets did not settle");
+    expect(result.complete).toBe(false);
+    expect((await renderer.diff(result.captureId!)).status).toBe("incomplete");
+  } finally { renderer.server.updateBuffer(file, undefined); }
+});

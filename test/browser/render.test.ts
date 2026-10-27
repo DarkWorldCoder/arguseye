@@ -29,13 +29,15 @@ describe("headless render (what an agent gets back)", () => {
 
     const timings: number[] = [];
     let last;
-    for (const price of [10, 20, 30]) {
+    for (const price of Array.from({ length: 20 }, (_, i) => i + 1)) {
       last = await renderer.render({ file: card, exportName: "ProductCard", props: { title: "Lamp", price } });
       timings.push(last.ms);
     }
 
-    expect(last!.snapshot).toContain("$30.00");
-    expect(Math.min(...timings)).toBeLessThan(100);
+    expect(last!.snapshot).toContain("$20.00");
+    const p95 = [...timings].sort((a, b) => a - b)[Math.ceil(timings.length * 0.95) - 1];
+    console.log("warm render p95", p95, "ms; samples", timings.join(","));
+    expect(p95).toBeLessThanOrEqual(100);
   });
 
   it("finds where a component is used and the real props each usage passes", async () => {
@@ -48,7 +50,16 @@ describe("headless render (what an agent gets back)", () => {
         unresolved: [],
       },
       { id: "app/page.tsx:10", props: { title: "USB-C Cable", price: 9.5 }, unresolved: [] },
+      { id: "app/shop/page.tsx:7", props: { title: "Standing Desk", price: 499 }, unresolved: [] },
     ]);
+  });
+
+  it("finds usages that import the component through a barrel (index.ts re-exports, renamed or star)", async () => {
+    expect((await renderer.listUsages(card, "ProductCard")).map((u) => u.id)).toEqual(["app/page.tsx:9", "app/page.tsx:10", "app/shop/page.tsx:7"]);
+    expect(await renderer.listUsages(path.join(root, "components/Alert.tsx"), "Alert")).toEqual([
+      { id: "app/shop/page.tsx:6", props: { title: "Sale ends soon", tone: "danger" }, unresolved: [] },
+    ]);
+    expect((await renderer.listUsages(path.join(root, "components/Greet.tsx"), "Greet")).map((u) => u.id)).toEqual(["app/shop/page.tsx:8"]);
   });
 
   it("renders a component with the props from a real usage", async () => {

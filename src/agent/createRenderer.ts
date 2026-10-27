@@ -171,11 +171,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         }
       }
 
-      const warnings: string[] = [];
+      const warnings: string[] = server.warnings();
       if (unresolved.length) warnings.push("Runtime usage inputs were not evaluated: " + unresolved.join(", "));
       if (propsSource === "sample") warnings.push("Sample props were generated from types; these are not real application data.");
-      const source = await server.readSource(rest.file);
-      if (/next\/(headers|font|server)|["']use server["']/.test(source)) warnings.push("Unsupported Next.js server/font behavior requires the application runtime.");
+
       const settled = await page.evaluate(async () => {
         const pending = [...document.images].filter((img) => !img.complete);
         if (pending.length || document.fonts.status !== "loaded") {
