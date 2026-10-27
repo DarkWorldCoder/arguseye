@@ -1,4 +1,5 @@
 import http from "node:http";
+import { statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
@@ -11,20 +12,19 @@ export type PreviewServerOptions = {
 export type PreviewServer = {
   url: string;
   moduleUrl(file: string): string;
-  /** URL of a page that renders `target` and reports `window.__CP__.status`. */
-  pageUrl(target: PreviewTarget): string;
+  /** URL of a page that renders `target` and reports `window.__CP__.status`. `live: false` skips pushed updates. */
+  pageUrl(target: PreviewTarget, options?: { live?: boolean }): string;
+  /** Picks up files changed on disk since they were served (e.g. saved by an agent) and returns the version state. */
+  syncDisk(): VersionState;
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
   updateBuffer(file: string, text: string | undefined): Update;
   close(): Promise<void>;
 };
 
 /** Pushed to open pages: `css` re-applies a stylesheet, `refresh` hot-swaps components, `reload` re-runs the graph. */
-export type Update = {
-  kind: "css" | "refresh" | "reload";
-  file: string;
-  epoch: number;
-  versions: Record<string, number>;
-};
+export type VersionState = { epoch: number; versions: Record<string, number> };
+
+export type Update = VersionState & { kind: "css" | "refresh" | "reload"; file: string };
 
 export async function createPreviewServer(options: PreviewServerOptions): Promise<PreviewServer> {
   const overlay = new Map<string, string>();
@@ -32,12 +32,36 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   let epoch = 0;
   const query = (file: string) => `?e=${epoch}${versions[file] ? `&v=${versions[file]}` : ""}`;
   const deps = new DepBundler(options.root);
-  const graph = new ModuleGraph(async (file) => overlay.get(file) ?? readFromDisk(file), deps, query);
+  /** mtime of each file as last served from disk, to spot edits made outside the editor. */
+  const servedMtimes = new Map<string, number>();
+  const readSource = async (file: string) => {
+    const buffered = overlay.get(file);
+    if (buffered !== undefined) return buffered;
+    servedMtimes.set(file, statSync(file).mtimeMs);
+    return readFromDisk(file);
+  };
+  const graph = new ModuleGraph(readSource, deps, query);
   const listeners = new Set<http.ServerResponse>();
 
   function updateBuffer(file: string, text: string | undefined): Update {
     if (text === undefined) overlay.delete(file);
     else overlay.set(file, text);
+    return changed(file);
+  }
+
+  function syncDisk(): VersionState {
+    for (const [file, mtime] of servedMtimes) {
+      if (overlay.has(file)) continue;
+      const now = statSync(file, { throwIfNoEntry: false })?.mtimeMs;
+      if (now !== mtime) {
+        servedMtimes.delete(file);
+        changed(file);
+      }
+    }
+    return { epoch, versions: { ...versions } };
+  }
+
+  function changed(file: string): Update {
     versions[file] = (versions[file] ?? 0) + 1;
     const kind = file.endsWith(".css") ? "css" : graph.isRefreshBoundary(file) ? "refresh" : "reload";
     if (kind === "reload") epoch++;
@@ -51,7 +75,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     const url = new URL(req.url ?? "/", "http://x");
     try {
       if (url.pathname === "/") {
-        const state = { epoch, versions };
+        const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         return send(res, 200, "text/html", previewHtml(decodeTarget(url.searchParams.get("t") ?? ""), state));
       }
       if (url.pathname === "/@events") {
@@ -88,8 +112,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   return {
     url: `http://127.0.0.1:${port}`,
     moduleUrl: (file) => `/@fs${file}`,
-    pageUrl: (target) => `/?t=${encodeTarget(target)}`,
+    pageUrl: (target, { live = true } = {}) => `/?t=${encodeTarget(target)}${live ? "" : "&live=0"}`,
     updateBuffer,
+    syncDisk,
     close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
   };
 }

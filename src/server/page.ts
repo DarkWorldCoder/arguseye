@@ -15,7 +15,10 @@ export function decodeTarget(encoded: string): PreviewTarget {
   return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 }
 
-export function previewHtml(target: PreviewTarget, state: { epoch: number; versions: Record<string, number> }): string {
+export function previewHtml(
+  target: PreviewTarget,
+  state: { epoch: number; versions: Record<string, number>; live: boolean },
+): string {
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
   return `<!doctype html>
@@ -49,7 +52,8 @@ const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file
 let root;
 let mountKey = 0;
 
-cp.show = async (target) => {
+cp.show = async (target, state) => {
+  if (state) Object.assign(cp, state);
   cp.target = target;
   cp.errors = [];
   cp.status = "loading";
@@ -73,7 +77,7 @@ cp.ready = cp.show(cp.target);
 
 /** Live updates pushed by the server as files change (saved or not). */
 cp.updates = 0;
-new EventSource("/@events").onmessage = async (event) => {
+if (cp.live) new EventSource("/@events").onmessage = async (event) => {
   const update = JSON.parse(event.data);
   cp.epoch = update.epoch;
   cp.versions = update.versions;

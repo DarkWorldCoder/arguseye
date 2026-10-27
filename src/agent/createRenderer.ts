@@ -39,7 +39,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
     const errors: string[] = [];
     pageErrors.set(page, errors);
     page.on("pageerror", (e) => errors.push(e.stack ?? e.message));
-    await page.goto(new URL(server.pageUrl(target), server.url).href);
+    await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready, null, { timeout: 15000 });
     await page.evaluate(() => (window as any).__CP__.ready);
     return page;
@@ -58,7 +58,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
       const page = await warm;
       const errors = pageErrors.get(page)!;
       errors.length = 0;
-      if (!isNew) await page.evaluate((t) => (window as any).__CP__.show(t), target);
+      if (!isNew) await page.evaluate(([t, s]) => (window as any).__CP__.show(t, s), [target, server.syncDisk()] as const);
 
       const { box, inPage } = await page.evaluate(() => {
         const r = document.getElementById("root")!.getBoundingClientRect();
