@@ -64,6 +64,16 @@ const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file
 let root;
 let mountKey = 0;
 
+/** Props travel as JSON; a value shaped { "$fn": "(x) => ..." } becomes a real function (callbacks, formatters). */
+const reviveProps = (value) => {
+  if (Array.isArray(value)) return value.map(reviveProps);
+  if (value && typeof value === "object") {
+    if (typeof value.$fn === "string" && Object.keys(value).length === 1) return new Function("return (" + value.$fn + ")")();
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, reviveProps(v)]));
+  }
+  return value;
+};
+
 /** A failed import() only says "failed to fetch"; the server kept the real reason. */
 const explain = async (error, since) => {
   if (!/Failed to fetch|Importing a module script failed|error loading dynamically imported module/i.test(String(error))) return [String(error?.stack ?? error)];
@@ -105,7 +115,7 @@ cp.show = async (target, state) => {
     root ??= createRoot(document.getElementById("root"), { onUncaughtError: fail, onRecoverableError: fail });
     if (target.fresh) mountKey++;
     const Wrapper = await appWrapper(since);
-    flushSync(() => root.render(createElement(Wrapper, null, createElement(Component, { ...target.props, key: mountKey }))));
+    flushSync(() => root.render(createElement(Wrapper, null, createElement(Component, { ...reviveProps(target.props), key: mountKey }))));
   } catch (error) {
     cp.errors.push(...(await explain(error, since)));
   }
