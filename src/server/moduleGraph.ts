@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import type { ResolverFactory } from "oxc-resolver";
 import { transform } from "oxc-transform";
 import { init, parse } from "es-module-lexer";
-import { transform as transformCss } from "lightningcss";
 import type { DepBundler } from "./depBundler.js";
+import type { CssPipeline } from "./cssPipeline.js";
 import { createResolver } from "./resolver.js";
 
 const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
@@ -18,6 +18,7 @@ export class ModuleGraph {
     private deps: DepBundler,
     /** Cache-busting query for a file's current version, e.g. `?e=0&v=2`. */
     private query: (file: string) => string,
+    private css: CssPipeline,
   ) {}
 
   /** True when the module only registers components, so Fast Refresh can swap it in place. */
@@ -27,7 +28,7 @@ export class ModuleGraph {
 
   async load(file: string): Promise<string> {
     const source = await this.readSource(file);
-    if (file.endsWith(".css")) return cssModule(file, source);
+    if (file.endsWith(".css")) return cssModule(file, await this.css.process(file, source));
     const { code, errors } = await transform(file, source, {
       sourceType: "module",
       jsx: { runtime: "automatic", development: true, refresh: true },
@@ -82,16 +83,7 @@ export class ModuleGraph {
 }
 
 /** A stylesheet as a JS module: injects (or replaces) its <style>; CSS modules also export their class map. */
-function cssModule(file: string, source: string): string {
-  let css = source;
-  let classes: Record<string, string> | undefined;
-  if (/\.module\.css$/.test(file)) {
-    const result = transformCss({ filename: file, code: Buffer.from(source), cssModules: true });
-    css = result.code.toString();
-    classes = Object.fromEntries(
-      Object.entries(result.exports ?? {}).map(([name, e]) => [name, [e.name, ...e.composes.map((c) => c.name)].join(" ")]),
-    );
-  }
+function cssModule(file: string, { css, classes }: { css: string; classes?: Record<string, string> }): string {
   const id = JSON.stringify(file);
   return [
     `let style = document.querySelector(\`style[data-file=\${JSON.stringify(${id})}]\`);`,

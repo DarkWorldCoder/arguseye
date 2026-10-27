@@ -21,4 +21,26 @@ describe("the component looks exactly as in the app", () => {
     expect(await preview.page.evaluate(() => document.body.className)).toBe("bg-zinc-50 text-zinc-900 antialiased");
     expect(await preview.page.evaluate(() => document.documentElement.className)).toBe("scroll-smooth");
   });
+
+  it("generates Tailwind v4 utilities used by the component, with the project's theme", async () => {
+    // Expected values come from tailwindcss/theme.css (v4.3) and the fixture's @theme block.
+    expect(await preview.style("body", "background-color")).toBe("oklch(0.985 0 none)");
+    expect(await preview.style("section", "background-color")).toBe("oklch(0.546 0.245 262.881)");
+    expect(await preview.style("section", "padding-top")).toBe("32px");
+    expect(await preview.style("a", "background-color")).toBe("rgb(255, 87, 34)");
+    expect(await preview.style("a", "padding-left")).toBe("13px");
+    expect(await preview.style("h1", "letter-spacing")).toBe("3px");
+  });
+
+  it("adds Tailwind classes typed in an unsaved edit", async () => {
+    const hero = path.join(root, "components/Hero.tsx");
+    const source = await import("node:fs").then((fs) => fs.readFileSync(hero, "utf8"));
+    try {
+      preview.server.updateBuffer(hero, source.replace("bg-blue-600 p-8", "bg-blue-600 p-8 uppercase tracking-[7px]"));
+      await expect.poll(() => preview.style("section", "text-transform")).toBe("uppercase");
+      expect(await preview.style("section", "letter-spacing")).toBe("7px");
+    } finally {
+      preview.server.updateBuffer(hero, undefined);
+    }
+  });
 });

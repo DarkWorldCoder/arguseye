@@ -1,8 +1,9 @@
 import http from "node:http";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
+import { CssPipeline } from "./cssPipeline.js";
 import { detectAppContext } from "../project/appContext.js";
 import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 
@@ -41,12 +42,18 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     servedMtimes.set(file, statSync(file).mtimeMs);
     return readFromDisk(file);
   };
-  const graph = new ModuleGraph(readSource, deps, query);
+  const css = new CssPipeline(options.root);
+  const graph = new ModuleGraph(readSource, deps, query, css);
   const listeners = new Set<http.ServerResponse>();
 
   function updateBuffer(file: string, text: string | undefined): Update {
     if (text === undefined) overlay.delete(file);
     else overlay.set(file, text);
+    if (!file.endsWith(".css")) {
+      // New utility classes in the edit: re-send the Tailwind sheets first so styles land with the markup.
+      const content = text ?? readFileSync(file, "utf8");
+      for (const sheet of css.sourceChanged(file, content)) changed(sheet);
+    }
     return changed(file);
   }
 
@@ -56,6 +63,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       const now = statSync(file, { throwIfNoEntry: false })?.mtimeMs;
       if (now !== mtime) {
         servedMtimes.delete(file);
+        if (now !== undefined && !file.endsWith(".css")) {
+          for (const sheet of css.sourceChanged(file, readFileSync(file, "utf8"))) changed(sheet);
+        }
         changed(file);
       }
     }
