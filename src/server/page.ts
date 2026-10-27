@@ -59,9 +59,11 @@ cp.show = async (target, state) => {
   cp.status = "loading";
   try {
     const mod = await import(moduleUrl(target.file));
-    const Component = mod[target.exportName ?? "default"] ?? mod.default;
-    if (typeof Component !== "function" && typeof Component !== "object") {
-      throw new Error("No component export " + JSON.stringify(target.exportName ?? "default") + " in " + target.file);
+    const name = target.exportName ?? "default";
+    const Component = mod[name];
+    if (typeof Component !== "function" && (typeof Component !== "object" || Component === null)) {
+      const available = Object.keys(mod).join(", ") || "none";
+      throw new Error("No component export " + JSON.stringify(name) + " in " + target.file + " (exports: " + available + ")");
     }
     root ??= createRoot(document.getElementById("root"), { onUncaughtError: fail, onRecoverableError: fail });
     if (target.fresh) mountKey++;
