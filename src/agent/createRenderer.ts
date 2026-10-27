@@ -16,6 +16,8 @@ export type RenderResult = {
   snapshot: string;
   errors: string[];
   ms: number;
+  /** The page was reloaded first because this component needed packages bundled after the page loaded. */
+  reloaded: boolean;
 };
 
 export type Renderer = {
@@ -34,19 +36,28 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
   const pages = new Map<string, Promise<Page>>();
   const pageErrors = new WeakMap<Page, string[]>();
   const cdp = new WeakMap<Page, CDPSession>();
+  /** Bundle generation each warm page was loaded under. */
+  const generations = new WeakMap<Page, number>();
 
   async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget): Promise<Page> {
     const page = await browser.newPage({ viewport });
     const errors: string[] = [];
     pageErrors.set(page, errors);
     page.on("pageerror", (e) => errors.push(e.stack ?? e.message));
+    await load(page, target);
+    cdp.set(page, await page.context().newCDPSession(page));
+    return page;
+  }
+
+  /** Navigates a page to `target`; the server bundles the packages it needs before responding. */
+  async function load(page: Page, target: PreviewTarget) {
+    const { generation } = await server.prepare(target.file);
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready, null, { timeout: 15000 });
     await page.evaluate(() => (window as any).__CP__.ready);
     // Agents get the settled frame: transitions end instantly, animations hold still, no blinking caret.
     await page.addStyleTag({ content: FREEZE_MOTION });
-    cdp.set(page, await page.context().newCDPSession(page));
-    return page;
+    generations.set(page, generation);
   }
 
   return {
@@ -62,7 +73,17 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
       const page = await warm;
       const errors = pageErrors.get(page)!;
       errors.length = 0;
-      if (!isNew) await page.evaluate(([t, s]) => (window as any).__CP__.show(t, s), [target, server.syncDisk()] as const);
+      let reloaded = false;
+      if (!isNew) {
+        const state = server.syncDisk();
+        const { generation } = await server.prepare(target.file);
+        if (generation !== generations.get(page)) {
+          reloaded = true;
+          await load(page, target);
+        } else {
+          await page.evaluate(([t, s]) => (window as any).__CP__.show(t, s), [target, state] as const);
+        }
+      }
 
       const { box, inPage } = await page.evaluate(() => {
         const r = document.getElementById("root")!.getBoundingClientRect();
@@ -72,7 +93,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
         };
       });
       const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator("#root").ariaSnapshot()]);
-      return { png, snapshot, errors: unique([...inPage, ...errors]), ms: Math.round(performance.now() - started) };
+      return { png, snapshot, errors: unique([...inPage, ...errors]), ms: Math.round(performance.now() - started), reloaded };
     },
     async close() {
       await browser.close();

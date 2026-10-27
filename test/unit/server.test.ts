@@ -51,6 +51,7 @@ describe("dependency pre-bundling", () => {
     expect(lib.status, lib.body).toBe(200);
     expect(lib.body).toMatch(/export\s*\{[^}]*\bGreeting\b/);
     expect(lib.body).toMatch(/export\s*\{[^}]*\bshout\b/);
-    expect(lib.body).not.toMatch(/\bdefault\b/);
+    expect(lib.body).not.toMatch(/export\s*\{[^}]*\bdefault\b/);
+    expect(lib.body).not.toContain("export default");
   });
 });

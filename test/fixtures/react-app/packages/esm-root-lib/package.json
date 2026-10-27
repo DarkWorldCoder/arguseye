@@ -1,1 +1,10 @@
-{ "name": "esm-root-lib", "version": "1.0.0", "main": "./node/index.js", "module": "./index.js", "sideEffects": false }
+{
+  "name": "esm-root-lib",
+  "version": "1.0.0",
+  "main": "./node/index.js",
+  "module": "./index.js",
+  "sideEffects": false,
+  "peerDependencies": {
+    "react": "*"
+  }
+}

@@ -33,6 +33,9 @@ export function previewHtml(target: PreviewTarget, { state, htmlClass, bodyClass
 <html${htmlClass ? ` class="${attr(htmlClass)}"` : ""}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
 window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [] };
+// Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
+window.process ??= { env: { NODE_ENV: "development" } };
+window.global ??= window;
 const fail = (message) => { window.__CP__.errors.push(String(message)); window.__CP__.status = "error"; };
 addEventListener("error", (e) => fail(e.error?.stack ?? e.message));
 addEventListener("unhandledrejection", (e) => fail(e.reason?.stack ?? e.reason));
@@ -116,6 +119,7 @@ cp.ready = cp.show(cp.target).then(cp.report);
 cp.updates = 0;
 if (cp.live) new EventSource("/@events").onmessage = async (event) => {
   const update = JSON.parse(event.data);
+  if (update.full) return location.reload();
   cp.epoch = update.epoch;
   cp.versions = update.versions;
   try {

@@ -68,4 +68,28 @@ describe("headless render (what an agent gets back)", () => {
     expect(result.errors[0]).toContain("components/Broken.tsx");
     expect(result.errors[0]).not.toContain("Failed to fetch");
   });
+
+  it("reloads the page (and says so) when a later render pulls in a package the first build did not have", async () => {
+    await renderer.render({ file: path.join(root, "components/Alert.tsx"), exportName: "Alert", props: { title: "First" } });
+
+    const result = await renderer.render({ file: path.join(root, "components/Greet.tsx"), exportName: "Greet", props: { name: "Ada" } });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Hello Ada!");
+    expect(result.reloaded).toBe(true);
+
+    const again = await renderer.render({ file: path.join(root, "components/Greet.tsx"), exportName: "Greet", props: { name: "Bo" } });
+    expect(again.reloaded).toBe(false);
+  });
+
+  it("bundles every package a component needs before the first paint, so a cold render never reloads", async () => {
+    const fresh = await createRenderer({ root });
+    try {
+      const result = await fresh.render({ file: path.join(root, "components/Greet.tsx"), exportName: "Greet", props: { name: "Cy" } });
+      expect(result.errors).toEqual([]);
+      expect(result.snapshot).toContain("Hello Cy!");
+      expect(result.reloaded).toBe(false);
+    } finally {
+      await fresh.close();
+    }
+  });
 });

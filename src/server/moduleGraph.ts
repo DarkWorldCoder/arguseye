@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
+import { join as pathJoin } from "node:path";
 import type { ResolverFactory } from "oxc-resolver";
 import { transform } from "oxc-transform";
 import { init, parse } from "es-module-lexer";
 import type { DepBundler } from "./depBundler.js";
 import { isStylesheet, type CssPipeline } from "./cssPipeline.js";
 import { assetModule, importsImagesAsObjects } from "./assets.js";
+import { isShim, shimFor } from "./shims.js";
 import { createResolver } from "./resolver.js";
 
 const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
@@ -14,6 +16,8 @@ export class ModuleGraph {
   private resolver: ResolverFactory = createResolver();
   private boundaries = new Set<string>();
   private imagesAsObjects: boolean;
+  /** Project files each module imports, from its last load; feeds `crawl`. */
+  private projectImports = new Map<string, string[]>();
 
   constructor(
     private readSource: (file: string) => Promise<string>,
@@ -21,7 +25,7 @@ export class ModuleGraph {
     /** Cache-busting query for a file's current version, e.g. `?e=0&v=2`. */
     private query: (file: string) => string,
     private css: CssPipeline,
-    root: string,
+    private root: string,
   ) {
     this.imagesAsObjects = importsImagesAsObjects(root);
   }
@@ -29,6 +33,21 @@ export class ModuleGraph {
   /** True when the module only registers components, so Fast Refresh can swap it in place. */
   isRefreshBoundary(file: string): boolean {
     return this.boundaries.has(file);
+  }
+
+  /**
+   * Loads `file` and everything it imports from the project, so every npm package it needs is known
+   * (and can be bundled once) before the page loads anything.
+   */
+  async crawl(file: string, seen = new Set<string>()): Promise<void> {
+    if (seen.has(file) || !SCRIPT_EXT.test(file)) return;
+    seen.add(file);
+    try {
+      await this.load(file);
+    } catch {
+      return; // the error is reported when the page requests the module
+    }
+    for (const dep of this.projectImports.get(file) ?? []) await this.crawl(dep, seen);
   }
 
   async load(file: string): Promise<string> {
@@ -67,17 +86,25 @@ export class ModuleGraph {
     const [imports] = parse(code, file);
     let out = "";
     let last = 0;
+    const project: string[] = [];
     for (const imp of imports) {
       if (imp.type === "import-meta" || imp.specifier === undefined) continue;
-      out += code.slice(last, imp.start) + this.urlFor(file, imp.specifier);
+      const url = this.urlFor(file, imp.specifier);
+      if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
+      out += code.slice(last, imp.start) + url;
       last = imp.end;
     }
+    this.projectImports.set(file, project);
     return out + code.slice(last);
   }
 
   private urlFor(importer: string, specifier: string): string {
     if (specifier.startsWith("/@")) return specifier;
-    const { path, error } = this.resolver.resolveFileSync(importer, specifier);
+    const shim = shimFor(specifier);
+    if (shim) return `/@fs${shim}${this.query(shim)}`;
+    // Shims live in this package but must use the project's react, so they resolve from the project root.
+    const from = isShim(importer) ? pathJoin(this.root, "index.js") : importer;
+    const { path, error } = this.resolver.resolveFileSync(from, specifier);
     if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer}: ${error}`);
     if (path.includes("/node_modules/")) {
       this.deps.add(specifier);

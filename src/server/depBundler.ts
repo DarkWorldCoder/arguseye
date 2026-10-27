@@ -20,6 +20,8 @@ export class DepBundler {
   private built = new Set<string>();
   private files = new Map<string, string>();
   private building: Promise<void> | undefined;
+  /** Bumps on every build. Chunks may re-hash between builds, so a page must not mix two generations. */
+  generation = 0;
   private resolver = new ResolverFactory({
     conditionNames: ["browser", "import", "module", "default"],
     mainFields: ["browser", "module", "main"],
@@ -40,7 +42,11 @@ export class DepBundler {
     return this.files.get(name);
   }
 
-  private async ensureBuilt() {
+  hasPending(): boolean {
+    return [...this.wanted].some((s) => !this.built.has(s));
+  }
+
+  async ensureBuilt() {
     while ([...this.wanted].some((s) => !this.built.has(s))) {
       this.building ??= this.build().finally(() => (this.building = undefined));
       await this.building;
@@ -76,6 +82,7 @@ export class DepBundler {
     await bundle.close();
     this.files = new Map(output.flatMap((o) => (o.type === "chunk" ? [[o.fileName, o.code] as const] : [])));
     specs.forEach((s) => this.built.add(s));
+    this.generation++;
   }
 
   /**

@@ -43,6 +43,7 @@ class PreviewPanel implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
   private servers = new Map<string, Promise<PreviewServer>>();
   private shownRoot: string | undefined;
+  private shownGeneration: number | undefined;
   private current: PreviewStatus | undefined;
   private statusChanged = new vscode.EventEmitter<PreviewStatus>();
   private pending = new Map<string, NodeJS.Timeout>();
@@ -113,8 +114,10 @@ class PreviewPanel implements vscode.Disposable {
     const server = await this.server(root);
     const target = await this.targetFor(root, file, document.getText());
     this.current = { file, status: "loading", errors: [], text: "" };
-    if (this.shownRoot !== root) {
+    const { generation } = await server.prepare(file);
+    if (this.shownRoot !== root || this.shownGeneration !== generation) {
       this.shownRoot = root;
+      this.shownGeneration = generation;
       const origin = (await vscode.env.asExternalUri(vscode.Uri.parse(server.url))).toString().replace(/\/$/, "");
       this.panel!.webview.html = webviewHtml(origin, `${origin}${server.pageUrl(target)}`);
     } else {
@@ -147,6 +150,7 @@ class PreviewPanel implements vscode.Disposable {
     panel.onDidDispose(() => {
       this.panel = undefined;
       this.shownRoot = undefined;
+      this.shownGeneration = undefined;
     });
     return panel;
   }

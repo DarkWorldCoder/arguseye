@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     testTimeout: 20000,
+    globalSetup: ["test/globalSetup.ts"],
     projects: [
       { test: { name: "unit", include: ["test/unit/**/*.test.ts"] } },
       // Browser tests carry timing budgets, so they run one file at a time on a quiet machine.

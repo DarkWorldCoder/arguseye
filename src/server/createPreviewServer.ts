@@ -5,6 +5,8 @@ import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
 import { CssPipeline, isStylesheet } from "./cssPipeline.js";
 import { contentType } from "./assets.js";
+
+const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext } from "../project/appContext.js";
@@ -23,6 +25,11 @@ export type PreviewServer = {
   syncDisk(): VersionState;
   /** Errors from serving modules (transform, resolve, bundling) since `since` (ms epoch), newest last. */
   errorsSince(since: number): ServeError[];
+  /**
+   * Makes sure every package `file` needs is bundled, and returns the bundle generation. A page loaded
+   * under an older generation must be reloaded before showing `file`, or it would mix two React copies.
+   */
+  prepare(file: string): Promise<{ generation: number }>;
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
   updateBuffer(file: string, text: string | undefined): Update;
   close(): Promise<void>;
@@ -31,7 +38,12 @@ export type PreviewServer = {
 /** Pushed to open pages: `css` re-applies a stylesheet, `refresh` hot-swaps components, `reload` re-runs the graph. */
 export type VersionState = { epoch: number; versions: Record<string, number> };
 
-export type Update = VersionState & { kind: "css" | "refresh" | "reload"; file: string };
+export type Update = VersionState & {
+  kind: "css" | "refresh" | "reload";
+  file: string;
+  /** The edit pulled in packages that were not bundled yet: the whole page must reload. */
+  full?: boolean;
+};
 
 /** A module the server could not produce; the browser only sees "failed to fetch", so this is kept for it. */
 export type ServeError = { url: string; message: string; at: number };
@@ -57,6 +69,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const serveErrors: ServeError[] = [];
   const errorsSince = (since: number) => serveErrors.filter((e) => e.at >= since);
 
+  async function prepare(file: string): Promise<{ generation: number }> {
+    await graph.crawl(file);
+    await deps.ensureBuilt();
+    return { generation: deps.generation };
+  }
+
   function updateBuffer(file: string, text: string | undefined): Update {
     if (text === undefined) overlay.delete(file);
     else overlay.set(file, text);
@@ -65,7 +83,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       const content = text ?? readFileSync(file, "utf8");
       for (const sheet of css.sourceChanged(file, content)) changed(sheet);
     }
-    return changed(file);
+    const update = changed(file, SCRIPT_EXT.test(file));
+    return update;
   }
 
   function syncDisk(): VersionState {
@@ -83,24 +102,36 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return { epoch, versions: { ...versions } };
   }
 
-  function changed(file: string): Update {
+  function changed(file: string, mayAddPackages = false): Update {
     versions[file] = (versions[file] ?? 0) + 1;
+    if (mayAddPackages) {
+      // A new import of a package not bundled yet: bundle it and have pages reload into the new generation.
+      void graph.crawl(file).then(() => {
+        if (!deps.hasPending()) return;
+        return deps.ensureBuilt().then(() => broadcast({ kind: "reload", file, epoch: ++epoch, versions: { ...versions }, full: true }));
+      });
+    }
     const kind = isStylesheet(file) ? "css" : graph.isRefreshBoundary(file) ? "refresh" : "reload";
     if (kind === "reload") epoch++;
     const update: Update = { kind, file, epoch, versions: { ...versions } };
+    broadcast(update);
+    return update;
+  }
+
+  function broadcast(update: Update) {
     const message = `data: ${JSON.stringify(update)}\n\n`;
     for (const res of listeners) res.write(message);
-    return update;
   }
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     try {
       if (url.pathname === "/") {
+        const target = decodeTarget(url.searchParams.get("t") ?? "");
+        await prepare(target.file);
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         const app = detectAppContext(options.root);
         const globalCssUrls = app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`);
-        const target = decodeTarget(url.searchParams.get("t") ?? "");
         return send(res, 200, "text/html", previewHtml(target, { state, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
       if (url.pathname === "/@errors") {
@@ -154,6 +185,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     updateBuffer,
     syncDisk,
     errorsSince,
+    prepare,
     close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
   };
 }
