@@ -70,6 +70,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   /** One warm page per viewport: later renders swap the target in place instead of reloading. */
   const pages = new Map<string, Promise<Page>>();
   const pageErrors = new WeakMap<Page, string[]>();
+  const loadedModules = new WeakMap<Page, Set<string>>();
   const cdp = new WeakMap<Page, CDPSession>();
   /** Bundle generation each warm page was loaded under. */
   const generations = new WeakMap<Page, number>();
@@ -77,6 +78,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget): Promise<Page> {
     const page = await browser.newPage({ viewport });
     const errors: string[] = [];
+    const loaded = new Set<string>(); loadedModules.set(page, loaded);
+    page.on("request", (request) => { const url = new URL(request.url()); if (url.pathname.startsWith("/@fs/")) loaded.add(decodeURIComponent(url.pathname.slice(4))); });
     pageErrors.set(page, errors);
     page.on("pageerror", (e) => errors.push(e.stack ?? e.message));
     await load(page, target);
@@ -167,11 +170,29 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           reloaded = true;
           await load(page, target);
         } else {
-          await page.evaluate(([t, s]) => (window as any).__CP__.show(t, s), [target, state] as const);
+          await page.evaluate(async ([t, s, loaded, context]) => {
+            const cp = (window as any).__CP__;
+            const sameEpoch = cp.epoch === s.epoch;
+            const changed = loaded.filter((f) => s.versions[f] && s.versions[f] !== cp.versions[f]);
+            Object.assign(cp, s);
+            const updateErrors: string[] = [];
+            for (const file of changed) {
+              if (/\.(css|scss|sass)$/.test(file) || sameEpoch) {
+                try { await cp.importModule("/@fs" + file + "?e=" + s.epoch + "&v=" + s.versions[file]); } catch (error) { updateErrors.push(String(error)); }
+              }
+            }
+            if (sameEpoch && changed.some((f) => !/\.(css|scss|sass)$/.test(f))) cp.refresh?.performReactRefresh();
+            if (document.documentElement.className !== (context.htmlClass ?? "")) document.documentElement.className = context.htmlClass ?? "";
+            if (document.body.className !== (context.bodyClass ?? "")) document.body.className = context.bodyClass ?? "";
+            for (const url of context.globalCssUrls) { try { await cp.importModule(url); } catch (error) { updateErrors.push(String(error)); } }
+            await cp.show(t, s);
+            cp.errors.push(...updateErrors);
+            return cp.status;
+          }, [target, state, [...loadedModules.get(page)!], server.context()] as const);
         }
       }
 
-      const warnings: string[] = server.warnings();
+      const warnings: string[] = server.warnings(rest.file);
       if (unresolved.length) warnings.push("Runtime usage inputs were not evaluated: " + unresolved.join(", "));
       if (propsSource === "sample") warnings.push("Sample props were generated from types; these are not real application data.");
 

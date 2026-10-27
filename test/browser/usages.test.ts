@@ -54,3 +54,26 @@ it("reports dropped runtime provider inputs even when the child renders", async 
   expect(result.warnings.join()).toContain("title={title}");
   expect(result.complete).toBe(false);
 });
+
+it("applies root class and global style edits to a warm headless render", async () => {
+  const layout = path.join(root, "app/layout.tsx");
+  writeFileSync(path.join(root, "app/theme.css"), '.day .card {background:rgb(255,255,255)} .night .card {background:rgb(30,30,30)}');
+  writeFileSync(layout, 'import "./theme.css"; export default ({children}) => <html className="day"><body>{children}</body></html>;');
+  const target = { file: path.join(root, "components/ProductCard.tsx"), exportName: "ProductCard", props: { title: "Desk", price: 1 } };
+  const baseline = await renderer.render(target);
+  try {
+    renderer.server.updateBuffer(layout, readFileSync(layout, "utf8").replace('className="day"', 'className="night"'));
+    const result = await renderer.diff(baseline.captureId!);
+    expect(result.status).toBe("changed");
+    expect(result.changedPixels).toBeGreaterThan(0);
+    expect(result.snapshotChanged).toBe(false);
+  } finally { renderer.server.updateBuffer(layout, undefined); }
+});
+
+it("does not attribute unrelated server-only files to the rendered component", async () => {
+  writeFileSync(path.join(root, "app/unrelated.ts"), '"use server"; export async function action() { return 1; }');
+  const file = path.join(root, "components/ProductCard.tsx");
+  await renderer.listUsages(file, "ProductCard");
+  const result = await renderer.render({ file, exportName: "ProductCard", props: { title: "Desk", price: 1 } });
+  expect(result.warnings.join()).not.toContain("unrelated.ts");
+});

@@ -40,7 +40,9 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
       const start = performance.now();
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy ("));
       await page.getByRole("button", { name: "Buy (1)" }).waitFor();
-      expect(performance.now() - start).toBeLessThan(100);
+      const ms = performance.now() - start;
+      console.log("Vue edit-to-pixels", Math.round(ms), "ms; target 50 ms, enforced limit 100 ms");
+      expect(ms).toBeLessThan(100);
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy (").replace("rgb(0, 80, 120)", "rgb(255, 0, 0)"));
       await expect.poll(() => page.locator("h2").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 0, 0)");
       expect(await page.locator("button").innerText()).toBe("Buy (1)");

@@ -28,7 +28,9 @@ export type PreviewServer = {
   /** Per-file overlay version for incremental static analysis. */
   version(file: string): number;
   /** Context and framework limitations observed while preparing project modules. */
-  warnings(): string[];
+  warnings(file?: string): string[];
+  /** Current global style URLs and root classes for warm pages, including unsaved layout edits. */
+  context(): { globalCssUrls: string[]; htmlClass?: string; bodyClass?: string };
   /** Reads the same unsaved source as the module graph. */
   readSource(file: string): Promise<string>;
   moduleUrl(file: string): string;
@@ -95,6 +97,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     entry ? entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
 
   async function prepare(file: string): Promise<{ generation: number; cached: boolean }> {
+    (file.endsWith(".vue") ? ["vue"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"]).forEach((spec) => deps.add(spec));
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
     // (only the providers: the layout itself may import server-only code).
@@ -216,7 +219,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   return {
     url: `http://127.0.0.1:${port}`,
-    warnings: () => [...appContext().warnings, ...[...moduleWarnings.values()].flat()],
+    context: () => { const app = appContext(); return { globalCssUrls: app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
+    warnings: (file) => {
+      const app = appContext();
+      const relevant = file ? new Set([...graph.filesFor(file), ...graph.filesFor(wrapperFile(app.entry)), ...(app.entry ? [app.entry] : [])]) : undefined;
+      return [...app.warnings, ...[...moduleWarnings].filter(([source]) => !relevant || relevant.has(source)).flatMap(([, warnings]) => warnings)];
+    },
     version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
     readSource,

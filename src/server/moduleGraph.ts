@@ -34,6 +34,13 @@ export class ModuleGraph {
     this.imagesAsObjects = importsImagesAsObjects(root);
   }
 
+  /** Project dependencies reachable from a target's last transform, for scoped provenance and diagnostics. */
+  filesFor(file: string, seen = new Set<string>()): string[] {
+    if (seen.has(file)) return [];
+    seen.add(file);
+    return [file, ...(this.projectImports.get(file) ?? []).flatMap((dep) => this.filesFor(dep, seen))];
+  }
+
   /** True when the module only registers components, so Fast Refresh can swap it in place. */
   isRefreshBoundary(file: string): boolean {
     return this.boundaries.has(file);

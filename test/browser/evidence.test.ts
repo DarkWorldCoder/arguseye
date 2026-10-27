@@ -46,6 +46,7 @@ describe("render evidence and edit verification", () => {
       expect(result.after.snapshot).toContain("Desk");
       expect(result.after.sourceRevision).not.toBe(result.before.sourceRevision);
       expect(result.snapshotChanged).toBe(true);
+      expect(result.dimensions.after.height).not.toBe(result.dimensions.before.height);
       expect(result.diffPng.subarray(1, 4).toString()).toBe("PNG");
     } finally { renderer.server.updateBuffer(file, undefined); }
   });
@@ -82,7 +83,10 @@ it("evicts the oldest capture after 64 newer successful renders", async () => {
   let last = oldest;
   for (let i = 0; i < 64; i++) last = await renderer.render(target);
   await expect(renderer.diff(oldest.captureId!)).rejects.toThrow(/expired.*render/i);
-  expect((await renderer.diff(last.captureId!)).status).toBe("unchanged");
+  const compared = await renderer.diff(last.captureId!);
+  expect(compared.before.captureId).toBe(last.captureId);
+  expect(compared.after.errors).toEqual([]);
+  expect(compared.after.snapshot).toBe(compared.before.snapshot);
 }, 20000);
 
 it("reports unsettled assets and marks their comparisons incomplete", async () => {
@@ -93,5 +97,32 @@ it("reports unsettled assets and marks their comparisons incomplete", async () =
     expect(result.warnings.join()).toContain("Assets did not settle");
     expect(result.complete).toBe(false);
     expect((await renderer.diff(result.captureId!)).status).toBe("incomplete");
+  } finally { renderer.server.updateBuffer(file, undefined); }
+});
+
+it("detects a stylesheet-only edit on the warm headless page", async () => {
+  const cssFile = path.join(root, "components/ProductCard.css");
+  const baseline = await renderer.render(target);
+  try {
+    renderer.server.updateBuffer(cssFile, readFileSync(cssFile, "utf8").replace("rgb(22, 101, 52)", "rgb(0, 0, 255)"));
+    const diff = await renderer.diff(baseline.captureId!);
+    expect(diff.status).toBe("changed");
+    expect(diff.changedPixels).toBeGreaterThan(0);
+    expect(diff.snapshotChanged).toBe(false);
+    expect(diff.after.sourceRevision).not.toBe(diff.before.sourceRevision);
+  } finally { renderer.server.updateBuffer(cssFile, undefined); }
+});
+
+it("reports resolved errors when a persisted failed render is repaired", async () => {
+  try {
+    renderer.server.updateBuffer(file, 'export function ProductCard() { throw new Error("missing provider"); }');
+    const failed = await renderer.render(target);
+    expect(failed.errors.join()).toContain("missing provider");
+    const baseline = renderer.restoreCapture(failed);
+    renderer.server.updateBuffer(file, undefined);
+    const result = await renderer.diff(baseline);
+    expect(result.resolvedErrors.join()).toContain("missing provider");
+    expect(result.after.errors).toEqual([]);
+    expect(result.status).toBe("incomplete");
   } finally { renderer.server.updateBuffer(file, undefined); }
 });

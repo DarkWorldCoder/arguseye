@@ -41,6 +41,7 @@ describe("live updates from unsaved edits", () => {
     server.updateBuffer(card, onDisk(card).replace("Add to cart", "Buy now"));
     await page.getByRole("button", { name: "Buy now (3)" }).waitFor({ timeout: 2000 });
     const ms = performance.now() - started;
+    console.log("React edit-to-pixels", Math.round(ms), "ms; target 50 ms, enforced limit 100 ms");
 
     expect(ms).toBeLessThan(100);
     server.updateBuffer(card, undefined);

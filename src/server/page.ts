@@ -37,6 +37,7 @@ export function previewHtml(target: PreviewTarget, { state, env, htmlClass, body
 <script>
 window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [] };
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
+window.__CP__.importModule = (url) => import(url);
 window.process ??= { env: ${envJson} };
 window.global ??= window;
 const fail = (message) => { window.__CP__.errors.push(String(message)); window.__CP__.status = "error"; };

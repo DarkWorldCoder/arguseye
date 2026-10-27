@@ -99,6 +99,8 @@ describe("headless render (what an agent gets back)", () => {
       expect(result.errors).toEqual([]);
       expect(result.snapshot).toContain("Hello Cy!");
       expect(result.reloaded).toBe(false);
+      const warm = await fresh.render({ file: path.join(root, "components/Greet.tsx"), exportName: "Greet", props: { name: "Di" } });
+      expect(warm.reloaded).toBe(false);
     } finally {
       await fresh.close();
     }
