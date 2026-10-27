@@ -27,9 +27,18 @@ export async function run(): Promise<void> {
   assert.equal(state.exportName, "ProductCard");
   assert.deepEqual(state.props, { title: "Wireless Headphones", price: 99, tags: ["audio", "bluetooth"], onSale: true });
   assert.deepEqual(state.schema.map((p) => `${p.name}${p.required ? "" : "?"}:${p.kind}`), ["title:string", "price:number", "tags?:array", "onSale?:boolean"]);
+  assert.ok(state.usages.some((u) => u.id === "app/page.tsx:9"));
+  await api.setUsage("app/page.tsx:10");
+  await api.waitForStatus((s) => /USB-C Cable/.test(s.text), 5000);
+  await api.setViewport("mobile");
+  assert.equal(api.state()!.viewport, "mobile");
+  await api.setUsage("app/page.tsx:9");
   await api.setProps({ ...state.props, title: "Desk Lamp", price: 12.5 });
   const edited = await api.waitForStatus((s) => /Desk Lamp/.test(s.text) && /\$12\.50/.test(s.text), 5000);
   assert.deepEqual(edited.errors, []);
+
+  const baseline = await api.captureBaseline();
+  assert.ok(baseline.captureId);
 
   // Typing in the editor (no save) updates the preview.
   const editor = await vscode.window.showTextDocument(document, vscode.ViewColumn.One);
@@ -37,6 +46,10 @@ export async function run(): Promise<void> {
   await editor.edit((e) => e.replace(new vscode.Range(at, at.translate(0, "Add to cart".length)), "Buy now"));
   const updated = await api.waitForStatus((s) => /Buy now \(0\)/.test(s.text) && /Desk Lamp/.test(s.text), 5000);
   assert.deepEqual(updated.errors, []);
+  const diff = await api.compareChanges();
+  assert.equal(diff.status, "changed");
+  assert.ok(diff.after.snapshot.includes("Buy now"));
+  assert.ok(diff.changedPixels > 0);
 
   // Switching to another component file follows along.
   const page = path.join(root, "app/page.tsx");

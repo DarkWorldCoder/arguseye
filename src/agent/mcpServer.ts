@@ -1,14 +1,10 @@
 import path from "node:path";
+import { VIEWPORTS, parseViewport } from "./viewports.js";
 import { renderEvidence, diffEvidence } from "./renderEvidence.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createRenderer, type RenderRequest, type RenderResult } from "./createRenderer.js";
 
-const VIEWPORTS: Record<string, { width: number; height: number }> = {
-  mobile: { width: 390, height: 844 },
-  tablet: { width: 820, height: 1180 },
-  desktop: { width: 1280, height: 800 },
-};
 /** Cap for render_usages so one call stays cheap on tokens. */
 const MAX_USAGES = 12;
 
@@ -30,13 +26,7 @@ export async function createMcpServer(options: { root: string }) {
   const abs = (file: string) => path.resolve(root, file);
   const rel = (file: string) => path.relative(root, file);
 
-  function viewport(value: string | undefined) {
-    if (!value) return undefined;
-    if (VIEWPORTS[value]) return VIEWPORTS[value];
-    const [width, height] = value.split("x").map(Number);
-    if (![width, height].every((n) => Number.isInteger(n) && n > 0 && n <= 8192) || !/^\d+x\d+$/.test(value)) throw new Error(`Unknown viewport "${value}"`);
-    return { width, height };
-  }
+  const viewport = (value: string | undefined) => parseViewport(value);
 
   /** One line of context, the errors, then the accessibility snapshot. */
   function describe(request: RenderRequest, result: RenderResult): string {

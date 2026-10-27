@@ -50,11 +50,11 @@ export type Renderer = {
 };
 
 /** Renders components headlessly so an agent can see them without running the app or a browser. */
-export async function createRenderer(options: { root: string }): Promise<Renderer> {
-  const server = await createPreviewServer({ root: options.root });
+export async function createRenderer(options: { root: string; server?: PreviewServer }): Promise<Renderer> {
+  const server = options.server ?? await createPreviewServer({ root: options.root });
   const usages = createUsageIndex(options.root, { readSource: server.readSource, version: server.version });
   let browser: Browser;
-  try { browser = await launchChrome(); } catch (error) { await server.close(); throw error; }
+  try { browser = await launchChrome(); } catch (error) { if (!options.server) await server.close(); throw error; }
   const captures = new Map<string, RenderResult>();
   let queue: Promise<unknown> = Promise.resolve();
   const serial = <T>(work: () => Promise<T>): Promise<T> => {
@@ -142,7 +142,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
       await queue;
       captures.clear();
       await browser.close();
-      await server.close();
+      if (!options.server) await server.close();
     },
   };
 

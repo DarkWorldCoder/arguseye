@@ -1,3 +1,4 @@
+import { parseViewport } from "./agent/viewports.js";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -83,7 +84,7 @@ if (values.help || !command) {
     if (command === "usages") {
       console.log(JSON.stringify(await renderer.listUsages(target.file, target.exportName), null, 2));
     } else {
-      const [width, height] = (values.viewport ?? "1280x800").split("x").map(Number);
+      const { width, height } = parseViewport(values.viewport);
       const result = await renderer.render({
         ...target,
         usage: values.usage,
