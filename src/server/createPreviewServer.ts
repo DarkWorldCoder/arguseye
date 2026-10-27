@@ -21,6 +21,8 @@ export type PreviewServer = {
   pageUrl(target: PreviewTarget, options?: { live?: boolean }): string;
   /** Picks up files changed on disk since they were served (e.g. saved by an agent) and returns the version state. */
   syncDisk(): VersionState;
+  /** Errors from serving modules (transform, resolve, bundling) since `since` (ms epoch), newest last. */
+  errorsSince(since: number): ServeError[];
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
   updateBuffer(file: string, text: string | undefined): Update;
   close(): Promise<void>;
@@ -30,6 +32,10 @@ export type PreviewServer = {
 export type VersionState = { epoch: number; versions: Record<string, number> };
 
 export type Update = VersionState & { kind: "css" | "refresh" | "reload"; file: string };
+
+/** A module the server could not produce; the browser only sees "failed to fetch", so this is kept for it. */
+export type ServeError = { url: string; message: string; at: number };
+const MAX_SERVE_ERRORS = 50;
 
 export async function createPreviewServer(options: PreviewServerOptions): Promise<PreviewServer> {
   const overlay = new Map<string, string>();
@@ -48,6 +54,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const css = new CssPipeline(options.root);
   const graph = new ModuleGraph(readSource, deps, query, css, options.root);
   const listeners = new Set<http.ServerResponse>();
+  const serveErrors: ServeError[] = [];
+  const errorsSince = (since: number) => serveErrors.filter((e) => e.at >= since);
 
   function updateBuffer(file: string, text: string | undefined): Update {
     if (text === undefined) overlay.delete(file);
@@ -95,6 +103,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const target = decodeTarget(url.searchParams.get("t") ?? "");
         return send(res, 200, "text/html", previewHtml(target, { state, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
+      if (url.pathname === "/@errors") {
+        return send(res, 200, "application/json", JSON.stringify(errorsSince(Number(url.searchParams.get("since") ?? 0))));
+      }
       if (url.pathname === "/@events") {
         res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
         res.write(": connected\n\n");
@@ -127,7 +138,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (publicFile.startsWith(path.join(options.root, "public")) && existsSync(publicFile)) return sendFile(res, publicFile);
       send(res, 404, "text/plain", "not found");
     } catch (err) {
-      send(res, 500, "text/plain", String((err as Error).stack ?? err));
+      const message = (err as Error).message ?? String(err);
+      serveErrors.push({ url: req.url ?? "", message, at: Date.now() });
+      if (serveErrors.length > MAX_SERVE_ERRORS) serveErrors.shift();
+      send(res, 500, "text/plain", message);
     }
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -139,6 +153,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     pageUrl: (target, { live = true } = {}) => `/?t=${encodeTarget(target)}${live ? "" : "&live=0"}`,
     updateBuffer,
     syncDisk,
+    errorsSince,
     close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
   };
 }

@@ -61,11 +61,22 @@ const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file
 let root;
 let mountKey = 0;
 
+/** A failed import() only says "failed to fetch"; the server kept the real reason. */
+const explain = async (error, since) => {
+  if (!/Failed to fetch|Importing a module script failed|error loading dynamically imported module/i.test(String(error))) return [String(error?.stack ?? error)];
+  try {
+    const served = await (await fetch("/@errors?since=" + since)).json();
+    if (served.length) return served.map((e) => e.message);
+  } catch {}
+  return [String(error?.stack ?? error)];
+};
+
 cp.show = async (target, state) => {
   if (state) Object.assign(cp, state);
   cp.target = target;
   cp.errors = [];
   cp.status = "loading";
+  const since = Date.now();
   try {
     const mod = await import(moduleUrl(target.file));
     const name = target.exportName ?? "default";
@@ -78,7 +89,7 @@ cp.show = async (target, state) => {
     if (target.fresh) mountKey++;
     flushSync(() => root.render(createElement(Component, { ...target.props, key: mountKey })));
   } catch (error) {
-    fail(error);
+    cp.errors.push(...(await explain(error, since)));
   }
   cp.status = cp.errors.length ? "error" : "mounted";
   return cp.status;

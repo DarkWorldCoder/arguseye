@@ -59,4 +59,13 @@ describe("headless render (what an agent gets back)", () => {
     expect(result.snapshot).toContain("$99.00");
     expect(result.snapshot).toContain("bluetooth");
   });
+
+  it("reports the server's real error when a module cannot be served, with the file and the import", async () => {
+    const result = await renderer.render({ file: path.join(root, "components/Broken.tsx"), exportName: "Broken" });
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('Cannot resolve "./does-not-exist"');
+    expect(result.errors[0]).toContain("components/Broken.tsx");
+    expect(result.errors[0]).not.toContain("Failed to fetch");
+  });
 });
