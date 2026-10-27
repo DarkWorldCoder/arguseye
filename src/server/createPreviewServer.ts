@@ -1,3 +1,4 @@
+import { vueRuntime } from "./vueRuntime.js";
 import http from "node:http";
 import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, statSync } from "node:fs";
@@ -7,10 +8,11 @@ import { DepBundler } from "./depBundler.js";
 import { CssPipeline, isStylesheet } from "./cssPipeline.js";
 import { contentType } from "./assets.js";
 
-const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
+const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue)$/;
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
+import { publicEnv } from "../project/publicEnv.js";
 import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 
 export type PreviewServerOptions = {
@@ -88,7 +90,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     // (only the providers: the layout itself may import server-only code).
     const app = detectAppContext(options.root);
     if (app.entry) await readSource(app.entry);
-    await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
+    if (!file.endsWith(".vue")) await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
+    else deps.add("vue");
     await deps.ensureBuilt();
     return { generation: deps.generation, cached: deps.cached };
   }
@@ -150,7 +153,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         const app = detectAppContext(options.root);
         const globalCssUrls = app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`);
-        return send(res, 200, "text/html", previewHtml(target, { state, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
+        return send(res, 200, "text/html", previewHtml(target, { state, env: publicEnv(options.root), globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
       if (url.pathname === "/@wrapper") {
         const app = detectAppContext(options.root);
@@ -170,6 +173,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         deps.add("react-refresh/runtime");
         return send(res, 200, "text/javascript", refreshSetup);
       }
+      if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "vue") return send(res, 200, "text/javascript", vueRuntime);
       if (url.pathname === "/@runtime") {
         ["react", "react-dom", "react-dom/client"].forEach((d) => deps.add(d));
         return send(res, 200, "text/javascript", reactRuntime);

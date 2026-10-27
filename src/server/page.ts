@@ -17,6 +17,8 @@ export function decodeTarget(encoded: string): PreviewTarget {
 
 export type PageContext = {
   state: { epoch: number; versions: Record<string, number>; live: boolean };
+  /** `NEXT_PUBLIC_*` and friends from the project's env files, as the app's build would expose them. */
+  env: Record<string, string>;
   htmlClass?: string;
   bodyClass?: string;
   /** Module URLs of the app's global stylesheets, loaded before the component so the cascade matches. */
@@ -25,24 +27,25 @@ export type PageContext = {
 
 const attr = (value: string) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
-export function previewHtml(target: PreviewTarget, { state, htmlClass, bodyClass, globalCssUrls }: PageContext): string {
+export function previewHtml(target: PreviewTarget, { state, env, htmlClass, bodyClass, globalCssUrls }: PageContext): string {
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
+  const envJson = JSON.stringify({ NODE_ENV: "development", ...env }).replace(/</g, "\\u003c");
   const globals = globalCssUrls.map((u) => `<script type="module" src="${attr(u)}"></script>`).join("\n");
   return `<!doctype html>
 <html${htmlClass ? ` class="${attr(htmlClass)}"` : ""}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
 window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [] };
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
-window.process ??= { env: { NODE_ENV: "development" } };
+window.process ??= { env: ${envJson} };
 window.global ??= window;
 const fail = (message) => { window.__CP__.errors.push(String(message)); window.__CP__.status = "error"; };
 addEventListener("error", (e) => fail(e.error?.stack ?? e.message));
 addEventListener("unhandledrejection", (e) => fail(e.reason?.stack ?? e.reason));
 </script>
-<script type="module" src="/@refresh-setup"></script>
+${target.file.endsWith(".vue") ? "" : '<script type="module" src="/@refresh-setup"></script>'}
 ${globals}
-<script type="module" src="/@runtime"></script>
+<script type="module" src="/@runtime${target.file.endsWith(".vue") ? "?framework=vue" : ""}"></script>
 </head><body${bodyClass ? ` class="${attr(bodyClass)}"` : ""}><div id="root"></div></body></html>`;
 }
 
