@@ -23,3 +23,7 @@ We prove it with an in-repo benchmark: same task, our MCP vs Playwright MCP + `n
 - Preview.js: closest idea in the editor (React/Vue/Svelte), stale since 2024, random props from types.
 - Marketplace previewers (Glance, JSX Preview, React File Preview, DevPreview, React Component Preview): React only, render on save, no real props.
 - Lightpanda (no rendering → no screenshots), Servo 0.1 (embeddable, React fidelity unproven): not used; Chromium stays the engine.
+
+## State (2026-10-27)
+Have: per-module oxc transform, Rolldown dep pre-bundle (ESM/CJS facades, one React per page, crawl before first paint, reload on new packages), unsaved-buffer live updates with Fast Refresh (~35 ms), root layout global CSS + html/body classes, Tailwind v4 and v3/PostCSS, Sass, CSS modules, assets and public/, next/link + next/image shims, process/global shims, real props from call sites, props schema from TypeScript + sample props, headless renderer (~40 ms warm, CDP capture, animations settled), MCP (render_component, list_usages, render_usages, describe_props), CLI (mcp, shot, usages), VS Code panel (follow, live edits, export picker, props form), real-project check on a Next 14 + MUI + Emotion + pnpm app.
+Next: providers from the root layout (MUI theme etc.), usage context (parent background), render_diff, color scheme, runtime diagnostics, snapshot refs, on-disk dep cache, Vue, next/font and next/navigation shims.
