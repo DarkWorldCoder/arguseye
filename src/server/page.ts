@@ -84,7 +84,22 @@ cp.show = async (target, state) => {
   return cp.status;
 };
 
-cp.ready = cp.show(cp.target);
+/** Tells a hosting panel (the VS Code webview) what is shown, so it can display status and errors. */
+cp.report = () => {
+  if (window.parent === window) return;
+  const root = document.getElementById("root");
+  window.parent.postMessage(
+    { source: "component-preview", file: cp.target.file, status: cp.status, errors: [...cp.errors], text: root.innerText },
+    "*",
+  );
+};
+addEventListener("message", async (event) => {
+  if (event.data?.type !== "cp:show") return;
+  await cp.show(event.data.target);
+  cp.report();
+});
+
+cp.ready = cp.show(cp.target).then(cp.report);
 
 /** Live updates pushed by the server as files change (saved or not). */
 cp.updates = 0;
@@ -104,4 +119,5 @@ if (cp.live) new EventSource("/@events").onmessage = async (event) => {
     cp.status = "error";
   }
   cp.updates++;
+  cp.report();
 };`;

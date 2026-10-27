@@ -48,5 +48,38 @@
     "dist",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact",
+    "onLanguage:vue"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "componentPreview.open",
+        "title": "Preview Component",
+        "category": "Component Preview",
+        "icon": "$(eye)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "componentPreview.open",
+          "group": "navigation",
+          "when": "resourceExtname =~ /\\.(tsx|jsx|vue)$/"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "componentPreview.open",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p",
+        "when": "editorTextFocus"
+      }
+    ]
+  }
 }

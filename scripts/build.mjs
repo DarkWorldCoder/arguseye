@@ -10,6 +10,11 @@ const external = [
   ...Object.keys(pkg.dependencies ?? {}),
 ].map((name) => new RegExp(`^${name.replace(/[/.]/g, "\\$&")}(/|$)`));
 
-const bundle = await rolldown({ input: { cli: "src/cli.ts" }, platform: "node", external });
-await bundle.write({ dir: "dist", format: "esm", entryFileNames: "[name].mjs", banner: "#!/usr/bin/env node" });
-await bundle.close();
+const cli = await rolldown({ input: { cli: "src/cli.ts" }, platform: "node", external });
+await cli.write({ dir: "dist", format: "esm", entryFileNames: "[name].mjs", banner: "#!/usr/bin/env node" });
+await cli.close();
+
+// The extension host loads CommonJS; the ESM-only deps are loaded lazily with import() inside it.
+const extension = await rolldown({ input: { extension: "src/extension/extension.ts" }, platform: "node", external });
+await extension.write({ dir: "dist", format: "cjs", entryFileNames: "[name].cjs", chunkFileNames: "[name]-[hash].cjs" });
+await extension.close();
