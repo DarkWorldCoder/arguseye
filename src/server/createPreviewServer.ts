@@ -1,6 +1,6 @@
 import http from "node:http";
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { appendFileSync, readFileSync, statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
@@ -21,6 +21,8 @@ export type PreviewServer = {
   url: string;
   /** Fingerprint of the source and styles actually read by this server, including unsaved buffers. */
   sourceRevision(): string;
+  /** Per-file overlay version for incremental static analysis. */
+  version(file: string): number;
   /** Reads the same unsaved source as the module graph. */
   readSource(file: string): Promise<string>;
   moduleUrl(file: string): string;
@@ -200,6 +202,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   return {
     url: `http://127.0.0.1:${port}`,
+    version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
     readSource,
     moduleUrl: (file) => `/@fs${file}`,
@@ -217,7 +220,11 @@ function sendFile(res: http.ServerResponse, file: string) {
   res.end(readFileSync(file));
 }
 
+/** CP_DEBUG_LOG=<file> appends every response, for debugging a host (like a webview) whose requests are invisible. */
+const debugLog = process.env.CP_DEBUG_LOG;
+
 function send(res: http.ServerResponse, status: number, type: string, body: string) {
+  if (debugLog) appendFileSync(debugLog, `${status} ${(res.req as http.IncomingMessage).url}\n`);
   res.writeHead(status, { "content-type": `${type}; charset=utf-8`, "cache-control": "no-cache" });
   res.end(body);
 }
