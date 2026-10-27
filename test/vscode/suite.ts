@@ -22,11 +22,20 @@ export async function run(): Promise<void> {
   assert.match(shown.text, /Wireless Headphones/, "shown with the real props from app/page.tsx");
   assert.match(shown.text, /Add to cart \(0\)/);
 
+  // The panel knows the component's props (from its type) and can re-render with edited ones.
+  const state = api.state()!;
+  assert.equal(state.exportName, "ProductCard");
+  assert.deepEqual(state.props, { title: "Wireless Headphones", price: 99, tags: ["audio", "bluetooth"], onSale: true });
+  assert.deepEqual(state.schema.map((p) => `${p.name}${p.required ? "" : "?"}:${p.kind}`), ["title:string", "price:number", "tags?:array", "onSale?:boolean"]);
+  await api.setProps({ ...state.props, title: "Desk Lamp", price: 12.5 });
+  const edited = await api.waitForStatus((s) => /Desk Lamp/.test(s.text) && /\$12\.50/.test(s.text), 5000);
+  assert.deepEqual(edited.errors, []);
+
   // Typing in the editor (no save) updates the preview.
-  const editor = vscode.window.activeTextEditor!;
+  const editor = await vscode.window.showTextDocument(document, vscode.ViewColumn.One);
   const at = document.positionAt(document.getText().indexOf("Add to cart"));
   await editor.edit((e) => e.replace(new vscode.Range(at, at.translate(0, "Add to cart".length)), "Buy now"));
-  const updated = await api.waitForStatus((s) => /Buy now \(0\)/.test(s.text), 5000);
+  const updated = await api.waitForStatus((s) => /Buy now \(0\)/.test(s.text) && /Desk Lamp/.test(s.text), 5000);
   assert.deepEqual(updated.errors, []);
 
   // Switching to another component file follows along.
