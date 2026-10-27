@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { parseSync, Visitor } from "oxc-parser";
@@ -34,7 +35,7 @@ export function createUsageIndex(root: string, options: { readSource?: (file: st
       const key = `${info.mtimeMs}:${info.ctimeMs}:${info.size}:${options.version?.(file) ?? 0}`;
       if (modules.get(file)?.key === key) return;
       const code = await (options.readSource ?? ((f) => readFile(f, "utf8")))(file);
-      modules.set(file, { key, parsed: parseModule(file, code) });
+      modules.set(file, { key, parsed: parseModule(file, code, root) });
     }));
   }
   const resolve = (file: string, spec: string) => resolver.resolveFileSync(file, spec).path;
@@ -83,7 +84,8 @@ export function createUsageIndex(root: string, options: { readSource?: (file: st
   };
 }
 
-function parseModule(file: string, code: string): Parsed {
+function parseModule(file: string, code: string, root: string): Parsed {
+  if (file.endsWith(".vue")) return parseVue(file, code, root);
   const result: Parsed = { code, imports: [], exports: [], calls: [] };
   const { program } = parseSync(file, code);
   for (const node of program.body as any[]) {
@@ -113,5 +115,36 @@ function parseModule(file: string, code: string): Parsed {
     else if (children.length) unresolved.push("children=" + code.slice(children[0].start, children.at(-1).end));
     result.calls.push({ local: opening.name.name, offset: opening.start, props, unresolved });
   } }).visit(program);
+  return result;
+}
+
+function parseVue(file: string, code: string, root: string): Parsed {
+  const compiler = createRequire(path.join(root, "package.json"))("vue/compiler-sfc");
+  const { descriptor } = compiler.parse(code, { filename: file });
+  const script = [descriptor.script?.content, descriptor.scriptSetup?.content].filter(Boolean).join("\n");
+  const result = parseModule(file + ".ts", script, root);
+  result.code = code; result.calls = [];
+  const kebab = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  function walk(node: any) {
+    if (node.type === 1) {
+      const imp = result.imports.find((i) => kebab(i.local) === kebab(node.tag));
+      if (imp) {
+        const props: Record<string, unknown> = {}, unresolved: string[] = [];
+        for (const attr of node.props) {
+          if (attr.type === 6) props[attr.name] = attr.value?.content ?? true;
+          else if (attr.name === "bind" && attr.arg?.isStatic && attr.exp) {
+            try {
+              const expr = parseSync("expression.ts", "(" + attr.exp.content + ")").program.body[0] as any;
+              props[attr.arg.content] = literal(expr.expression);
+            } catch { unresolved.push(attr.loc.source); }
+          } else unresolved.push(attr.loc.source);
+        }
+        if (node.children?.some((c: any) => c.type !== 2 || c.content.trim())) unresolved.push("slots=" + node.loc.source);
+        result.calls.push({ local: imp.local, offset: node.loc.start.offset, props, unresolved });
+      }
+    }
+    for (const child of node.children ?? []) walk(child);
+  }
+  if (descriptor.template?.ast) walk(descriptor.template.ast);
   return result;
 }

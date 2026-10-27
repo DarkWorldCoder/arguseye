@@ -135,7 +135,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
       after.unresolved = [...before.unresolved];
       after.warnings = unique([...before.warnings, ...after.warnings]);
       after.complete &&= before.complete;
-      const page = await pages.get(`${before.viewport.width}x${before.viewport.height}`)!;
+      const page = await pages.get(`${before.target.file.endsWith(".vue") ? "vue" : "react"}:${before.viewport.width}x${before.viewport.height}`)!;
       return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
     }),
     async close() {
@@ -152,7 +152,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
       rest.file = path.resolve(options.root, rest.file);
       const { props, propsSource, unresolved } = await resolveProps(rest, usage, resolved);
       const target = { fresh: true, ...rest, props };
-      const key = `${viewport.width}x${viewport.height}`;
+      const key = `${rest.file.endsWith(".vue") ? "vue" : "react"}:${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
       const isNew = !warm;
       if (!warm) pages.set(key, (warm = warmPage(viewport, target)));
@@ -187,14 +187,16 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
         return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"]);
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
-      const { box, inPage } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings } = await page.evaluate(() => {
         const r = document.getElementById("root")!.getBoundingClientRect();
         return {
           box: { x: r.x, y: r.y, width: Math.max(1, r.width), height: Math.max(1, r.height) },
           inPage: (window as any).__CP__.errors as string[],
+          runtimeWarnings: ((window as any).__CP__.warnings ?? []) as string[],
         };
       });
       const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator("#root").ariaSnapshot()]);
+      warnings.push(...runtimeWarnings);
       const allErrors = unique([...inPage, ...errors]);
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
       const result: RenderResult = {

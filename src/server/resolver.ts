@@ -6,6 +6,6 @@ export function createResolver(): ResolverFactory {
     tsconfig: "auto",
     conditionNames: ["browser", "import", "module", "default"],
     mainFields: ["browser", "module", "main"],
-    extensions: [".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"],
+    extensions: [".tsx", ".ts", ".jsx", ".js", ".mjs", ".json", ".vue"],
   });
 }

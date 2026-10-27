@@ -1,3 +1,4 @@
+import { createVueCompiler } from "./createVueCompiler.js";
 import { readFile } from "node:fs/promises";
 import { join as pathJoin } from "node:path";
 import type { ResolverFactory } from "oxc-resolver";
@@ -9,13 +10,15 @@ import { assetModule, importsImagesAsObjects } from "./assets.js";
 import { isShim, shimFor } from "./shims.js";
 import { createResolver } from "./resolver.js";
 
-const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
+const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue)$/;
 
 /** Turns project files into browser ESM the preview page can import directly. */
 export class ModuleGraph {
   private resolver: ResolverFactory = createResolver();
   private boundaries = new Set<string>();
   private imagesAsObjects: boolean;
+  private vue: ReturnType<typeof createVueCompiler>;
+  private transformed = new Map<string, { source: string; code: string }>();
   /** Project files each module imports, from its last load; feeds `crawl`. */
   private projectImports = new Map<string, string[]>();
 
@@ -27,6 +30,7 @@ export class ModuleGraph {
     private css: CssPipeline,
     private root: string,
   ) {
+    this.vue = createVueCompiler(root, css);
     this.imagesAsObjects = importsImagesAsObjects(root);
   }
 
@@ -72,12 +76,18 @@ export class ModuleGraph {
     if (!SCRIPT_EXT.test(file) && !isStylesheet(file)) return assetModule(file, this.imagesAsObjects);
     const source = await this.readSource(file);
     if (isStylesheet(file)) return cssModule(file, await this.css.process(file, source));
-    const { code, errors } = await transform(file, source, {
-      sourceType: "module",
-      jsx: { runtime: "automatic", development: true, refresh: true },
-    });
-    if (errors.length) throw new Error(errors.map((e) => e.message).join("\n"));
-    return this.rewriteImports(file, this.withRefresh(file, code));
+    let cached = this.transformed.get(file);
+    if (!cached || cached.source !== source) {
+      const vue = file.endsWith(".vue");
+      const input = vue ? await this.vue.compile(file, source) : source;
+      const { code, errors } = await transform(vue ? file + ".ts" : file, input, {
+        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: !vue },
+      });
+      if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
+      cached = { source, code: vue ? code : this.withRefresh(file, code) };
+      this.transformed.set(file, cached);
+    }
+    return this.rewriteImports(file, cached.code);
   }
 
   /** Lets React Fast Refresh swap this module's components in place, keeping their state. */
