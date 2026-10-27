@@ -6,6 +6,9 @@ import { ResolverFactory } from "oxc-resolver";
 import { init, parse } from "es-module-lexer";
 
 const FACADE = "\0facade:";
+const ownRequire = createRequire(import.meta.url);
+/** Packages the preview runtime itself needs; resolved from this extension, not the user's project. */
+const OWN: Record<string, string> = { "react-refresh/runtime": ownRequire.resolve("react-refresh/runtime") };
 const IDENT = /^[A-Za-z_$][\w$]*$/;
 
 /**
@@ -51,6 +54,7 @@ export class DepBundler {
       input: Object.fromEntries(specs.map((s) => [s, FACADE + s])),
       cwd: this.root,
       platform: "browser",
+      resolve: { alias: OWN },
       transform: { define: { "process.env.NODE_ENV": '"development"' } },
       plugins: [
         {
@@ -72,7 +76,9 @@ export class DepBundler {
 
   /** Re-exports a package so CommonJS packages (like React) expose their named exports. */
   private async facade(spec: string): Promise<string> {
-    const target = this.resolver.resolveFileSync(path.join(this.root, "index.js"), spec);
+    const target = OWN[spec]
+      ? { path: OWN[spec], moduleType: "commonjs" }
+      : this.resolver.resolveFileSync(path.join(this.root, "index.js"), spec);
     const id = JSON.stringify(spec);
     if (target.moduleType === "module" || /\.mjs$/.test(target.path ?? "")) {
       await init;
@@ -80,7 +86,8 @@ export class DepBundler {
       const hasDefault = exports.some((e) => e.type !== "reexport-all" && e.name === "default");
       return `export * from ${id};${hasDefault ? `export { default } from ${id};` : ""}`;
     }
-    const names = Object.keys(createRequire(path.join(this.root, "index.js"))(spec)).filter(
+    const load = OWN[spec] ? ownRequire : createRequire(path.join(this.root, "index.js"));
+    const names = Object.keys(load(OWN[spec] ?? spec)).filter(
       (k) => IDENT.test(k) && k !== "default" && k !== "__esModule",
     );
     return `import __m from ${id}; export default __m; export const { ${names.join(", ")} } = __m;`;

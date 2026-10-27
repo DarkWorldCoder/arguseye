@@ -2,6 +2,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
+import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 
 export type PreviewServerOptions = {
   root: string;
@@ -10,6 +11,8 @@ export type PreviewServerOptions = {
 export type PreviewServer = {
   url: string;
   moduleUrl(file: string): string;
+  /** URL of a page that renders `target` and reports `window.__CP__.status`. */
+  pageUrl(target: PreviewTarget): string;
   close(): Promise<void>;
 };
 
@@ -20,6 +23,17 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     try {
+      if (url.pathname === "/") {
+        return send(res, 200, "text/html", previewHtml(decodeTarget(url.searchParams.get("t") ?? "")));
+      }
+      if (url.pathname === "/@refresh-setup") {
+        deps.add("react-refresh/runtime");
+        return send(res, 200, "text/javascript", refreshSetup);
+      }
+      if (url.pathname === "/@runtime") {
+        ["react", "react-dom", "react-dom/client"].forEach((d) => deps.add(d));
+        return send(res, 200, "text/javascript", reactRuntime);
+      }
       if (url.pathname.startsWith("/@fs/")) {
         const file = decodeURIComponent(url.pathname.slice("/@fs".length));
         return send(res, 200, "text/javascript", await graph.load(file));
@@ -39,6 +53,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   return {
     url: `http://127.0.0.1:${port}`,
     moduleUrl: (file) => `/@fs${file}`,
+    pageUrl: (target) => `/?t=${encodeTarget(target)}`,
     close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
   };
 }

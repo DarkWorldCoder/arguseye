@@ -24,12 +24,28 @@ export class ModuleGraph {
 
   async load(file: string): Promise<string> {
     const source = await this.readSource(file);
+    if (file.endsWith(".css")) return cssModule(file, source);
     const { code, errors } = await transform(file, source, {
       sourceType: "module",
       jsx: { runtime: "automatic", development: true, refresh: true },
     });
     if (errors.length) throw new Error(errors.map((e) => e.message).join("\n"));
-    return this.rewriteImports(file, code);
+    return this.rewriteImports(file, this.withRefresh(file, code));
+  }
+
+  /** Lets React Fast Refresh swap this module's components in place, keeping their state. */
+  private withRefresh(file: string, code: string): string {
+    if (!code.includes("$RefreshReg$") && !code.includes("$RefreshSig$")) return code;
+    this.deps.add("react-refresh/runtime");
+    const id = JSON.stringify(file);
+    return [
+      `import __RR from "/@deps/react-refresh/runtime.js";`,
+      `const __prevReg = window.$RefreshReg$, __prevSig = window.$RefreshSig$;`,
+      `window.$RefreshReg$ = (type, name) => __RR.register(type, ${id} + " " + name);`,
+      `window.$RefreshSig$ = __RR.createSignatureFunctionForTransform;`,
+      code,
+      `window.$RefreshReg$ = __prevReg; window.$RefreshSig$ = __prevSig;`,
+    ].join("\n");
   }
 
   private async rewriteImports(file: string, code: string): Promise<string> {
@@ -55,6 +71,15 @@ export class ModuleGraph {
     }
     return SCRIPT_EXT.test(path) ? `/@fs${path}` : `/@fs${path}?import`;
   }
+}
+
+function cssModule(file: string, css: string): string {
+  const id = JSON.stringify(file);
+  return [
+    `let style = document.querySelector(\`style[data-file=\${JSON.stringify(${id})}]\`);`,
+    `if (!style) { style = document.createElement("style"); style.dataset.file = ${id}; document.head.append(style); }`,
+    `style.textContent = ${JSON.stringify(css)};`,
+  ].join("\n");
 }
 
 export const readFromDisk = (file: string) => readFile(file, "utf8");
