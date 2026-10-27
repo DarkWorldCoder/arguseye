@@ -6,7 +6,8 @@
   "publisher": "ayushniroula",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.95.0"
+    "vscode": "^1.95.0",
+    "node": ">=22"
   },
   "categories": [
     "Visualization",
@@ -17,7 +18,9 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:vscode": "npm run build && node test/vscode/run.mjs"
+    "test:vscode": "npm run build && node test/vscode/run.mjs",
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "package": "npm run build && vsce package --allow-missing-repository"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -34,11 +37,13 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/mcp": "^0.0.83",
     "@types/node": "^26.6.5",
     "@types/vscode": "^1.95.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
     "typescript": "^7.0.2",
+    "vite": "^8.3.5",
     "vitest": "^5.0.5"
   },
   "bin": {
@@ -47,7 +52,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "shims",
+    "node_modules/**"
   ],
   "main": "./dist/extension.cjs",
   "activationEvents": [

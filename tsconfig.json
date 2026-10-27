@@ -6,7 +6,14 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src", "test/unit", "test/browser"]
+  "include": [
+    "src",
+    "test/unit",
+    "test/browser",
+    "test/vscode"
+  ]
 }

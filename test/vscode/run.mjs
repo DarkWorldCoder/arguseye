@@ -12,7 +12,7 @@ await bundle.write({ dir: path.join(repo, "dist-test"), format: "cjs", entryFile
 await bundle.close();
 
 await runTests({
-  extensionDevelopmentPath: repo,
+  extensionDevelopmentPath: process.env.CP_EXTENSION_PATH ?? repo,
   extensionTestsPath: path.join(repo, "dist-test/suite.cjs"),
   extensionTestsEnv: { CP_FIXTURE_ROOT: path.join(repo, "test/fixtures/react-app"), CP_HOLD_MS: process.env.CP_HOLD_MS },
   launchArgs: [path.join(repo, "test/fixtures/react-app"), "--disable-extensions", "--disable-workspace-trust"],

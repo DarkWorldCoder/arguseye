@@ -1,7 +1,8 @@
 import { builtinModules } from "node:module";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { rolldown } from "rolldown";
 
+rmSync("dist", { recursive: true, force: true });
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const external = [
   "vscode",
