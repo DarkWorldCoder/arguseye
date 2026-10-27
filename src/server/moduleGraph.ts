@@ -1,26 +1,20 @@
 import { readFile } from "node:fs/promises";
-import { ResolverFactory } from "oxc-resolver";
+import type { ResolverFactory } from "oxc-resolver";
 import { transform } from "oxc-transform";
 import { init, parse } from "es-module-lexer";
 import type { DepBundler } from "./depBundler.js";
+import { createResolver } from "./resolver.js";
 
 const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
 
 /** Turns project files into browser ESM the preview page can import directly. */
 export class ModuleGraph {
-  private resolver: ResolverFactory;
+  private resolver: ResolverFactory = createResolver();
 
   constructor(
     private readSource: (file: string) => Promise<string>,
     private deps: DepBundler,
-  ) {
-    this.resolver = new ResolverFactory({
-      tsconfig: "auto",
-      conditionNames: ["browser", "import", "module", "default"],
-      mainFields: ["browser", "module", "main"],
-      extensions: [".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"],
-    });
-  }
+  ) {}
 
   async load(file: string): Promise<string> {
     const source = await this.readSource(file);

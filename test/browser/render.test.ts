@@ -37,4 +37,26 @@ describe("headless render (what an agent gets back)", () => {
     expect(last!.snapshot).toContain("$30.00");
     expect(Math.min(...timings)).toBeLessThan(100);
   });
+
+  it("finds where a component is used and the real props each usage passes", async () => {
+    const usages = await renderer.listUsages(card, "ProductCard");
+
+    expect(usages).toEqual([
+      {
+        id: "app/page.tsx:9",
+        props: { title: "Wireless Headphones", price: 99, tags: ["audio", "bluetooth"], onSale: true },
+        unresolved: [],
+      },
+      { id: "app/page.tsx:10", props: { title: "USB-C Cable", price: 9.5 }, unresolved: [] },
+    ]);
+  });
+
+  it("renders a component with the props from a real usage", async () => {
+    const result = await renderer.render({ file: card, exportName: "ProductCard", usage: "app/page.tsx:9" });
+
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain('heading "Wireless Headphones"');
+    expect(result.snapshot).toContain("$99.00");
+    expect(result.snapshot).toContain("bluetooth");
+  });
 });

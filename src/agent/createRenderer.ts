@@ -1,9 +1,12 @@
 import { chromium, type Browser, type Page } from "playwright-core";
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
 import type { PreviewTarget } from "../server/page.js";
+import { findUsages, type Usage } from "../usages/findUsages.js";
 
 export type RenderRequest = PreviewTarget & {
   viewport?: { width: number; height: number };
+  /** Render with the props of a real usage, by its id from `listUsages` (e.g. `app/page.tsx:9`). */
+  usage?: string;
 };
 
 export type RenderResult = {
@@ -17,6 +20,7 @@ export type RenderResult = {
 
 export type Renderer = {
   render(request: RenderRequest): Promise<RenderResult>;
+  listUsages(file: string, exportName?: string): Promise<Usage[]>;
   server: PreviewServer;
   close(): Promise<void>;
 };
@@ -43,9 +47,10 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
 
   return {
     server,
-    async render({ viewport = { width: 1280, height: 800 }, ...rest }) {
+    listUsages: (file, exportName) => findUsages(options.root, file, exportName),
+    async render({ viewport = { width: 1280, height: 800 }, usage, ...rest }) {
       const started = performance.now();
-      const target = { fresh: true, ...rest };
+      const target = { fresh: true, ...rest, props: { ...(await usageProps(options.root, rest, usage)), ...rest.props } };
       const key = `${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
       const isNew = !warm;
@@ -71,6 +76,13 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
       await server.close();
     },
   };
+}
+
+async function usageProps(root: string, target: PreviewTarget, usage: string | undefined) {
+  if (!usage) return {};
+  const found = (await findUsages(root, target.file, target.exportName)).find((u) => u.id === usage);
+  if (!found) throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${target.file}`);
+  return found.props;
 }
 
 async function launchChrome(): Promise<Browser> {
