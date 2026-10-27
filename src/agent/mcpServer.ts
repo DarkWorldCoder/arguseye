@@ -154,23 +154,21 @@ export async function createMcpServer(options: { root: string }) {
   server.registerTool(
     "render_usages",
     {
-      description: `After changing a component, render it at every place it is used (up to ${MAX_USAGES}) with each call site's real props, to see the blast radius in one call.`,
-      inputSchema: { ...target, ...look },
+      description: `After changing a component, render it at every place it is used (up to ${MAX_USAGES}) with each call site's real props, to inspect isolated literal-prop variants. These are not full-page integration tests.`,
+      inputSchema: { ...target, ...look, cursor: z.string().optional(), limit: z.number().int().min(1).max(MAX_USAGES).optional() },
     },
     async (args) => {
       try {
         const file = abs(args.file);
-        const usages = await renderer.listUsages(file, args.export);
-        const content = [];
-        let failed = false;
-        for (const usage of usages.slice(0, MAX_USAGES)) {
-          const rendered = await renderContent({ file, exportName: args.export, usage: usage.id, viewport: viewport(args.viewport) });
-          failed ||= rendered.result.errors.length > 0;
-          content.push(...rendered.content);
-        }
-        if (usages.length > MAX_USAGES) content.push({ type: "text" as const, text: `${usages.length - MAX_USAGES} more usages not rendered` });
-        if (!usages.length) content.push({ type: "text" as const, text: "No usages found in the project." });
-        return { isError: failed, content };
+        if (args.cursor && !/^\d+$/.test(args.cursor)) throw new Error(`Invalid usage cursor "${args.cursor}"`);
+        const page = await renderer.renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), offset: Number(args.cursor ?? 0), limit: args.limit });
+        const content = page.results.flatMap((result) => [
+          ...(args.output === "summary" ? [] : [{ type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" }]),
+          ...(args.output === "image" ? [] : [{ type: "text" as const, text: describe({ ...result.target, usage: result.usage, viewport: result.viewport }, result) }]),
+        ]);
+        if (!page.total) content.push({ type: "text", text: "No usages found in the project." });
+        if (page.nextOffset !== null) content.push({ type: "text", text: `${page.total - page.nextOffset} more usages; continue with cursor ${page.nextOffset}` });
+        return { isError: page.results.some((r) => r.errors.length > 0), content, structuredContent: { results: page.results.map((r) => ({ ...renderEvidence(r), usage: r.usage })), total: page.total, nextCursor: page.nextOffset === null ? null : String(page.nextOffset), coverage: "Isolated component renders with discovered literal props; surrounding pages are not exercised." } };
       } catch (error) {
         return failure(error);
       }

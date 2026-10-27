@@ -4,7 +4,8 @@ import { compareCaptures, type DiffResult } from "./compareCaptures.js";
 import { chromium, type Browser, type CDPSession, type Page } from "playwright-core";
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
 import type { PreviewTarget } from "../server/page.js";
-import { findUsages, type Usage } from "../usages/findUsages.js";
+import { createUsageIndex } from "../usages/createUsageIndex.js";
+import { type Usage } from "../usages/findUsages.js";
 import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
 
 export type RenderRequest = PreviewTarget & {
@@ -36,6 +37,8 @@ export type RenderResult = {
 
 export type Renderer = {
   render(request: RenderRequest): Promise<RenderResult>;
+  /** Renders one bounded page from a single usage-index query. */
+  renderUsages(request: RenderRequest & { offset?: number; limit?: number }): Promise<{ results: Array<RenderResult & { usage: string }>; total: number; nextOffset: number | null }>;
   diff(baselineId: string): Promise<DiffResult>;
   /** Imports a persisted CLI capture into this renderer's bounded session cache. */
   restoreCapture(capture: RenderResult): string;
@@ -49,6 +52,7 @@ export type Renderer = {
 /** Renders components headlessly so an agent can see them without running the app or a browser. */
 export async function createRenderer(options: { root: string }): Promise<Renderer> {
   const server = await createPreviewServer({ root: options.root });
+  const usages = createUsageIndex(options.root, { readSource: server.readSource, version: server.version });
   let browser: Browser;
   try { browser = await launchChrome(); } catch (error) { await server.close(); throw error; }
   const captures = new Map<string, RenderResult>();
@@ -97,9 +101,9 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
   }
 
   /** Given props win; else a named usage's props; else, with nothing to go on, samples from the type. */
-  async function resolveProps(target: PreviewTarget, usage: string | undefined): Promise<{ props: Record<string, unknown>; propsSource: RenderResult["propsSource"]; unresolved: string[] }> {
+  async function resolveProps(target: PreviewTarget, usage: string | undefined, resolved?: Usage): Promise<{ props: Record<string, unknown>; propsSource: RenderResult["propsSource"]; unresolved: string[] }> {
     if (usage) {
-      const found = (await findUsages(options.root, target.file, target.exportName)).find((u) => u.id === usage);
+      const found = resolved ?? (await usages.list(target.file, target.exportName)).find((u) => u.id === usage);
       if (!found) throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${target.file}`);
       return { props: { ...found.props, ...target.props }, propsSource: "usage", unresolved: found.unresolved };
     }
@@ -112,9 +116,17 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
 
   return {
     server,
-    listUsages: (file, exportName) => findUsages(options.root, file, exportName),
+    listUsages: (file, exportName) => usages.list(file, exportName),
     describeProps,
     render: (request) => serial(() => render(request)),
+    renderUsages: (request) => serial(async () => {
+      const { offset = 0, limit = 12, ...target } = request;
+      if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 12) throw new Error("Usage page requires offset >= 0 and limit between 1 and 12");
+      const all = await usages.list(path.resolve(options.root, target.file), target.exportName);
+      const results: Array<RenderResult & { usage: string }> = [];
+      for (const usage of all.slice(offset, offset + limit)) results.push({ ...await render({ ...target, usage: usage.id }, usage), usage: usage.id });
+      return { results, total: all.length, nextOffset: offset + limit < all.length ? offset + limit : null };
+    }),
     restoreCapture: remember,
     diff: (baselineId) => serial(async () => {
       const before = captures.get(baselineId);
@@ -134,11 +146,11 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
     },
   };
 
-  async function render({ viewport = { width: 1280, height: 800 }, usage, ...rest }: RenderRequest): Promise<RenderResult> {
+  async function render({ viewport = { width: 1280, height: 800 }, usage, ...rest }: RenderRequest, resolved?: Usage): Promise<RenderResult> {
       const started = performance.now();
       if (![viewport.width, viewport.height].every((v) => Number.isInteger(v) && v > 0 && v <= 8192)) throw new Error(`Invalid viewport "${viewport.width}x${viewport.height}"`);
       rest.file = path.resolve(options.root, rest.file);
-      const { props, propsSource, unresolved } = await resolveProps(rest, usage);
+      const { props, propsSource, unresolved } = await resolveProps(rest, usage, resolved);
       const target = { fresh: true, ...rest, props };
       const key = `${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);

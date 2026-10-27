@@ -45,14 +45,14 @@ describe("MCP tools (what a coding agent calls)", () => {
   it("list_usages returns each usage id with its real props", async () => {
     const result = await client.callTool({ name: "list_usages", arguments: { file: "components/ProductCard.tsx", export: "ProductCard" } });
     const usages = JSON.parse((result.content as Content)[0].text!);
-    expect(usages.map((u: { id: string }) => u.id)).toEqual(["app/page.tsx:9", "app/page.tsx:10"]);
+    expect(usages.map((u: { id: string }) => u.id)).toEqual(["app/page.tsx:9", "app/page.tsx:10", "app/shop/page.tsx:7"]);
   });
 
   it("render_usages renders the component at every place it is used, in one call", async () => {
     const result = await client.callTool({ name: "render_usages", arguments: { file: "components/ProductCard.tsx", export: "ProductCard" } });
     const content = result.content as Content;
 
-    expect(content.filter((c) => c.type === "image")).toHaveLength(2);
+    expect(content.filter((c) => c.type === "image")).toHaveLength(3);
     const texts = content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
     expect(texts).toContain("usage app/page.tsx:9");
     expect(texts).toContain('heading "USB-C Cable"');
@@ -95,4 +95,19 @@ it("returns structured evidence without images when summary output is requested"
   const diff = await client.callTool({ name: "render_diff", arguments: { baselineId: evidence.captureId, output: "summary" } });
   expect((diff.structuredContent as any).status).toBe("unchanged");
   expect((diff.content as Content).some((c) => c.type === "image")).toBe(false);
+});
+
+it("paginates usage renders and returns structured per-usage evidence", async () => {
+  const args = { file: "components/ProductCard.tsx", export: "ProductCard", output: "summary", limit: 1 };
+  const first = await client.callTool({ name: "render_usages", arguments: args });
+  const page = first.structuredContent as any;
+  expect(page.total).toBe(3);
+  expect(page.results).toHaveLength(1);
+  expect(page.results[0].captureId).toBeTruthy();
+  expect(page.nextCursor).toBeTruthy();
+  const next = await client.callTool({ name: "render_usages", arguments: { ...args, cursor: page.nextCursor } });
+  expect((next.structuredContent as any).results[0].target.props.title).toBe("USB-C Cable");
+  expect((next.structuredContent as any).nextCursor).toBe("2");
+  const last = await client.callTool({ name: "render_usages", arguments: { ...args, cursor: "2" } });
+  expect((last.structuredContent as any).nextCursor).toBeNull();
 });
