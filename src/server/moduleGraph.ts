@@ -10,11 +10,19 @@ const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
 /** Turns project files into browser ESM the preview page can import directly. */
 export class ModuleGraph {
   private resolver: ResolverFactory = createResolver();
+  private boundaries = new Set<string>();
 
   constructor(
     private readSource: (file: string) => Promise<string>,
     private deps: DepBundler,
+    /** Cache-busting query for a file's current version, e.g. `?e=0&v=2`. */
+    private query: (file: string) => string,
   ) {}
+
+  /** True when the module only registers components, so Fast Refresh can swap it in place. */
+  isRefreshBoundary(file: string): boolean {
+    return this.boundaries.has(file);
+  }
 
   async load(file: string): Promise<string> {
     const source = await this.readSource(file);
@@ -29,7 +37,11 @@ export class ModuleGraph {
 
   /** Lets React Fast Refresh swap this module's components in place, keeping their state. */
   private withRefresh(file: string, code: string): string {
-    if (!code.includes("$RefreshReg$") && !code.includes("$RefreshSig$")) return code;
+    if (!code.includes("$RefreshReg$")) {
+      this.boundaries.delete(file);
+      return code;
+    }
+    this.boundaries.add(file);
     this.deps.add("react-refresh/runtime");
     const id = JSON.stringify(file);
     return [
@@ -63,7 +75,8 @@ export class ModuleGraph {
       this.deps.add(specifier);
       return `/@deps/${specifier}.js`;
     }
-    return SCRIPT_EXT.test(path) ? `/@fs${path}` : `/@fs${path}?import`;
+    const query = this.query(path);
+    return SCRIPT_EXT.test(path) ? `/@fs${path}${query}` : `/@fs${path}?import&${query.slice(1)}`;
   }
 }
 
