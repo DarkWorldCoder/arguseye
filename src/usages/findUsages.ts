@@ -65,7 +65,7 @@ export async function findUsages(root: string, componentFile: string, exportName
     .map(({ id, props, unresolved }) => ({ id, props, unresolved }));
 }
 
-class NotLiteral extends Error {}
+export class NotLiteral extends Error {}
 
 function attrValue(value: any): unknown {
   if (value === null) return true;
@@ -74,7 +74,7 @@ function attrValue(value: any): unknown {
 }
 
 /** Evaluates literal expressions only; anything that needs runtime values throws NotLiteral. */
-function literal(node: any): unknown {
+export function literal(node: any): unknown {
   switch (node.type) {
     case "Literal":
       return node.value;
