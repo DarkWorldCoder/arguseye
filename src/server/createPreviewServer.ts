@@ -1,4 +1,5 @@
 import http from "node:http";
+import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
@@ -18,6 +19,10 @@ export type PreviewServerOptions = {
 
 export type PreviewServer = {
   url: string;
+  /** Fingerprint of the source and styles actually read by this server, including unsaved buffers. */
+  sourceRevision(): string;
+  /** Reads the same unsaved source as the module graph. */
+  readSource(file: string): Promise<string>;
   moduleUrl(file: string): string;
   /** URL of a page that renders `target` and reports `window.__CP__.status`. `live: false` skips pushed updates. */
   pageUrl(target: PreviewTarget, options?: { live?: boolean }): string;
@@ -57,11 +62,13 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const deps = new DepBundler(options.root);
   /** mtime of each file as last served from disk, to spot edits made outside the editor. */
   const servedMtimes = new Map<string, number>();
+  const hashes = new Map<string, string>();
   const readSource = async (file: string) => {
     const buffered = overlay.get(file);
-    if (buffered !== undefined) return buffered;
-    servedMtimes.set(file, statSync(file).mtimeMs);
-    return readFromDisk(file);
+    if (buffered === undefined) servedMtimes.set(file, statSync(file).mtimeMs);
+    const source = buffered ?? await readFromDisk(file);
+    hashes.set(file, createHash("sha256").update(source).digest("hex"));
+    return source;
   };
   const css = new CssPipeline(options.root);
   const graph = new ModuleGraph(readSource, deps, query, css, options.root);
@@ -78,6 +85,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     // The root layout's providers render around every component, so their packages belong in the same build
     // (only the providers: the layout itself may import server-only code).
     const app = detectAppContext(options.root);
+    if (app.entry) await readSource(app.entry);
     await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
     await deps.ensureBuilt();
     return { generation: deps.generation, cached: deps.cached };
@@ -117,7 +125,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       void graph.crawl(file).then(() => {
         if (!deps.hasPending()) return;
         return deps.ensureBuilt().then(() => broadcast({ kind: "reload", file, epoch: ++epoch, versions: { ...versions }, full: true }));
-      });
+      }).catch((error) => { serveErrors.push({ url: file, message: String(error), at: Date.now() }); });
     }
     const kind = isStylesheet(file) ? "css" : graph.isRefreshBoundary(file) ? "refresh" : "reload";
     if (kind === "reload") epoch++;
@@ -187,11 +195,13 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       send(res, 500, "text/plain", message);
     }
   });
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", () => { server.off("error", reject); resolve(); }); });
   const { port } = server.address() as AddressInfo;
 
   return {
     url: `http://127.0.0.1:${port}`,
+    sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
+    readSource,
     moduleUrl: (file) => `/@fs${file}`,
     pageUrl: (target, { live = true } = {}) => `/?t=${encodeTarget(target)}${live ? "" : "&live=0"}`,
     updateBuffer,

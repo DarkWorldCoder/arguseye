@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { compareCaptures, type DiffResult } from "./compareCaptures.js";
 import { chromium, type Browser, type CDPSession, type Page } from "playwright-core";
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
 import type { PreviewTarget } from "../server/page.js";
@@ -13,6 +16,14 @@ export type RenderRequest = PreviewTarget & {
 export type RenderResult = {
   /** PNG cropped to the rendered component. */
   png: Buffer;
+  /** Immutable baseline id, absent when rendering failed. */
+  captureId?: string;
+  target: { file: string; exportName: string; props: Record<string, unknown> };
+  viewport: { width: number; height: number };
+  sourceRevision: string;
+  unresolved: string[];
+  warnings: string[];
+  complete: boolean;
   /** Accessibility tree of the component, compact enough to read as text. */
   snapshot: string;
   errors: string[];
@@ -25,6 +36,9 @@ export type RenderResult = {
 
 export type Renderer = {
   render(request: RenderRequest): Promise<RenderResult>;
+  diff(baselineId: string): Promise<DiffResult>;
+  /** Imports a persisted CLI capture into this renderer's bounded session cache. */
+  restoreCapture(capture: RenderResult): string;
   listUsages(file: string, exportName?: string): Promise<Usage[]>;
   /** What the component accepts, from its TypeScript type, plus sample props that satisfy the required ones. */
   describeProps(file: string, exportName?: string): Promise<{ props: PropSchema[]; sample: Record<string, unknown> }>;
@@ -35,7 +49,19 @@ export type Renderer = {
 /** Renders components headlessly so an agent can see them without running the app or a browser. */
 export async function createRenderer(options: { root: string }): Promise<Renderer> {
   const server = await createPreviewServer({ root: options.root });
-  const browser = await launchChrome();
+  let browser: Browser;
+  try { browser = await launchChrome(); } catch (error) { await server.close(); throw error; }
+  const captures = new Map<string, RenderResult>();
+  let queue: Promise<unknown> = Promise.resolve();
+  const serial = <T>(work: () => Promise<T>): Promise<T> => {
+    const result = queue.then(work); queue = result.catch(() => {}); return result;
+  };
+  function remember(result: RenderResult): string {
+    const id = randomUUID();
+    captures.set(id, { ...structuredClone(result), png: Buffer.from(result.png), captureId: id });
+    if (captures.size > 64) captures.delete(captures.keys().next().value!);
+    return id;
+  }
 
   /** One warm page per viewport: later renders swap the target in place instead of reloading. */
   const pages = new Map<string, Promise<Page>>();
@@ -71,15 +97,15 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
   }
 
   /** Given props win; else a named usage's props; else, with nothing to go on, samples from the type. */
-  async function resolveProps(target: PreviewTarget, usage: string | undefined): Promise<{ props: Record<string, unknown>; propsSource: RenderResult["propsSource"] }> {
+  async function resolveProps(target: PreviewTarget, usage: string | undefined): Promise<{ props: Record<string, unknown>; propsSource: RenderResult["propsSource"]; unresolved: string[] }> {
     if (usage) {
       const found = (await findUsages(options.root, target.file, target.exportName)).find((u) => u.id === usage);
       if (!found) throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${target.file}`);
-      return { props: { ...found.props, ...target.props }, propsSource: "usage" };
+      return { props: { ...found.props, ...target.props }, propsSource: "usage", unresolved: found.unresolved };
     }
-    if (target.props && Object.keys(target.props).length) return { props: target.props, propsSource: "given" };
+    if (target.props && Object.keys(target.props).length) return { props: target.props, propsSource: "given", unresolved: [] };
     const sample = sampleProps(await propsSchema(target.file, target.exportName).catch(() => []));
-    return Object.keys(sample).length ? { props: sample, propsSource: "sample" } : { props: {}, propsSource: "none" };
+    return Object.keys(sample).length ? { props: sample, propsSource: "sample", unresolved: [] } : { props: {}, propsSource: "none", unresolved: [] };
   }
 
 /** Settled frame: transitions end at once, finite animations jump to their final state, spinners stop, no caret. */
@@ -88,9 +114,31 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
     server,
     listUsages: (file, exportName) => findUsages(options.root, file, exportName),
     describeProps,
-    async render({ viewport = { width: 1280, height: 800 }, usage, ...rest }) {
+    render: (request) => serial(() => render(request)),
+    restoreCapture: remember,
+    diff: (baselineId) => serial(async () => {
+      const before = captures.get(baselineId);
+      if (!before) throw new Error(`Unknown or expired baseline "${baselineId}"; render the component again to capture a new baseline.`);
+      const after = await render({ ...structuredClone(before.target), viewport: before.viewport });
+      after.unresolved = [...before.unresolved];
+      after.warnings = unique([...before.warnings, ...after.warnings]);
+      after.complete &&= before.complete;
+      const page = await pages.get(`${before.viewport.width}x${before.viewport.height}`)!;
+      return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
+    }),
+    async close() {
+      await queue;
+      captures.clear();
+      await browser.close();
+      await server.close();
+    },
+  };
+
+  async function render({ viewport = { width: 1280, height: 800 }, usage, ...rest }: RenderRequest): Promise<RenderResult> {
       const started = performance.now();
-      const { props, propsSource } = await resolveProps(rest, usage);
+      if (![viewport.width, viewport.height].every((v) => Number.isInteger(v) && v > 0 && v <= 8192)) throw new Error(`Invalid viewport "${viewport.width}x${viewport.height}"`);
+      rest.file = path.resolve(options.root, rest.file);
+      const { props, propsSource, unresolved } = await resolveProps(rest, usage);
       const target = { fresh: true, ...rest, props };
       const key = `${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
@@ -111,6 +159,22 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
         }
       }
 
+      const warnings: string[] = [];
+      if (unresolved.length) warnings.push("Runtime usage inputs were not evaluated: " + unresolved.join(", "));
+      if (propsSource === "sample") warnings.push("Sample props were generated from types; these are not real application data.");
+      const source = await server.readSource(rest.file);
+      if (/next\/(headers|font|server)|["']use server["']/.test(source)) warnings.push("Unsupported Next.js server/font behavior requires the application runtime.");
+      const settled = await page.evaluate(async () => {
+        const pending = [...document.images].filter((img) => !img.complete);
+        if (pending.length || document.fonts.status !== "loaded") {
+          await Promise.race([
+            Promise.allSettled([document.fonts.ready, ...pending.map((img) => img.decode())]),
+            new Promise((r) => setTimeout(r, 300)),
+          ]);
+        }
+        return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"]);
+      });
+      if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       const { box, inPage } = await page.evaluate(() => {
         const r = document.getElementById("root")!.getBoundingClientRect();
         return {
@@ -119,13 +183,16 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
         };
       });
       const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator("#root").ariaSnapshot()]);
-      return { png, snapshot, errors: unique([...inPage, ...errors]), ms: Math.round(performance.now() - started), reloaded, propsSource };
-    },
-    async close() {
-      await browser.close();
-      await server.close();
-    },
-  };
+      const allErrors = unique([...inPage, ...errors]);
+      if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
+      const result: RenderResult = {
+        png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource,
+        target: structuredClone({ file: rest.file, exportName: rest.exportName ?? "default", props }), viewport: { ...viewport },
+        sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,
+      };
+      if (!allErrors.length) result.captureId = remember(result);
+      return result;
+  }
 }
 
 const FREEZE_MOTION = `*, *::before, *::after {
