@@ -26,7 +26,7 @@ const HELP = `component-preview: inspect React and Vue components and verify UI 
   component-preview usages FILE [--export NAME] [--root DIR]
       Print every usage of a component with its real props (JSON)
 
-  component-preview serve FILE [--export NAME] [--usage ID] [--props JSON] [--root DIR]
+  component-preview serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
       Start the preview server and print a URL that shows the component live (updates as files change)`;
 
 const { positionals, values } = parseArgs({
@@ -38,6 +38,7 @@ const { positionals, values } = parseArgs({
     props: { type: "string" },
     viewport: { type: "string" },
     out: { type: "string" },
+    port: { type: "string" },
     json: { type: "boolean" },
     output: { type: "string", default: "both" },
     "capture-dir": { type: "string" },
@@ -58,7 +59,7 @@ if (values.help || !command) {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 } else if (command === "serve" && file) {
-  const server = await createPreviewServer({ root });
+  const server = await createPreviewServer({ root, port: values.port ? Number(values.port) : undefined });
   const target = { file: path.resolve(root, file), exportName: values.export };
   let props = values.props ? JSON.parse(values.props) : undefined;
   if (values.usage) props = { ...(await findUsages(root, target.file, target.exportName)).find((u) => u.id === values.usage)?.props, ...props };

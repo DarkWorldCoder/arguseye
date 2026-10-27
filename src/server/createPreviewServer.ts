@@ -17,6 +17,8 @@ import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, ty
 
 export type PreviewServerOptions = {
   root: string;
+  /** Fixed port (default: any free one), e.g. to keep a browser's permission for the origin. */
+  port?: number;
 };
 
 export type PreviewServer = {
@@ -201,7 +203,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       send(res, 500, "text/plain", message);
     }
   });
-  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", () => { server.off("error", reject); resolve(); }); });
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(options.port ?? 0, "127.0.0.1", () => { server.off("error", reject); resolve(); }); });
   const { port } = server.address() as AddressInfo;
 
   return {
