@@ -74,6 +74,20 @@ const explain = async (error, since) => {
   return [String(error?.stack ?? error)];
 };
 
+/** The root layout's providers, loaded once per epoch; a broken layout is reported and the component still renders. */
+let wrapperEpoch = -1, wrapper;
+const appWrapper = async (since) => {
+  if (wrapperEpoch === cp.epoch && wrapper) return wrapper;
+  try {
+    wrapper = (await import("/@wrapper?e=" + cp.epoch)).default;
+    wrapperEpoch = cp.epoch;
+  } catch (error) {
+    cp.errors.push(...(await explain(error, since)).map((e) => "Root layout providers could not be loaded: " + e));
+    wrapper = ({ children }) => children;
+  }
+  return wrapper;
+};
+
 cp.show = async (target, state) => {
   if (state) Object.assign(cp, state);
   cp.target = target;
@@ -90,7 +104,8 @@ cp.show = async (target, state) => {
     }
     root ??= createRoot(document.getElementById("root"), { onUncaughtError: fail, onRecoverableError: fail });
     if (target.fresh) mountKey++;
-    flushSync(() => root.render(createElement(Component, { ...target.props, key: mountKey })));
+    const Wrapper = await appWrapper(since);
+    flushSync(() => root.render(createElement(Wrapper, null, createElement(Component, { ...target.props, key: mountKey }))));
   } catch (error) {
     cp.errors.push(...(await explain(error, since)));
   }

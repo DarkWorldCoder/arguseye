@@ -9,7 +9,7 @@ import { contentType } from "./assets.js";
 const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { detectAppContext } from "../project/appContext.js";
+import { detectAppContext, wrapperModule } from "../project/appContext.js";
 import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 
 export type PreviewServerOptions = {
@@ -71,6 +71,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   async function prepare(file: string): Promise<{ generation: number }> {
     await graph.crawl(file);
+    // The root layout's providers render around every component, so their packages belong in the same build.
+    const { entry } = detectAppContext(options.root);
+    if (entry) await graph.crawl(entry);
     await deps.ensureBuilt();
     return { generation: deps.generation };
   }
@@ -133,6 +136,11 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const app = detectAppContext(options.root);
         const globalCssUrls = app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`);
         return send(res, 200, "text/html", previewHtml(target, { state, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
+      }
+      if (url.pathname === "/@wrapper") {
+        const app = detectAppContext(options.root);
+        const asFile = app.entry ? app.entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
+        return send(res, 200, "text/javascript", await graph.loadVirtual(asFile, wrapperModule(app.wrappers)));
       }
       if (url.pathname === "/@errors") {
         return send(res, 200, "application/json", JSON.stringify(errorsSince(Number(url.searchParams.get("since") ?? 0))));

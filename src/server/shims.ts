@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const SHIMS: Record<string, string> = {
   "next/link": "next/link.tsx",
   "next/image": "next/image.tsx",
+  "next/navigation": "next/navigation.ts",
 };
 
 /** `shims/` sits at the package root; this file runs from src/ in tests and from dist/ when bundled. */

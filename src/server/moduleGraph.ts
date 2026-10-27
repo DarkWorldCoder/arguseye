@@ -50,6 +50,13 @@ export class ModuleGraph {
     for (const dep of this.projectImports.get(file) ?? []) await this.crawl(dep, seen);
   }
 
+  /** A generated module that resolves its imports as if it lived at `asFile` (e.g. next to the root layout). */
+  async loadVirtual(asFile: string, source: string): Promise<string> {
+    const { code, errors } = await transform(asFile, source, { sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: true } });
+    if (errors.length) throw new Error(errors.map((e) => e.message).join("\n"));
+    return this.rewriteImports(asFile, this.withRefresh(asFile, code));
+  }
+
   async load(file: string): Promise<string> {
     if (!SCRIPT_EXT.test(file) && !isStylesheet(file)) return assetModule(file, this.imagesAsObjects);
     const source = await this.readSource(file);
