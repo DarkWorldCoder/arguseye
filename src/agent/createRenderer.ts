@@ -109,9 +109,11 @@ async function usageProps(root: string, target: PreviewTarget, usage: string | u
   return found.props;
 }
 
+/** Settled frame: transitions end at once, finite animations jump to their final state, spinners stop, no caret. */
 const FREEZE_MOTION = `*, *::before, *::after {
   transition-duration: 0s !important; transition-delay: 0s !important;
-  animation-play-state: paused !important; caret-color: transparent !important;
+  animation-duration: 0.001s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
+  caret-color: transparent !important;
 }`;
 
 /** Screenshot through the DevTools protocol directly: no Playwright waiting, encoder tuned for speed. */
