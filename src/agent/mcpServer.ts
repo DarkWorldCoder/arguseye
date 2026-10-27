@@ -41,7 +41,7 @@ export async function createMcpServer(options: { root: string }) {
     const head = [
       request.exportName ?? "default",
       rel(request.file),
-      request.usage ? `usage ${request.usage}` : undefined,
+      request.usage ? `usage ${request.usage}` : `props: ${result.propsSource}`,
       `${size.width}x${size.height}`,
       `${result.ms} ms`,
     ].filter(Boolean);
@@ -82,7 +82,7 @@ export async function createMcpServer(options: { root: string }) {
     "render_component",
     {
       description:
-        "See a component exactly as it looks in the app, without a dev server: returns a PNG cropped to the component and its accessibility tree. Pass `usage` (from list_usages) to use the props from a real call site, or `props` as JSON.",
+        "See a component exactly as it looks in the app, without a dev server: returns a PNG cropped to the component and its accessibility tree. Pass `usage` (from list_usages) to use the props from a real call site, or `props` as JSON; with neither, required props are filled with samples from the TypeScript type (see describe_props).",
       inputSchema: {
         ...target,
         usage: z.string().optional().describe('Usage id from list_usages, e.g. "app/page.tsx:9"'),
@@ -95,6 +95,23 @@ export async function createMcpServer(options: { root: string }) {
         const request = { file: abs(args.file), exportName: args.export, usage: args.usage, props: args.props, viewport: viewport(args.viewport) };
         const { result, content } = await renderContent(request);
         return { isError: result.errors.length > 0, content };
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "describe_props",
+    {
+      description:
+        "What props a component accepts, read from its TypeScript type: name, kind (string, number, boolean, enum with options, array, object with fields, function, node), required, default, description. Includes `sample`, the props render_component uses when you pass none.",
+      inputSchema: target,
+    },
+    async (args) => {
+      try {
+        const schema = await renderer.describeProps(abs(args.file), args.export);
+        return { content: [{ type: "text" as const, text: JSON.stringify(schema, null, 1) }] };
       } catch (error) {
         return failure(error);
       }

@@ -23,7 +23,7 @@ type Content = Array<{ type: string; text?: string; data?: string; mimeType?: st
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["list_usages", "render_component", "render_usages"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["describe_props", "list_usages", "render_component", "render_usages"]);
   });
 
   it("render_component returns a PNG and a compact text snapshot for a real usage, by project-relative path", async () => {
@@ -63,5 +63,24 @@ describe("MCP tools (what a coding agent calls)", () => {
     const text = (result.content as Content).find((c) => c.type === "text")!.text!;
     expect(result.isError).toBe(true);
     expect(text).toContain('No component export "Missing"');
+  });
+
+  it("describe_props tells an agent what a component accepts, from its TypeScript type", async () => {
+    const result = await client.callTool({ name: "describe_props", arguments: { file: "components/Alert.tsx", export: "Alert" } });
+    const schema = JSON.parse((result.content as Content)[0].text!);
+    expect(schema.props.map((p: { name: string; kind: string; required: boolean }) => `${p.name}${p.required ? "" : "?"}:${p.kind}`)).toEqual([
+      "title:string", "tone?:enum", "count?:number", "dismissible?:boolean", "tags?:array", "action?:object", "onClose?:function", "children?:node",
+    ]);
+    expect(schema.props[1].options).toEqual(["info", "success", "danger"]);
+    expect(schema.sample).toEqual({ title: "Title" });
+  });
+
+  it("render_component with no props and no usage fills the required props from the type", async () => {
+    const result = await client.callTool({ name: "render_component", arguments: { file: "components/Alert.tsx", export: "Alert" } });
+    const text = (result.content as Content)[1].text!;
+    expect(result.isError).toBeFalsy();
+    expect(text).toContain("errors: none");
+    expect(text).toContain("Title");
+    expect(text).toContain("props: sample");
   });
 });

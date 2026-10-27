@@ -2,6 +2,7 @@ import { chromium, type Browser, type CDPSession, type Page } from "playwright-c
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
 import type { PreviewTarget } from "../server/page.js";
 import { findUsages, type Usage } from "../usages/findUsages.js";
+import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
 
 export type RenderRequest = PreviewTarget & {
   viewport?: { width: number; height: number };
@@ -18,11 +19,15 @@ export type RenderResult = {
   ms: number;
   /** The page was reloaded first because this component needed packages bundled after the page loaded. */
   reloaded: boolean;
+  /** Where the props came from: given by the caller, a real usage, or samples made from the TypeScript type. */
+  propsSource: "given" | "usage" | "sample" | "none";
 };
 
 export type Renderer = {
   render(request: RenderRequest): Promise<RenderResult>;
   listUsages(file: string, exportName?: string): Promise<Usage[]>;
+  /** What the component accepts, from its TypeScript type, plus sample props that satisfy the required ones. */
+  describeProps(file: string, exportName?: string): Promise<{ props: PropSchema[]; sample: Record<string, unknown> }>;
   server: PreviewServer;
   close(): Promise<void>;
 };
@@ -60,12 +65,33 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
     generations.set(page, generation);
   }
 
+  async function describeProps(file: string, exportName?: string) {
+    const props = await propsSchema(file, exportName);
+    return { props, sample: sampleProps(props) };
+  }
+
+  /** Given props win; else a named usage's props; else, with nothing to go on, samples from the type. */
+  async function resolveProps(target: PreviewTarget, usage: string | undefined): Promise<{ props: Record<string, unknown>; propsSource: RenderResult["propsSource"] }> {
+    if (usage) {
+      const found = (await findUsages(options.root, target.file, target.exportName)).find((u) => u.id === usage);
+      if (!found) throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${target.file}`);
+      return { props: { ...found.props, ...target.props }, propsSource: "usage" };
+    }
+    if (target.props && Object.keys(target.props).length) return { props: target.props, propsSource: "given" };
+    const sample = sampleProps(await propsSchema(target.file, target.exportName).catch(() => []));
+    return Object.keys(sample).length ? { props: sample, propsSource: "sample" } : { props: {}, propsSource: "none" };
+  }
+
+/** Settled frame: transitions end at once, finite animations jump to their final state, spinners stop, no caret. */
+
   return {
     server,
     listUsages: (file, exportName) => findUsages(options.root, file, exportName),
+    describeProps,
     async render({ viewport = { width: 1280, height: 800 }, usage, ...rest }) {
       const started = performance.now();
-      const target = { fresh: true, ...rest, props: { ...(await usageProps(options.root, rest, usage)), ...rest.props } };
+      const { props, propsSource } = await resolveProps(rest, usage);
+      const target = { fresh: true, ...rest, props };
       const key = `${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
       const isNew = !warm;
@@ -93,7 +119,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
         };
       });
       const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator("#root").ariaSnapshot()]);
-      return { png, snapshot, errors: unique([...inPage, ...errors]), ms: Math.round(performance.now() - started), reloaded };
+      return { png, snapshot, errors: unique([...inPage, ...errors]), ms: Math.round(performance.now() - started), reloaded, propsSource };
     },
     async close() {
       await browser.close();
@@ -102,14 +128,6 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
   };
 }
 
-async function usageProps(root: string, target: PreviewTarget, usage: string | undefined) {
-  if (!usage) return {};
-  const found = (await findUsages(root, target.file, target.exportName)).find((u) => u.id === usage);
-  if (!found) throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${target.file}`);
-  return found.props;
-}
-
-/** Settled frame: transitions end at once, finite animations jump to their final state, spinners stop, no caret. */
 const FREEZE_MOTION = `*, *::before, *::after {
   transition-duration: 0s !important; transition-delay: 0s !important;
   animation-duration: 0.001s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
