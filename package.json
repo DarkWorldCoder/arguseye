@@ -12,7 +12,6 @@
     "Visualization",
     "Other"
   ],
-  "main": "./dist/extension.cjs",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -38,5 +37,13 @@
     "@vscode/vsce": "^4.0.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
-  }
+  },
+  "bin": {
+    "component-preview": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }
