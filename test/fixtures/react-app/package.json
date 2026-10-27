@@ -1,1 +1,10 @@
-{ "name": "react-app-fixture", "private": true, "dependencies": { "react": "^19.2.0", "react-dom": "^19.2.0", "clsx": "^2.1.1" } }
+{
+  "name": "react-app-fixture",
+  "private": true,
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "clsx": "^2.1.1",
+    "esm-root-lib": "file:./packages/esm-root-lib"
+  }
+}

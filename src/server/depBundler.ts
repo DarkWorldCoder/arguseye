@@ -54,6 +54,10 @@ export class DepBundler {
       input: Object.fromEntries(specs.map((s) => [s, FACADE + s])),
       cwd: this.root,
       platform: "browser",
+      // "use client"/"use server" directives are expected in app packages and mean nothing to a preview.
+      onLog: (level, log, defaultHandler) => {
+        if (log.code !== "MODULE_LEVEL_DIRECTIVE" && log.code !== "EMPTY_BUNDLE") defaultHandler(level, log);
+      },
       resolve: { alias: OWN },
       transform: { define: { "process.env.NODE_ENV": '"development"' } },
       plugins: [
@@ -74,22 +78,22 @@ export class DepBundler {
     specs.forEach((s) => this.built.add(s));
   }
 
-  /** Re-exports a package so CommonJS packages (like React) expose their named exports. */
+  /**
+   * Re-exports a package so CommonJS packages (like React) expose their named exports.
+   * ESM vs CommonJS is decided from the file the bundler will actually use (packages like MUI ship ESM at
+   * the root and CommonJS under `main`), by its syntax rather than by package.json metadata.
+   */
   private async facade(spec: string): Promise<string> {
-    const target = OWN[spec]
-      ? { path: OWN[spec], moduleType: "commonjs" }
-      : this.resolver.resolveFileSync(path.join(this.root, "index.js"), spec);
     const id = JSON.stringify(spec);
-    if (target.moduleType === "module" || /\.mjs$/.test(target.path ?? "")) {
-      await init;
-      const [, exports] = parse(readFileSync(target.path!, "utf8"));
+    const file = OWN[spec] ?? this.resolver.resolveFileSync(path.join(this.root, "index.js"), spec).path;
+    if (!file) throw new Error(`Cannot resolve package "${spec}" from ${this.root}`);
+    await init;
+    const [, exports, , hasModuleSyntax] = parse(readFileSync(file, "utf8"));
+    if (hasModuleSyntax) {
       const hasDefault = exports.some((e) => e.type !== "reexport-all" && e.name === "default");
       return `export * from ${id};${hasDefault ? `export { default } from ${id};` : ""}`;
     }
-    const load = OWN[spec] ? ownRequire : createRequire(path.join(this.root, "index.js"));
-    const names = Object.keys(load(OWN[spec] ?? spec)).filter(
-      (k) => IDENT.test(k) && k !== "default" && k !== "__esModule",
-    );
+    const names = Object.keys(createRequire(file)(file)).filter((k) => IDENT.test(k) && k !== "default" && k !== "__esModule");
     return `import __m from ${id}; export default __m; export const { ${names.join(", ")} } = __m;`;
   }
 }

@@ -44,4 +44,13 @@ describe("dependency pre-bundling", () => {
     expect(reactChunk).toBeDefined();
     expect(runtime.body).toContain(reactChunk);
   });
+
+  it("bundles packages whose ESM build is at the root and CJS under main (MUI's layout), without inventing a default export", async () => {
+    server = await createPreviewServer({ root });
+    const lib = await get("/@deps/esm-root-lib.js");
+    expect(lib.status, lib.body).toBe(200);
+    expect(lib.body).toMatch(/export\s*\{[^}]*\bGreeting\b/);
+    expect(lib.body).toMatch(/export\s*\{[^}]*\bshout\b/);
+    expect(lib.body).not.toMatch(/\bdefault\b/);
+  });
 });
