@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from "playwright-core";
+import { chromium, type Browser, type CDPSession, type Page } from "playwright-core";
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
 import type { PreviewTarget } from "../server/page.js";
 import { findUsages, type Usage } from "../usages/findUsages.js";
@@ -33,6 +33,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
   /** One warm page per viewport: later renders swap the target in place instead of reloading. */
   const pages = new Map<string, Promise<Page>>();
   const pageErrors = new WeakMap<Page, string[]>();
+  const cdp = new WeakMap<Page, CDPSession>();
 
   async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget): Promise<Page> {
     const page = await browser.newPage({ viewport });
@@ -42,6 +43,9 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready, null, { timeout: 15000 });
     await page.evaluate(() => (window as any).__CP__.ready);
+    // Agents get the settled frame: transitions end instantly, animations hold still, no blinking caret.
+    await page.addStyleTag({ content: FREEZE_MOTION });
+    cdp.set(page, await page.context().newCDPSession(page));
     return page;
   }
 
@@ -67,8 +71,7 @@ export async function createRenderer(options: { root: string }): Promise<Rendere
           inPage: (window as any).__CP__.errors as string[],
         };
       });
-      const png = await page.screenshot({ clip: box, animations: "disabled", caret: "hide" });
-      const snapshot = await page.locator("#root").ariaSnapshot();
+      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator("#root").ariaSnapshot()]);
       return { png, snapshot, errors: unique([...inPage, ...errors]), ms: Math.round(performance.now() - started) };
     },
     async close() {
@@ -83,6 +86,22 @@ async function usageProps(root: string, target: PreviewTarget, usage: string | u
   const found = (await findUsages(root, target.file, target.exportName)).find((u) => u.id === usage);
   if (!found) throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${target.file}`);
   return found.props;
+}
+
+const FREEZE_MOTION = `*, *::before, *::after {
+  transition-duration: 0s !important; transition-delay: 0s !important;
+  animation-play-state: paused !important; caret-color: transparent !important;
+}`;
+
+/** Screenshot through the DevTools protocol directly: no Playwright waiting, encoder tuned for speed. */
+async function capture(session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
+  const { data } = await session.send("Page.captureScreenshot", {
+    format: "png",
+    clip: { ...box, scale: 1 },
+    optimizeForSpeed: true,
+    captureBeyondViewport: true,
+  });
+  return Buffer.from(data, "base64");
 }
 
 async function launchChrome(): Promise<Browser> {

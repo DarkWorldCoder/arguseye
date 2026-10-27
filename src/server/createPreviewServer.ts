@@ -4,6 +4,9 @@ import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
 import { CssPipeline } from "./cssPipeline.js";
+import { contentType } from "./assets.js";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { detectAppContext } from "../project/appContext.js";
 import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 
@@ -43,7 +46,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return readFromDisk(file);
   };
   const css = new CssPipeline(options.root);
-  const graph = new ModuleGraph(readSource, deps, query, css);
+  const graph = new ModuleGraph(readSource, deps, query, css, options.root);
   const listeners = new Set<http.ServerResponse>();
 
   function updateBuffer(file: string, text: string | undefined): Update {
@@ -107,6 +110,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         ["react", "react-dom", "react-dom/client"].forEach((d) => deps.add(d));
         return send(res, 200, "text/javascript", reactRuntime);
       }
+      if (url.pathname.startsWith("/@fs/") && url.searchParams.has("raw")) {
+        const file = decodeURIComponent(url.pathname.slice("/@fs".length));
+        return sendFile(res, file);
+      }
       if (url.pathname.startsWith("/@fs/")) {
         const file = decodeURIComponent(url.pathname.slice("/@fs".length));
         return send(res, 200, "text/javascript", await graph.load(file));
@@ -115,6 +122,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const code = await deps.get(decodeURIComponent(url.pathname.slice("/@deps/".length)));
         if (code !== undefined) return send(res, 200, "text/javascript", code);
       }
+      // Anything else is a public/ asset referenced by absolute path, as the app's server would serve it.
+      const publicFile = path.join(options.root, "public", path.normalize(decodeURIComponent(url.pathname)));
+      if (publicFile.startsWith(path.join(options.root, "public")) && existsSync(publicFile)) return sendFile(res, publicFile);
       send(res, 404, "text/plain", "not found");
     } catch (err) {
       send(res, 500, "text/plain", String((err as Error).stack ?? err));
@@ -131,6 +141,11 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     syncDisk,
     close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
   };
+}
+
+function sendFile(res: http.ServerResponse, file: string) {
+  res.writeHead(200, { "content-type": contentType(file), "cache-control": "no-cache" });
+  res.end(readFileSync(file));
 }
 
 function send(res: http.ServerResponse, status: number, type: string, body: string) {

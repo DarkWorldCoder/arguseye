@@ -40,7 +40,7 @@ addEventListener("unhandledrejection", (e) => fail(e.reason?.stack ?? e.reason))
 <script type="module" src="/@refresh-setup"></script>
 ${globals}
 <script type="module" src="/@runtime"></script>
-</head><body${bodyClass ? ` class="${attr(bodyClass)}"` : ""}><div id="root" style="display:inline-block;min-width:1px"></div></body></html>`;
+</head><body${bodyClass ? ` class="${attr(bodyClass)}"` : ""}><div id="root"></div></body></html>`;
 }
 
 /** Installs the React Refresh hook before react-dom loads (module scripts run in document order). */

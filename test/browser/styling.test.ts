@@ -43,4 +43,18 @@ describe("the component looks exactly as in the app", () => {
       preview.server.updateBuffer(hero, undefined);
     }
   });
+
+  it("loads assets: url() in CSS, imported images (Next-style objects) and public/ paths", async () => {
+    const loaded = (selector: string) =>
+      preview.page.locator(selector).evaluate((img: HTMLImageElement) => img.decode().then(() => [img.naturalWidth, img.naturalHeight]));
+    expect(await loaded("#badge")).toEqual([24, 12]);
+    expect(await loaded("#logo")).toEqual([4, 4]);
+    expect(await preview.page.locator("#badge").getAttribute("width")).toBe("24");
+
+    const background = await preview.style("h1", "background-image");
+    const url = background.match(/url\("(.+)"\)/)![1];
+    const res = await fetch(url);
+    expect(res.headers.get("content-type")).toContain("image/svg+xml");
+    expect(await res.text()).toContain('fill="red"');
+  });
 });

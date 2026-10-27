@@ -4,6 +4,7 @@ import { transform } from "oxc-transform";
 import { init, parse } from "es-module-lexer";
 import type { DepBundler } from "./depBundler.js";
 import type { CssPipeline } from "./cssPipeline.js";
+import { assetModule, importsImagesAsObjects } from "./assets.js";
 import { createResolver } from "./resolver.js";
 
 const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
@@ -12,6 +13,7 @@ const SCRIPT_EXT = /\.(m|c)?(j|t)sx?$/;
 export class ModuleGraph {
   private resolver: ResolverFactory = createResolver();
   private boundaries = new Set<string>();
+  private imagesAsObjects: boolean;
 
   constructor(
     private readSource: (file: string) => Promise<string>,
@@ -19,7 +21,10 @@ export class ModuleGraph {
     /** Cache-busting query for a file's current version, e.g. `?e=0&v=2`. */
     private query: (file: string) => string,
     private css: CssPipeline,
-  ) {}
+    root: string,
+  ) {
+    this.imagesAsObjects = importsImagesAsObjects(root);
+  }
 
   /** True when the module only registers components, so Fast Refresh can swap it in place. */
   isRefreshBoundary(file: string): boolean {
@@ -27,6 +32,7 @@ export class ModuleGraph {
   }
 
   async load(file: string): Promise<string> {
+    if (!SCRIPT_EXT.test(file) && !file.endsWith(".css")) return assetModule(file, this.imagesAsObjects);
     const source = await this.readSource(file);
     if (file.endsWith(".css")) return cssModule(file, await this.css.process(file, source));
     const { code, errors } = await transform(file, source, {

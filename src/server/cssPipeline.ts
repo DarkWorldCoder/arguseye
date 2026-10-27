@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { transform as transformCss } from "lightningcss";
+import { rewriteCssUrls } from "./assets.js";
 
 type TailwindNode = typeof import("@tailwindcss/node");
 type TailwindOxide = typeof import("@tailwindcss/oxide");
@@ -26,6 +27,11 @@ export class CssPipeline {
   constructor(private root: string) {}
 
   async process(file: string, source: string): Promise<{ css: string; classes?: Record<string, string> }> {
+    const { css, classes } = await this.compile(file, source);
+    return { css: rewriteCssUrls(css, file), classes };
+  }
+
+  private async compile(file: string, source: string): Promise<{ css: string; classes?: Record<string, string> }> {
     if (/\.module\.css$/.test(file)) {
       const result = transformCss({ filename: file, code: Buffer.from(source), cssModules: true });
       const classes = Object.fromEntries(
