@@ -72,4 +72,17 @@ describe("dependency pre-bundling", () => {
     expect(lib.body).not.toMatch(/from\s*["'](node:)?(fs|crypto)["']/);
     expect(lib.body).toMatch(/export\s*\{[^}]*\binBrowser\b/);
   });
+
+  it("reuses a dependency bundle from disk when a previous process on the same project built it", async () => {
+    const first = await createPreviewServer({ root });
+    await first.prepare(card);
+    await first.close();
+
+    server = await createPreviewServer({ root });
+    const second = await server.prepare(card);
+    expect(second.cached).toBe(true);
+    const react = await get("/@deps/react.js");
+    expect(react.status).toBe(200);
+    expect(react.body).toMatch(/export\s*\{[^}]*\buseState\b/);
+  });
 });

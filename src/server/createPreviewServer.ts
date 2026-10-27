@@ -29,7 +29,7 @@ export type PreviewServer = {
    * Makes sure every package `file` needs is bundled, and returns the bundle generation. A page loaded
    * under an older generation must be reloaded before showing `file`, or it would mix two React copies.
    */
-  prepare(file: string): Promise<{ generation: number }>;
+  prepare(file: string): Promise<{ generation: number; cached: boolean }>;
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
   updateBuffer(file: string, text: string | undefined): Update;
   close(): Promise<void>;
@@ -73,14 +73,14 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const wrapperFile = (entry: string | undefined) =>
     entry ? entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
 
-  async function prepare(file: string): Promise<{ generation: number }> {
+  async function prepare(file: string): Promise<{ generation: number; cached: boolean }> {
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
     // (only the providers: the layout itself may import server-only code).
     const app = detectAppContext(options.root);
     await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
     await deps.ensureBuilt();
-    return { generation: deps.generation };
+    return { generation: deps.generation, cached: deps.cached };
   }
 
   function updateBuffer(file: string, text: string | undefined): Update {

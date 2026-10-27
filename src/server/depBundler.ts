@@ -1,11 +1,15 @@
 import { builtinModules, createRequire } from "node:module";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { rolldown } from "rolldown";
 import { ResolverFactory } from "oxc-resolver";
 import { init, parse } from "es-module-lexer";
 
 const FACADE = "\0facade:";
+/** Bump when the bundle output format changes, so stale on-disk bundles are not reused. */
+const BUNDLER_VERSION = 1;
+const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
 // CommonJS on purpose: named imports from it become `undefined` at runtime instead of a build-time missing-export error.
 const EMPTY = "\0node-builtin-empty.cjs";
 /** Node built-ins have no browser equivalent; packages that reach them get an empty module, as bundlers do. */
@@ -26,13 +30,24 @@ export class DepBundler {
   private building: Promise<void> | undefined;
   /** Bumps on every build. Chunks may re-hash between builds, so a page must not mix two generations. */
   generation = 0;
+  /** True when the current bundle came from the on-disk cache rather than a fresh build. */
+  cached = false;
+  private cacheDir: string;
+
+  private static rolldownVersion = ownRequire("rolldown/package.json").version as string;
   private resolver = new ResolverFactory({
     conditionNames: ["browser", "import", "module", "default"],
     mainFields: ["browser", "module", "main"],
     moduleType: true,
   });
 
-  constructor(private root: string) {}
+  constructor(private root: string) {
+    this.cacheDir = path.join(root, "node_modules", ".component-preview", "deps");
+    // Temp folders left by a process that died mid-write.
+    try {
+      for (const name of readdirSync(this.cacheDir)) if (/\.\d+$/.test(name)) rmSync(path.join(this.cacheDir, name), { recursive: true, force: true });
+    } catch {}
+  }
 
   add(specifier: string) {
     this.wanted.add(specifier);
@@ -58,7 +73,49 @@ export class DepBundler {
   }
 
   private async build() {
-    const specs = [...this.wanted];
+    const specs = [...this.wanted].sort();
+    const key = this.cacheKey(specs);
+    const dir = path.join(this.cacheDir, key);
+    if (existsSync(path.join(dir, "manifest.json"))) {
+      // Names are paths ("react/jsx-dev-runtime.js"), so the cache folder is read recursively.
+      const names = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => f.endsWith(".js"));
+      this.files = new Map(names.map((f) => [f, readFileSync(path.join(dir, f), "utf8")] as const));
+      specs.forEach((s) => this.built.add(s));
+      this.generation++;
+      this.cached = true;
+      return;
+    }
+    await this.bundle(specs);
+    this.cached = false;
+    try {
+      const tmp = `${dir}.${process.pid}`;
+      mkdirSync(tmp, { recursive: true });
+      for (const [name, code] of this.files) {
+        mkdirSync(path.dirname(path.join(tmp, name)), { recursive: true });
+        writeFileSync(path.join(tmp, name), code);
+      }
+      writeFileSync(path.join(tmp, "manifest.json"), JSON.stringify({ specs, rolldown: DepBundler.rolldownVersion }));
+      rmSync(dir, { recursive: true, force: true });
+      renameSync(tmp, dir);
+    } catch {
+      // a read-only or missing node_modules only costs the cache
+    }
+  }
+
+  /** Same packages, same lockfile, same bundler: the same output. */
+  private cacheKey(specs: string[]): string {
+    const hash = createHash("sha1").update(`${BUNDLER_VERSION}|${DepBundler.rolldownVersion}|${specs.join(",")}`);
+    for (const name of LOCKFILES) {
+      const file = path.join(this.root, name);
+      if (!existsSync(file)) continue;
+      const stat = statSync(file);
+      hash.update(`|${name}:${stat.size}:${stat.mtimeMs}`);
+      break;
+    }
+    return hash.digest("hex").slice(0, 16);
+  }
+
+  private async bundle(specs: string[]) {
     const facades = new Map(await Promise.all(specs.map(async (s) => [s, await this.facade(s)] as const)));
     const bundle = await rolldown({
       input: Object.fromEntries(specs.map((s) => [s, FACADE + s])),
