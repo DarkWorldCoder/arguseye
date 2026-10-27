@@ -1,0 +1,6 @@
+$gap: 11px;
+
+.card {
+  margin-top: $gap;
+  .label { word-spacing: $gap * 2; }
+}

@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -14,7 +15,11 @@ type TailwindSheet = {
 };
 
 const TAILWIND_V4 = /@import\s+["']tailwindcss["']|@import\s+["']tailwindcss\/|@tailwind\s+utilities|@theme\b/;
+const POSTCSS_CONFIGS = ["postcss.config.js", "postcss.config.mjs", "postcss.config.cjs", "postcss.config.ts", ".postcssrc.json"];
 const ownRequire = createRequire(import.meta.url);
+
+/** Stylesheets the preview compiles (as opposed to assets it serves as files). */
+export const isStylesheet = (file: string) => /\.(css|scss|sass)$/.test(file);
 
 /**
  * Turns stylesheets into the CSS the app would ship: Tailwind v4 compiled with the project's own
@@ -23,24 +28,91 @@ const ownRequire = createRequire(import.meta.url);
 export class CssPipeline {
   private sheets = new Map<string, TailwindSheet>();
   private tailwind: Promise<{ node: TailwindNode; oxide: TailwindOxide }> | undefined;
+  private postcss: Promise<((css: string, from: string) => Promise<string>) | undefined> | undefined;
+  private projectRequire: NodeJS.Require;
+  private tailwindMajor: number | undefined;
 
-  constructor(private root: string) {}
+  constructor(private root: string) {
+    this.projectRequire = createRequire(path.join(root, "package.json"));
+    try {
+      this.tailwindMajor = Number(JSON.parse(readFileSync(this.projectRequire.resolve("tailwindcss/package.json"), "utf8")).version.split(".")[0]);
+    } catch {
+      this.tailwindMajor = undefined;
+    }
+  }
 
   async process(file: string, source: string): Promise<{ css: string; classes?: Record<string, string> }> {
     const { css, classes } = await this.compile(file, source);
     return { css: rewriteCssUrls(css, file), classes };
   }
 
+  /** Same order as the app's bundler: Sass → Tailwind v4 or the project's PostCSS → CSS modules. */
   private async compile(file: string, source: string): Promise<{ css: string; classes?: Record<string, string> }> {
-    if (/\.module\.css$/.test(file)) {
-      const result = transformCss({ filename: file, code: Buffer.from(source), cssModules: true });
+    let css = /\.(scss|sass)$/.test(file) ? await this.sass(file, source) : source;
+    if (this.tailwindMajor !== undefined && this.tailwindMajor >= 4 && TAILWIND_V4.test(css)) {
+      css = await this.buildTailwind(file, css);
+    } else {
+      const postcss = await this.loadPostcss();
+      if (postcss) css = await postcss(css, file);
+    }
+    if (/\.module\.(css|scss|sass)$/.test(file)) {
+      const result = transformCss({ filename: file, code: Buffer.from(css), cssModules: true });
       const classes = Object.fromEntries(
         Object.entries(result.exports ?? {}).map(([name, e]) => [name, [e.name, ...e.composes.map((c) => c.name)].join(" ")]),
       );
       return { css: result.code.toString(), classes };
     }
-    if (TAILWIND_V4.test(source)) return { css: await this.buildTailwind(file, source) };
-    return { css: source };
+    return { css };
+  }
+
+  /** Compiles with the project's own `sass` / `sass-embedded`. */
+  private async sass(file: string, source: string): Promise<string> {
+    const sass = await this.importFromProject("sass").catch(() => this.importFromProject("sass-embedded"));
+    const result = await sass.compileStringAsync(source, {
+      url: pathToFileURL(file),
+      syntax: file.endsWith(".sass") ? "indented" : "scss",
+      loadPaths: [path.dirname(file), path.join(this.root, "node_modules")],
+    });
+    return result.css;
+  }
+
+  /** The project's PostCSS with its own config, so Tailwind v3, autoprefixer and friends run as in the app. */
+  private loadPostcss() {
+    this.postcss ??= (async () => {
+      const configFile = POSTCSS_CONFIGS.map((f) => path.join(this.root, f)).find((f) => existsSync(f));
+      if (!configFile) return undefined;
+      const postcss = (await this.importFromProject("postcss")).default;
+      const config = configFile.endsWith(".json")
+        ? JSON.parse(readFileSync(configFile, "utf8"))
+        : (await import(pathToFileURL(configFile).href)).default;
+      const declared = typeof config === "function" ? config({ env: "development" }) : config;
+      const plugins = Array.isArray(declared.plugins)
+        ? declared.plugins
+        : await Promise.all(
+            Object.entries(declared.plugins ?? {})
+              .filter(([, options]) => options !== false)
+              .map(async ([name, options]) => {
+                const plugin = (await this.importFromProject(name)).default;
+                return plugin(options === true ? {} : options);
+              }),
+          );
+      const processor = postcss(plugins);
+      const cwd = process.cwd();
+      return async (css: string, from: string) => {
+        // Tailwind v3 resolves `content` globs against the working directory.
+        process.chdir(this.root);
+        try {
+          return (await processor.process(css, { from })).css;
+        } finally {
+          process.chdir(cwd);
+        }
+      };
+    })();
+    return this.postcss;
+  }
+
+  private async importFromProject(name: string): Promise<any> {
+    return import(pathToFileURL(this.projectRequire.resolve(name)).href);
   }
 
   /**
@@ -61,6 +133,7 @@ export class CssPipeline {
   }
 
   private async buildTailwind(file: string, source: string): Promise<string> {
+    // v4 is compiled directly (not through PostCSS) so classes from unsaved edits can be added.
     let sheet = this.sheets.get(file);
     if (!sheet || sheet.source !== source) {
       const { node, oxide } = await this.loadTailwind();

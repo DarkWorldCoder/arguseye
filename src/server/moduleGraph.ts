@@ -3,7 +3,7 @@ import type { ResolverFactory } from "oxc-resolver";
 import { transform } from "oxc-transform";
 import { init, parse } from "es-module-lexer";
 import type { DepBundler } from "./depBundler.js";
-import type { CssPipeline } from "./cssPipeline.js";
+import { isStylesheet, type CssPipeline } from "./cssPipeline.js";
 import { assetModule, importsImagesAsObjects } from "./assets.js";
 import { createResolver } from "./resolver.js";
 
@@ -32,9 +32,9 @@ export class ModuleGraph {
   }
 
   async load(file: string): Promise<string> {
-    if (!SCRIPT_EXT.test(file) && !file.endsWith(".css")) return assetModule(file, this.imagesAsObjects);
+    if (!SCRIPT_EXT.test(file) && !isStylesheet(file)) return assetModule(file, this.imagesAsObjects);
     const source = await this.readSource(file);
-    if (file.endsWith(".css")) return cssModule(file, await this.css.process(file, source));
+    if (isStylesheet(file)) return cssModule(file, await this.css.process(file, source));
     const { code, errors } = await transform(file, source, {
       sourceType: "module",
       jsx: { runtime: "automatic", development: true, refresh: true },
