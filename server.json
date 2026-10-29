@@ -1,16 +1,28 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.DarkWorldCoder/arguseye",
-  "description": "Eyes for coding agents: render any React, Next.js or Vue component exactly as in the app, no dev server. Real props from call sites, states, parent context, changes since the last render.",
-  "repository": { "url": "https://github.com/DarkWorldCoder/arguseye", "source": "github" },
-  "version_detail": { "version": "0.0.3" },
+  "title": "Arguseye",
+  "description": "Renders React, Next.js and Vue components from source for coding agents, with no dev server.",
+  "repository": {
+    "url": "https://github.com/DarkWorldCoder/arguseye",
+    "source": "github"
+  },
+  "websiteUrl": "https://darkworldcoder.github.io/arguseye/",
+  "version": "0.0.5",
   "packages": [
     {
-      "registry_name": "npm",
-      "name": "@ayushniroula/arguseye",
-      "version": "0.0.3",
-      "runtime_hint": "npx",
-      "package_arguments": [{ "type": "positional", "value": "mcp" }]
+      "registryType": "npm",
+      "identifier": "@ayushniroula/arguseye",
+      "version": "0.0.5",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
     }
   ]
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.5
+
+- npm package carries `mcpName` for the official MCP Registry; `server.json` on the 2025-12-11 schema.
+
 ## 0.0.4
 
 - Reconstruct imported root Next Google font variables using matching cached font faces from the project's `.next/static` build; keep missing font context visible.
