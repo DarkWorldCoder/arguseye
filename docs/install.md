@@ -1,0 +1,26 @@
+# Install Component Preview for your agent or editor
+
+Everything runs through one MCP server: `npx component-preview mcp` (started in the project directory, or with `--root <dir>`). The `install` command writes the server entry and the skill where each client reads them; it merges into existing config and can be run again safely.
+
+```bash
+npx component-preview install all          # every client below
+npx component-preview install claude       # one client
+npx component-preview install codex --project /path/to/app --dry-run
+```
+
+| Client | What `install` writes | Alternative |
+|---|---|---|
+| Claude Code | `.mcp.json` in the project; skill in `~/.claude/skills/component-preview` | `claude mcp add component-preview -- npx -y component-preview mcp`, or the plugin: `claude plugin marketplace add ayushniroula/component-preview` then `claude plugin install component-preview` |
+| Codex | `[mcp_servers.component-preview]` in `~/.codex/config.toml`; skill in `~/.agents/skills/component-preview` | `codex mcp add component-preview -- npx -y component-preview mcp` |
+| Cursor | `~/.cursor/mcp.json`; skill in `.cursor/skills/component-preview` | Settings → MCP → add the JSON |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | |
+| VS Code (Copilot agent mode) | `.vscode/mcp.json` (`servers`) | |
+| Antigravity (CLI and IDE) | `.agents/mcp_config.json` and `.agents/skills/component-preview` in the workspace | plugin: `agy plugin install https://github.com/ayushniroula/component-preview` |
+
+## VS Code extension (the human panel)
+
+Marketplace listing: **Component Preview**. Cursor, Windsurf and VSCodium install the same extension from Open VSX. To install a local build: `npm run package` then `code --install-extension component-preview-*.vsix`.
+
+## Skill only (no MCP)
+
+The skill at `skills/component-preview/SKILL.md` follows the Agent Skills format and also works on its own: it tells the agent to use the CLI (`npx component-preview shot …`) when the MCP tools are not available. Copy it to `~/.claude/skills/`, `~/.agents/skills/` or `.cursor/skills/`.

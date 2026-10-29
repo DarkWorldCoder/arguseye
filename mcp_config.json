@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "component-preview": {
+      "command": "npx",
+      "args": ["-y", "component-preview", "mcp"]
+    }
+  }
+}

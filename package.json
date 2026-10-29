@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:vscode": "npm run build && node test/vscode/run.mjs",
     "benchmark": "npm run build && node scripts/benchmark.mjs",
-    "package": "npm run build && vsce package --allow-missing-repository"
+    "package": "npm run build && vsce package --target linux-x64 --allow-missing-repository",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -52,9 +53,10 @@
   },
   "files": [
     "dist",
+    "shims",
+    "skills",
     "README.md",
     "LICENSE",
-    "shims",
     "node_modules/**"
   ],
   "main": "./dist/extension.cjs",
@@ -89,5 +91,22 @@
         "when": "editorTextFocus"
       }
     ]
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ayushniroula/component-preview"
+  },
+  "keywords": [
+    "react",
+    "nextjs",
+    "vue",
+    "component",
+    "preview",
+    "mcp",
+    "agent",
+    "claude",
+    "codex",
+    "cursor",
+    "screenshot"
+  ]
 }

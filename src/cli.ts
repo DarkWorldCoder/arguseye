@@ -28,6 +28,9 @@ const HELP = `component-preview: inspect React and Vue components and verify UI 
   component-preview usages FILE [--export NAME] [--root DIR]
       Print every usage of a component with its real props (JSON)
 
+  component-preview install <claude|codex|cursor|windsurf|vscode|antigravity|all> [--project DIR] [--dry-run]
+      Write the MCP server entry and the skill where that agent reads them (merges existing config)
+
   component-preview serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
       Start the preview server and print a URL that shows the component live (updates as files change)`;
 
@@ -43,6 +46,8 @@ const { positionals, values } = parseArgs({
     port: { type: "string" },
     "in-context": { type: "boolean" },
     frame: { type: "string" },
+    project: { type: "string" },
+    "dry-run": { type: "boolean" },
     json: { type: "boolean" },
     output: { type: "string", default: "both" },
     "capture-dir": { type: "string" },
@@ -62,6 +67,15 @@ if (values.help || !command) {
   process.stdin.on("close", stop);
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
+} else if (command === "install" && file) {
+  const { install, CLIENTS } = await import("./install.js");
+  const client = file as any;
+  if (client !== "all" && !CLIENTS.includes(client)) { console.error(`Unknown client "${file}". One of: ${CLIENTS.join(", ")}, all`); process.exitCode = 2; }
+  else {
+    const steps = install({ client, project: path.resolve(values.project ?? root), dryRun: values["dry-run"] });
+    for (const s of steps) console.log(`${values["dry-run"] ? "would " : ""}${s.action.padEnd(5)} ${s.file}${s.note ? `  (${s.note})` : ""}`);
+    console.log(values["dry-run"] ? "Dry run: nothing written." : "Done. Restart the agent so it picks up the new MCP server and skill.");
+  }
 } else if (command === "serve" && file) {
   const server = await createPreviewServer({ root, port: values.port ? Number(values.port) : undefined, watch: true, warmup: true });
   const target = { file: path.resolve(root, file), exportName: values.export };

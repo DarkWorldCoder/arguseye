@@ -1,0 +1,21 @@
+{
+  "name": "component-preview",
+  "description": "See any React, Next.js or Vue component exactly as it looks in the app, with no dev server: render, states, parent context, changes since the last render.",
+  "version": "0.0.1",
+  "author": {
+    "name": "Ayush Niroula"
+  },
+  "homepage": "https://github.com/ayushniroula/component-preview",
+  "repository": "https://github.com/ayushniroula/component-preview",
+  "license": "MIT",
+  "mcpServers": {
+    "component-preview": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "component-preview",
+        "mcp"
+      ]
+    }
+  }
+}
