@@ -19,15 +19,25 @@ export async function run(): Promise<void> {
   const shown = await api.waitForStatus((s) => s.status === "mounted", 20000);
   assert.equal(shown.file, card);
   assert.deepEqual(shown.errors, []);
-  assert.match(shown.text, /Wireless Headphones/, "shown with the real props from app/page.tsx");
+  // The first mount takes the first usage the index lists (by path, so app/deals/page.tsx comes before
+  // app/page.tsx); check that it is a real usage and that its props are what rendered, whichever it is.
+  const first = api.state()!;
+  assert.equal(first.exportName, "ProductCard");
+  assert.equal(first.propsSource, "usage", "first mount uses real props; got " + JSON.stringify({ status: shown, state: first }));
+  assert.ok(first.usage && first.usages.some((u) => u.id === first.usage), "first mount names its usage; got " + JSON.stringify(first));
+  assert.ok(shown.text.includes(String(first.props.title)), `shown with the props of ${first.usage}; got ${JSON.stringify(shown.text)}`);
   assert.match(shown.text, /Add to cart \(0\)/);
 
-  // The panel knows the component's props (from its type) and can re-render with edited ones.
+  // The panel knows the component's props (from its type) and lets the caller pick which usage renders.
+  assert.deepEqual(first.schema.map((p) => `${p.name}${p.required ? "" : "?"}:${p.kind}`), ["title:string", "price:number", "tags?:array", "onSale?:boolean"]);
+  assert.ok(first.usages.some((u) => u.id === "app/page.tsx:9"), "app/page.tsx:9 is indexed; got " + JSON.stringify(first.usages.map((u) => u.id)));
+  await api.setUsage("app/page.tsx:9");
+  const headphones = await api.waitForStatus((s) => /Wireless Headphones/.test(s.text), 5000);
+  assert.deepEqual(headphones.errors, []);
+  assert.match(headphones.text, /Add to cart \(0\)/);
   const state = api.state()!;
-  assert.equal(state.exportName, "ProductCard");
+  assert.equal(state.usage, "app/page.tsx:9");
   assert.deepEqual(state.props, { title: "Wireless Headphones", price: 99, tags: ["audio", "bluetooth"], onSale: true });
-  assert.deepEqual(state.schema.map((p) => `${p.name}${p.required ? "" : "?"}:${p.kind}`), ["title:string", "price:number", "tags?:array", "onSale?:boolean"]);
-  assert.ok(state.usages.some((u) => u.id === "app/page.tsx:9"));
   await api.setUsage("app/page.tsx:10");
   await api.waitForStatus((s) => /USB-C Cable/.test(s.text), 5000);
   await api.setViewport("mobile");
@@ -56,7 +66,7 @@ export async function run(): Promise<void> {
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(page));
   const followed = await api.waitForStatus((s) => s.file === page && s.status === "mounted", 10000);
   assert.match(followed.text, /Hi Ayush/);
-  console.log("SUITE OK:", JSON.stringify({ first: shown.text.slice(0, 60), updated: updated.text.slice(0, 40), followed: followed.text.slice(0, 20) }));
+  console.log("SUITE OK:", JSON.stringify({ first: `${first.usage}: ${shown.text.slice(0, 40)}`, headphones: headphones.text.slice(0, 40), updated: updated.text.slice(0, 40), followed: followed.text.slice(0, 20) }));
 
   // For screenshots: keep the window up after the checks (CP_HOLD_MS=15000 npm run test:vscode).
   if (process.env.CP_HOLD_MS) await new Promise((r) => setTimeout(r, Number(process.env.CP_HOLD_MS)));
