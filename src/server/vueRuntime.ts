@@ -29,7 +29,7 @@ cp.show = async (target, state) => {
   return cp.status;
 };
 cp.report = () => {
-  if (parent !== window) parent.postMessage({ source: "component-preview", file: cp.target.file, status: cp.status, errors: [...cp.errors], warnings: [...cp.warnings], text: document.getElementById("root").innerText }, "*");
+  if (parent !== window) parent.postMessage({ source: "arguseye", file: cp.target.file, status: cp.status, errors: [...cp.errors], warnings: [...cp.warnings], text: document.getElementById("root").innerText }, "*");
 };
 addEventListener("message", async (event) => {
   if (event.source !== parent || event.data?.type !== "cp:show") return;

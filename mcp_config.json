@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "component-preview": {
+    "arguseye": {
       "command": "npx",
-      "args": ["-y", "component-preview", "mcp"]
+      "args": ["-y", "arguseye", "mcp"]
     }
   }
 }

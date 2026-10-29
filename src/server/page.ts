@@ -201,7 +201,7 @@ cp.report = () => {
   if (window.parent === window) return;
   const root = document.getElementById("root");
   window.parent.postMessage(
-    { source: "component-preview", file: cp.target.file, status: cp.status, errors: [...cp.errors], text: root.innerText },
+    { source: "arguseye", file: cp.target.file, status: cp.status, errors: [...cp.errors], text: root.innerText },
     "*",
   );
 };

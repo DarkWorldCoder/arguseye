@@ -17,7 +17,7 @@ export type InstallOptions = {
 
 export type InstallStep = { file: string; action: "write" | "merge" | "copy"; note?: string };
 
-const SERVER = { command: "npx", args: ["-y", "component-preview", "mcp", "--root"] };
+const SERVER = { command: "npx", args: ["-y", "arguseye", "mcp", "--root"] };
 const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /**
@@ -29,7 +29,7 @@ export function install({ client, project, home = os.homedir(), dryRun = false }
   const root = path.resolve(project);
   const steps: InstallStep[] = [];
   const server = { command: SERVER.command, args: [...SERVER.args, root] };
-  const skillSource = path.join(PACKAGE_ROOT, "skills", "component-preview");
+  const skillSource = path.join(PACKAGE_ROOT, "skills", "arguseye");
 
   const writeJsonMerge = (file: string, mutate: (json: any) => void, note?: string) => {
     const current = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
@@ -52,34 +52,34 @@ export function install({ client, project, home = os.homedir(), dryRun = false }
     switch (c) {
       case "claude":
         // Project-scoped MCP config Claude Code reads; the skill goes to the user's skills directory.
-        writeJsonMerge(path.join(root, ".mcp.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["component-preview"] = server; }, "Claude Code reads .mcp.json in the project");
-        copySkill(path.join(home, ".claude", "skills", "component-preview"), "user skill for Claude Code");
+        writeJsonMerge(path.join(root, ".mcp.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Claude Code reads .mcp.json in the project");
+        copySkill(path.join(home, ".claude", "skills", "arguseye"), "user skill for Claude Code");
         break;
       case "codex": {
         const file = path.join(home, ".codex", "config.toml");
         const current = existsSync(file) ? readFileSync(file, "utf8") : "";
-        const block = `\n[mcp_servers.component-preview]\ncommand = ${JSON.stringify(server.command)}\nargs = ${JSON.stringify(server.args)}\n`;
-        const next = current.includes("[mcp_servers.component-preview]")
-          ? current.replace(/\n\[mcp_servers\.component-preview\][^[]*/s, block)
+        const block = `\n[mcp_servers.arguseye]\ncommand = ${JSON.stringify(server.command)}\nargs = ${JSON.stringify(server.args)}\n`;
+        const next = current.includes("[mcp_servers.arguseye]")
+          ? current.replace(/\n\[mcp_servers\.arguseye\][^[]*/s, block)
           : current + block;
         steps.push({ file, action: current ? "merge" : "write", note: "Codex reads ~/.codex/config.toml" });
         if (!dryRun) { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, next); }
-        copySkill(path.join(home, ".agents", "skills", "component-preview"), "Codex (and Antigravity) read ~/.agents/skills");
+        copySkill(path.join(home, ".agents", "skills", "arguseye"), "Codex (and Antigravity) read ~/.agents/skills");
         break;
       }
       case "cursor":
-        writeJsonMerge(path.join(home, ".cursor", "mcp.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["component-preview"] = { type: "stdio", ...server }; }, "Cursor reads ~/.cursor/mcp.json");
-        copySkill(path.join(root, ".cursor", "skills", "component-preview"), "Cursor reads project skills from .cursor/skills");
+        writeJsonMerge(path.join(home, ".cursor", "mcp.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = { type: "stdio", ...server }; }, "Cursor reads ~/.cursor/mcp.json");
+        copySkill(path.join(root, ".cursor", "skills", "arguseye"), "Cursor reads project skills from .cursor/skills");
         break;
       case "windsurf":
-        writeJsonMerge(path.join(home, ".codeium", "windsurf", "mcp_config.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["component-preview"] = server; }, "Windsurf reads ~/.codeium/windsurf/mcp_config.json");
+        writeJsonMerge(path.join(home, ".codeium", "windsurf", "mcp_config.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Windsurf reads ~/.codeium/windsurf/mcp_config.json");
         break;
       case "vscode":
-        writeJsonMerge(path.join(root, ".vscode", "mcp.json"), (j) => { j.servers ??= {}; j.servers["component-preview"] = { type: "stdio", ...server }; }, "VS Code (Copilot agent mode) reads .vscode/mcp.json");
+        writeJsonMerge(path.join(root, ".vscode", "mcp.json"), (j) => { j.servers ??= {}; j.servers["arguseye"] = { type: "stdio", ...server }; }, "VS Code (Copilot agent mode) reads .vscode/mcp.json");
         break;
       case "antigravity":
-        writeJsonMerge(path.join(root, ".agents", "mcp_config.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["component-preview"] = server; }, "Antigravity reads .agents/mcp_config.json in the workspace");
-        copySkill(path.join(root, ".agents", "skills", "component-preview"), "Antigravity and Codex read .agents/skills in the repo");
+        writeJsonMerge(path.join(root, ".agents", "mcp_config.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Antigravity reads .agents/mcp_config.json in the workspace");
+        copySkill(path.join(root, ".agents", "skills", "arguseye"), "Antigravity and Codex read .agents/skills in the repo");
         break;
     }
   }

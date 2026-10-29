@@ -1,8 +1,8 @@
-# Component Preview
+# Arguseye
 
 See a component, change it, and inspect the consequences—without starting the app or writing stories.
 
-Component Preview renders your actual React or Vue components with your project's packages. Coding agents receive screenshots, accessibility snapshots, source fingerprints, unresolved-input warnings, and before/after comparisons. VS Code shows a live preview of the same source and uses the same verification engine.
+Arguseye renders your actual React or Vue components with your project's packages. Coding agents receive screenshots, accessibility snapshots, source fingerprints, unresolved-input warnings, and before/after comparisons. VS Code shows a live preview of the same source and uses the same verification engine.
 
 ## Run locally
 
@@ -11,11 +11,11 @@ Use Node.js 22 or newer (validated on Node 24), install the target project's dep
 ```sh
 npm ci
 npm run build
-node /path/to/component-preview/dist/cli.mjs shot components/Card.tsx \
+node /path/to/arguseye/dist/cli.mjs shot components/Card.tsx \
   --root /path/to/your-app --export Card --props '{"title":"Desk"}' --out /tmp/card.png
 ```
 
-There is no application dev server to start. Component Preview itself runs a loopback-only module server and Chromium. It executes your component code and does not supply missing backends or authentication.
+There is no application dev server to start. Arguseye itself runs a loopback-only module server and Chromium. It executes your component code and does not supply missing backends or authentication.
 
 ## Connect a coding agent
 
@@ -24,13 +24,13 @@ Build once, then substitute absolute paths in these examples. No API key is requ
 **Codex**
 
 ```sh
-codex mcp add component-preview -- node /path/to/component-preview/dist/cli.mjs mcp --root /path/to/your-app
+codex mcp add arguseye -- node /path/to/arguseye/dist/cli.mjs mcp --root /path/to/your-app
 ```
 
 **Claude Code**
 
 ```sh
-claude mcp add component-preview -- node /path/to/component-preview/dist/cli.mjs mcp --root /path/to/your-app
+claude mcp add arguseye -- node /path/to/arguseye/dist/cli.mjs mcp --root /path/to/your-app
 ```
 
 **Cursor** — put this in the target project's `.cursor/mcp.json`:
@@ -38,9 +38,9 @@ claude mcp add component-preview -- node /path/to/component-preview/dist/cli.mjs
 ```json
 {
   "mcpServers": {
-    "component-preview": {
+    "arguseye": {
       "command": "node",
-      "args": ["/path/to/component-preview/dist/cli.mjs", "mcp", "--root", "/path/to/your-app"]
+      "args": ["/path/to/arguseye/dist/cli.mjs", "mcp", "--root", "/path/to/your-app"]
     }
   }
 }
@@ -51,10 +51,10 @@ claude mcp add component-preview -- node /path/to/component-preview/dist/cli.mjs
 ```json
 {
   "servers": {
-    "component-preview": {
+    "arguseye": {
       "type": "stdio",
       "command": "node",
-      "args": ["/path/to/component-preview/dist/cli.mjs", "mcp", "--root", "/path/to/your-app"]
+      "args": ["/path/to/arguseye/dist/cli.mjs", "mcp", "--root", "/path/to/your-app"]
     }
   }
 }
@@ -109,7 +109,7 @@ A baseline directory contains `capture.json` and `capture.png`. A comparison dir
 
 Build a local extension package with `npm run package -- --target linux-x64` on Linux x64, then install the resulting VSIX through **Extensions → Install from VSIX**. Build on each target platform to include its native dependencies.
 
-Open a `.tsx`, `.jsx`, or `.vue` file and run **Component Preview: Preview Component** (`Ctrl+Alt+P`, or `Cmd+Alt+P` on macOS). The panel provides export and usage selection, editable typed React props, fixed viewport presets, **Capture Baseline**, and **Compare Changes**.
+Open a `.tsx`, `.jsx`, or `.vue` file and run **Arguseye: Preview Component** (`Ctrl+Alt+P`, or `Cmd+Alt+P` on macOS). The panel provides export and usage selection, editable typed React props, fixed viewport presets, **Capture Baseline**, and **Compare Changes**.
 
 Unsaved edits update the live preview. Ordinary React refresh and Vue template/style updates preserve component state. Vue script edits reset state and report that reset. Verification renders use fresh component state. Changing selected props, usage, export, or viewport requires a new baseline.
 

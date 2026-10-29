@@ -1,6 +1,6 @@
 {
-  "name": "component-preview",
-  "displayName": "Component Preview",
+  "name": "arguseye",
+  "displayName": "Arguseye",
   "description": "See any React, Next.js or Vue component live beside your code, as it looks in your app. No dev server.",
   "version": "0.0.1",
   "publisher": "ayushniroula",
@@ -49,7 +49,7 @@
     "vitest": "^5.0.5"
   },
   "bin": {
-    "component-preview": "./dist/cli.mjs"
+    "arguseye": "./dist/cli.mjs"
   },
   "files": [
     "dist",
@@ -70,7 +70,7 @@
       {
         "command": "componentPreview.open",
         "title": "Preview Component",
-        "category": "Component Preview",
+        "category": "Arguseye",
         "icon": "$(eye)"
       }
     ],
@@ -94,7 +94,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ayushniroula/component-preview"
+    "url": "https://github.com/DarkWorldCoder/arguseye"
   },
   "keywords": [
     "react",

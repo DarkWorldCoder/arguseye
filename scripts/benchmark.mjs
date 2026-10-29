@@ -10,7 +10,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scratch = mkdtempSync(path.join(os.tmpdir(), "cp-benchmark-"));
 const fixture = path.join(repo, "test/fixtures/react-app");
-const cpRoot = path.join(scratch, "component-preview"), pwRoot = path.join(scratch, "playwright");
+const cpRoot = path.join(scratch, "arguseye"), pwRoot = path.join(scratch, "playwright");
 for (const root of [cpRoot, pwRoot]) {
   cpSync(fixture, root, { recursive: true, filter: (p) => !p.includes("node_modules") });
   symlinkSync(path.join(fixture, "node_modules"), path.join(root, "node_modules"));
@@ -24,7 +24,7 @@ async function connect(args, cwd) {
   const started = performance.now();
   const transport = new StdioClientTransport({ command: process.execPath, args, cwd, stderr: "pipe" });
   transports.push(transport);
-  const client = new Client({ name: "component-preview-benchmark", version: "1" }); clients.push(client);
+  const client = new Client({ name: "arguseye-benchmark", version: "1" }); clients.push(client);
   await client.connect(transport);
   return { client, startupMs: Math.round(performance.now() - started) };
 }
@@ -57,7 +57,7 @@ try {
     writeFileSync(cpFile, readFileSync(cpFile, "utf8").replace(index === 0 ? "Add to cart" : "Buy now", wanted));
     const diff = await call(cp.client, cpMetrics, "render_diff", { baselineId: baseline.structuredContent.captureId });
     const verified = diff.structuredContent.after.errors.length === 0 && diff.structuredContent.after.snapshot.includes(wanted);
-    report.results.push({ engine: "Component Preview MCP", phase, startupMs: phase === "cold" ? cp.startupMs : 0, workflowMs: Math.round(performance.now() - cpStart), verified, status: diff.structuredContent.status, ...cpMetrics, approximateTextTokens: Math.ceil(cpMetrics.textCharacters / 4) });
+    report.results.push({ engine: "Arguseye MCP", phase, startupMs: phase === "cold" ? cp.startupMs : 0, workflowMs: Math.round(performance.now() - cpStart), verified, status: diff.structuredContent.status, ...cpMetrics, approximateTextTokens: Math.ceil(cpMetrics.textCharacters / 4) });
     const pwMetrics = metrics(), pwStart = performance.now();
     let navigation = await call(pw.client, pwMetrics, phase === "cold" ? "browser_navigate" : "browser_snapshot", phase === "cold" ? { url } : {});
     let snapshot = navigation.content.filter((c) => c.type === "text").map((c) => c.text).join("\n");

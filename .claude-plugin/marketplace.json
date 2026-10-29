@@ -1,17 +1,17 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "component-preview",
+  "name": "arguseye",
   "metadata": { "description": "Eyes for coding agents: render components exactly as in the app, no dev server." },
   "owner": { "name": "Ayush Niroula" },
   "plugins": [
     {
-      "name": "component-preview",
+      "name": "arguseye",
       "description": "See any React, Next.js or Vue component exactly as it looks in the app, with no dev server.",
       "version": "0.0.1",
       "author": { "name": "Ayush Niroula" },
       "source": ".",
       "category": "development",
-      "homepage": "https://github.com/ayushniroula/component-preview"
+      "homepage": "https://github.com/DarkWorldCoder/arguseye"
     }
   ]
 }

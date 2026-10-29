@@ -1,6 +1,6 @@
-# Component Preview: rules for every agent working here
+# Arguseye: rules for every agent working here
 
-Component Preview is **eyes for coding agents**: it renders a real component or page from the user's project, looking exactly as it does in their app, with no dev server and no stories. The VS Code panel is the human view of the same engine. Before adding or cutting a feature, read `docs/product.md` (who it's for, what makes it different, what agents need back).
+Arguseye is **eyes for coding agents**: it renders a real component or page from the user's project, looking exactly as it does in their app, with no dev server and no stories. The VS Code panel is the human view of the same engine. Before adding or cutting a feature, read `docs/product.md` (who it's for, what makes it different, what agents need back).
 
 ## Workflow: red → green, one slice per commit
 1. Write one failing test at an agreed seam. Watch it go **red** for the right reason.

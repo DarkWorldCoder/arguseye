@@ -283,7 +283,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   if (options.watch) {
     const pending = new Map<string, NodeJS.Timeout>();
     watcher = watch(options.root, { recursive: true }, (_event, name) => {
-      if (!name || /node_modules|\.git[\/]|\.component-preview/.test(name)) return;
+      if (!name || /node_modules|\.git[\/]|\.arguseye/.test(name)) return;
       const file = path.join(options.root, name);
       if (!servedMtimes.has(file) || overlay.has(file)) return;
       clearTimeout(pending.get(file));

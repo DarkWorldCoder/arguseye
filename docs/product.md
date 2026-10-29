@@ -1,6 +1,6 @@
-# Product: why Component Preview exists
+# Product: why Arguseye exists
 
-Component Preview is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
+Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 
 ## What is implemented
 

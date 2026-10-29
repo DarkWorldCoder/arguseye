@@ -97,7 +97,7 @@ export class DepBundler {
 
   constructor(private root: string) {
     this.aliases = vendoredReact(root) ?? {};
-    this.cacheDir = path.join(root, "node_modules", ".component-preview", "deps");
+    this.cacheDir = path.join(root, "node_modules", ".arguseye", "deps");
     // Temp folders left by a process that died mid-write.
     try {
       for (const name of readdirSync(this.cacheDir)) if (/\.\d+$/.test(name)) rmSync(path.join(this.cacheDir, name), { recursive: true, force: true });

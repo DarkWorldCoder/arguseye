@@ -276,7 +276,7 @@ class PreviewPanel implements vscode.Disposable {
 
   private createPanel(): vscode.WebviewPanel {
     // Keeps the cursor in the file being edited: the preview is for watching while typing.
-    const panel = vscode.window.createWebviewPanel("componentPreview", "Component Preview", { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
+    const panel = vscode.window.createWebviewPanel("componentPreview", "Arguseye", { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
       enableScripts: true,
       retainContextWhenHidden: true,
     });
@@ -289,7 +289,7 @@ class PreviewPanel implements vscode.Disposable {
       if (message.type === "compare") return act(this.compareChanges());
       if (message.type === "props") return void this.setProps(message.props);
       if (message.type === "export") return void this.setExport(message.exportName);
-      if (message.source !== "component-preview") return;
+      if (message.source !== "arguseye") return;
       this.current = { file: message.file, status: message.status, errors: message.errors, text: message.text };
       this.statusChanged.fire(this.current);
     });
@@ -379,7 +379,7 @@ vscode.postMessage({ type: "ready" });
 
 addEventListener("message", (event) => {
   const data = event.data;
-  if (event.source === frame.contentWindow && data?.source === "component-preview") vscode.postMessage(data);        // from the preview page
+  if (event.source === frame.contentWindow && data?.source === "arguseye") vscode.postMessage(data);        // from the preview page
   else if (data?.type === "show") frame.contentWindow.postMessage({ type: "cp:show", target: data.target }, "*");
   else if (data?.type === "verification") {
     const host = document.getElementById("verification"); host.replaceChildren();

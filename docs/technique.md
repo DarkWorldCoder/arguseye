@@ -1,4 +1,4 @@
-# Mirror rendering: how Component Preview shows a component as the app shows it
+# Mirror rendering: how Arguseye shows a component as the app shows it
 
 No dev server, no stories, no mocks. The technique has five parts; each is ours, and together they are what no other tool does. The pixels come from Chromium, on purpose: "exactly as in the app" is only true when the same engine draws it.
 

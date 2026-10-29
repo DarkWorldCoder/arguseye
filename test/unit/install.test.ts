@@ -11,14 +11,14 @@ describe("install for agent clients", () => {
     const home = tmp(), project = tmp();
     const steps = install({ client: "all", project, home });
     expect(steps.map((s) => path.relative(home, s.file).replace(/\\/g, "/")).filter((f) => !f.startsWith(".."))).toEqual(
-      expect.arrayContaining([".claude/skills/component-preview/SKILL.md", ".codex/config.toml", ".agents/skills/component-preview/SKILL.md", ".cursor/mcp.json", ".codeium/windsurf/mcp_config.json"]),
+      expect.arrayContaining([".claude/skills/arguseye/SKILL.md", ".codex/config.toml", ".agents/skills/arguseye/SKILL.md", ".cursor/mcp.json", ".codeium/windsurf/mcp_config.json"]),
     );
     const claude = JSON.parse(readFileSync(path.join(project, ".mcp.json"), "utf8"));
-    expect(claude.mcpServers["component-preview"]).toEqual({ command: "npx", args: ["-y", "component-preview", "mcp", "--root", project] });
-    expect(readFileSync(path.join(home, ".codex", "config.toml"), "utf8")).toContain("[mcp_servers.component-preview]");
-    expect(readFileSync(path.join(home, ".claude", "skills", "component-preview", "SKILL.md"), "utf8")).toMatch(/^---\nname: component-preview/);
-    expect(JSON.parse(readFileSync(path.join(project, ".vscode", "mcp.json"), "utf8")).servers["component-preview"].type).toBe("stdio");
-    expect(existsSync(path.join(project, ".agents", "skills", "component-preview", "SKILL.md"))).toBe(true);
+    expect(claude.mcpServers["arguseye"]).toEqual({ command: "npx", args: ["-y", "arguseye", "mcp", "--root", project] });
+    expect(readFileSync(path.join(home, ".codex", "config.toml"), "utf8")).toContain("[mcp_servers.arguseye]");
+    expect(readFileSync(path.join(home, ".claude", "skills", "arguseye", "SKILL.md"), "utf8")).toMatch(/^---\nname: arguseye/);
+    expect(JSON.parse(readFileSync(path.join(project, ".vscode", "mcp.json"), "utf8")).servers["arguseye"].type).toBe("stdio");
+    expect(existsSync(path.join(project, ".agents", "skills", "arguseye", "SKILL.md"))).toBe(true);
 
     // Running again keeps other servers and does not duplicate ours.
     const cursor = path.join(home, ".cursor", "mcp.json");
@@ -27,8 +27,8 @@ describe("install for agent clients", () => {
     writeFileSync(cursor, JSON.stringify(before));
     install({ client: "cursor", project, home });
     const after = JSON.parse(readFileSync(cursor, "utf8"));
-    expect(Object.keys(after.mcpServers).sort()).toEqual(["component-preview", "other"]);
-    expect(readFileSync(path.join(home, ".codex", "config.toml"), "utf8").match(/mcp_servers\.component-preview/g)).toHaveLength(1);
+    expect(Object.keys(after.mcpServers).sort()).toEqual(["arguseye", "other"]);
+    expect(readFileSync(path.join(home, ".codex", "config.toml"), "utf8").match(/mcp_servers\.arguseye/g)).toHaveLength(1);
   });
 
   it("dry run reports steps and writes nothing", () => {

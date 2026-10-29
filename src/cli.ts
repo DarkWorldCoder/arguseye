@@ -10,28 +10,28 @@ import { createMcpServer } from "./agent/mcpServer.js";
 import { createPreviewServer } from "./server/createPreviewServer.js";
 import { findUsages } from "./usages/findUsages.js";
 
-const HELP = `component-preview: inspect React and Vue components and verify UI edits, no dev server
+const HELP = `arguseye: inspect React and Vue components and verify UI edits, no dev server
 
-  component-preview mcp [--root DIR]
+  arguseye mcp [--root DIR]
       MCP server on stdio for coding agents (render_component, list_usages, render_usages)
 
-  component-preview shot FILE [--export NAME] [--usage ID] [--props JSON] [--viewport WxH] [--out FILE.png] [--root DIR]
+  arguseye shot FILE [--export NAME] [--usage ID] [--props JSON] [--viewport WxH] [--out FILE.png] [--root DIR]
       Render once: writes a PNG and prints the accessibility snapshot and errors
       --in-context renders inside the usage's parent elements; --frame WxH[:background] inside a stand-in box
 
-  component-preview shot FILE [--capture-dir DIR] [--json] [--output image|summary|both]
+  arguseye shot FILE [--capture-dir DIR] [--json] [--output image|summary|both]
       Save an immutable baseline and optional PNG; JSON reports metadata without image bytes
 
-  component-preview diff --baseline DIR --out DIR [--json] [--root DIR]
+  arguseye diff --baseline DIR --out DIR [--json] [--root DIR]
       Compare current source against a saved baseline; writes before/after/diff PNGs and JSON
 
-  component-preview usages FILE [--export NAME] [--root DIR]
+  arguseye usages FILE [--export NAME] [--root DIR]
       Print every usage of a component with its real props (JSON)
 
-  component-preview install <claude|codex|cursor|windsurf|vscode|antigravity|all> [--project DIR] [--dry-run]
+  arguseye install <claude|codex|cursor|windsurf|vscode|antigravity|all> [--project DIR] [--dry-run]
       Write the MCP server entry and the skill where that agent reads them (merges existing config)
 
-  component-preview serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
+  arguseye serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
       Start the preview server and print a URL that shows the component live (updates as files change)`;
 
 const { positionals, values } = parseArgs({

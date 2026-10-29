@@ -8,7 +8,7 @@ const card = path.join(root, "components/ProductCard.tsx");
 
 /** Entry point for @vscode/test-electron: runs the checks and throws on the first failure. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension("ayushniroula.component-preview");
+  const extension = vscode.extensions.getExtension("ayushniroula.arguseye");
   assert.ok(extension, "extension is installed in the test host");
   const api: PreviewApi = await extension.activate();
 

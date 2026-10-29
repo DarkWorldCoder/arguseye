@@ -22,7 +22,7 @@ const look = {
 export async function createMcpServer(options: { root: string; warmup?: boolean }) {
   const root = path.resolve(options.root);
   const renderer = await createRenderer({ root, warmup: options.warmup ?? true });
-  const server = new McpServer({ name: "component-preview", version: "0.0.1" });
+  const server = new McpServer({ name: "arguseye", version: "0.0.1" });
   const abs = (file: string) => path.resolve(root, file);
   const rel = (file: string) => path.relative(root, file);
 

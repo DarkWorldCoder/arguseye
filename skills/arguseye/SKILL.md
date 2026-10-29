@@ -1,9 +1,9 @@
 ---
-name: component-preview
-description: See what a React, Next.js or Vue component or page looks like, exactly as in the app, without a dev server. Use after writing or editing UI, to check a layout, a style, a state (open menu, filled form, hovered), a usage in its real parent, or what an edit changed. Works through the component-preview MCP tools, or the CLI when MCP is unavailable.
+name: arguseye
+description: See what a React, Next.js or Vue component or page looks like, exactly as in the app, without a dev server. Use after writing or editing UI, to check a layout, a style, a state (open menu, filled form, hovered), a usage in its real parent, or what an edit changed. Works through the arguseye MCP tools, or the CLI when MCP is unavailable.
 ---
 
-# Component Preview
+# Arguseye
 
 Eyes for coding agents: render any component from source with the project's own packages, global CSS, Tailwind, theme providers and nested layouts, in Chromium, and get back a cropped PNG, the accessibility tree, layout timings and errors with file paths. Warm renders take tens of milliseconds; nothing needs to be running.
 
@@ -13,7 +13,7 @@ Eyes for coding agents: render any component from source with the project's own 
 - When a component needs a state: pass `actions` (click, hover, fill, press, scroll, wait) and `storage` (localStorage/sessionStorage for logged-in or flagged states).
 - When a component has no usage yet: `describe_props` gives the schema and sample props; `frame` gives it a parent box of a chosen size and background.
 
-## Tools (MCP server `component-preview`)
+## Tools (MCP server `arguseye`)
 | Tool | Use |
 |---|---|
 | `render_component {file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?}` | The render. Prefer `usage` ids from `list_usages` so the props are real. `viewport`: `mobile`, `tablet`, `desktop` or `WxH`. |
@@ -32,9 +32,9 @@ Function props are passed as `{ "$fn": "(x) => ..." }`. Paths are relative to th
 
 ## Without MCP (CLI)
 ```bash
-npx component-preview shot src/components/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png
-npx component-preview usages src/components/Card.tsx --export Card
-npx component-preview serve src/components/Card.tsx --export Card --port 4321   # live page with hot reload
+npx arguseye shot src/components/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png
+npx arguseye usages src/components/Card.tsx --export Card
+npx arguseye serve src/components/Card.tsx --export Card --port 4321   # live page with hot reload
 ```
 
 ## Workflow
