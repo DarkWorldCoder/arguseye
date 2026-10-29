@@ -1,7 +1,7 @@
 import { vueRuntime } from "./vueRuntime.js";
 import http from "node:http";
 import { createHash } from "node:crypto";
-import { appendFileSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, readFileSync, statSync, watch } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
@@ -21,6 +21,8 @@ export type PreviewServerOptions = {
   root: string;
   /** Bundle every package the project's sources import at start, so later renders never rebuild or reload. */
   warmup?: boolean;
+  /** Watch the project on disk and push changes to open pages (hot reload without an editor). */
+  watch?: boolean;
   /** Fixed port (default: any free one), e.g. to keep a browser's permission for the origin. */
   port?: number;
 };
@@ -253,6 +255,20 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   if (options.warmup) warming = warmup();
 
+  // Disk watcher: a file served to a page that changes on disk (saved by anyone) is pushed like an editor edit.
+  let watcher: ReturnType<typeof watch> | undefined;
+  if (options.watch) {
+    const pending = new Map<string, NodeJS.Timeout>();
+    watcher = watch(options.root, { recursive: true }, (_event, name) => {
+      if (!name || /node_modules|\.git[\/]|\.component-preview/.test(name)) return;
+      const file = path.join(options.root, name);
+      if (!servedMtimes.has(file) || overlay.has(file)) return;
+      clearTimeout(pending.get(file));
+      pending.set(file, setTimeout(() => { pending.delete(file); syncDisk(); }, 30));
+    });
+    watcher.on("error", () => {});
+  }
+
   return {
     url: `http://127.0.0.1:${port}`,
     context: () => { const app = appContext(); return { globalCssUrls: app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
@@ -271,7 +287,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     errorsSince,
     prepare,
     ready: () => warming,
-    close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
+    close: () => new Promise((r) => { watcher?.close(); server.closeAllConnections(); server.close(() => r()); }),
   };
 }
 

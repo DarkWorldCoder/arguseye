@@ -63,7 +63,7 @@ if (values.help || !command) {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 } else if (command === "serve" && file) {
-  const server = await createPreviewServer({ root, port: values.port ? Number(values.port) : undefined });
+  const server = await createPreviewServer({ root, port: values.port ? Number(values.port) : undefined, watch: true, warmup: true });
   const target = { file: path.resolve(root, file), exportName: values.export };
   let props = values.props ? JSON.parse(values.props) : undefined;
   if (values.usage) props = { ...(await findUsages(root, target.file, target.exportName)).find((u) => u.id === values.usage)?.props, ...props };
