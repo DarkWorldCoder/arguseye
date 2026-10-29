@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.2
+
+- Gemini CLI install target; required function props get a stand-in in sample props; Marketplace publishing through trusted publishing; project site at darkworldcoder.github.io/arguseye.
+
 ## 0.0.1 (unreleased)
 
 First public version.

@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx vsce package --target ${{ matrix.target }} --allow-missing-repository
+      - run: npx @vscode/vsce package --target ${{ matrix.target }} --allow-missing-repository --readme-path README.marketplace.md
       - uses: actions/upload-artifact@v4
         with:
           name: vsix-${{ matrix.target }}
@@ -60,7 +60,10 @@ jobs:
       - run: for f in artifacts/*/*.vsix; do npx @vscode/vsce publish --oidc --packagePath "$f"; done
 
   npm:
+    # Skipped until the NPM_TOKEN secret exists (or npm trusted publishing is configured).
     runs-on: ubuntu-latest
+    env:
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,5 +72,6 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm publish --access public
+        if: env.HAS_NPM_TOKEN == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

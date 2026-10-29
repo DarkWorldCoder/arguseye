@@ -2,7 +2,7 @@
   "name": "arguseye",
   "displayName": "Arguseye",
   "description": "See any React, Next.js or Vue component live beside your code, as it looks in your app. No dev server.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "ayushniroula",
   "license": "MIT",
   "engines": {
