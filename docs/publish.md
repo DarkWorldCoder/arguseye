@@ -22,7 +22,7 @@ After this, `npx arguseye install claude` works for anyone.
 
 ## 3. VS Code Marketplace
 
-1. Create a publisher named `ayushniroula` at https://marketplace.visualstudio.com/manage (one time).
+1. Publisher `ayushniroula` exists (created 2026-10-29 at https://marketplace.visualstudio.com/manage/publishers/ayushniroula). The VSIX is 32 MB, so it has to go through `vsce`, not the web upload.
 2. Create an Azure DevOps personal access token with the **Marketplace → Manage** scope.
 3. Publish a platform build (the native binaries are per platform):
 
