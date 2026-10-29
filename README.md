@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="Arguseye: a terminal renders a component in 1.5 s with real props, next to the rendered card" width="960">
+  <img src="assets/banner.svg" alt="Arguseye: your coding agent can see what it just built" width="1000">
 </p>
 
 <p align="center">
@@ -21,6 +21,10 @@ npx arguseye install claude      # or codex, cursor, windsurf, vscode, antigravi
 ```
 
 One command writes the MCP server and the skill where your agent reads them. Then tell the agent: *look at the card you just changed.*
+
+<p align="center">
+  <img src="assets/hero.svg" alt="Editing a real home-page section of a production Next.js app: the desktop and mobile previews update beside the code, and the agent gets the measured change" width="1000">
+</p>
 
 ## What changes for you
 
@@ -74,6 +78,8 @@ CLI for agents without MCP: `npx arguseye shot src/Card.tsx --export Card --usag
 The skill (`skills/arguseye/SKILL.md`) follows the Agent Skills format and works on its own too: it tells the agent when to look, how to read a result, and how to use the CLI if MCP is unavailable.
 
 ## VS Code
+
+<p align="center"><img src="assets/hero-editor.svg" alt="Typing in the editor re-renders the component beside it; component state is kept" width="1000"></p>
 
 Open a `.tsx`, `.jsx` or `.vue` file and run **Preview Component** (the eye icon in the editor title, or `Ctrl+Alt+P`). The panel shows the component with the props from its first real usage, follows the file you edit, re-renders in under 50 ms as you type with component state kept, and has a props form built from the component's type. Extension id `ayushniroula.arguseye` on the Marketplace and Open VSX (Cursor, Windsurf, VSCodium).
 
