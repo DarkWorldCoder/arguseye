@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { routeFor } from "../project/routeFor.js";
 import { defaultRouteFile } from "../project/appContext.js";
 import path from "node:path";
 import { compareCaptures, type DiffResult } from "./compareCaptures.js";
@@ -228,14 +229,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           target.contextFile = path.resolve(options.root, found.id.split(":")[0]);
         }
       }
-      // The page whose layouts and templates wrap the render: the usage's page, else a page that uses it, else the most common route.
-      const usageFile = (id: string) => path.resolve(options.root, id.split(":")[0]);
-      let route = usage ? usageFile(usage) : resolved ? usageFile(resolved.id) : undefined;
-      if (!route) {
-        const any = (await usages.list(rest.file, rest.exportName)).find((u) => /(^|\/)page\.[jt]sx?:/.test(u.id));
-        route = any ? usageFile(any.id) : rest.file.includes(`${path.sep}app${path.sep}`) ? rest.file : defaultRouteFile(options.root);
-      }
-      target.route = route;
+      target.route = resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
       const contextApplied = target.context?.map((w) => (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
       const key = `${rest.file.endsWith(".vue") ? "vue" : "react"}:${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);

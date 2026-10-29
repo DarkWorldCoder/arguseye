@@ -9,6 +9,7 @@ import { createRenderer } from "./agent/createRenderer.js";
 import { createMcpServer } from "./agent/mcpServer.js";
 import { createPreviewServer } from "./server/createPreviewServer.js";
 import { findUsages } from "./usages/findUsages.js";
+import { routeFor } from "./project/routeFor.js";
 
 const HELP = `arguseye: inspect React and Vue components and verify UI edits, no dev server
 
@@ -84,7 +85,8 @@ if (values.help || !command) {
   const target = { file: path.resolve(root, file), exportName: values.export };
   let props = values.props ? JSON.parse(values.props) : undefined;
   if (values.usage) props = { ...(await findUsages(root, target.file, target.exportName)).find((u) => u.id === values.usage)?.props, ...props };
-  console.log(`${server.url}${server.pageUrl({ ...target, props })}`);
+  const route = await routeFor(root, target.file, target.exportName, values.usage, (f, e) => findUsages(root, f, e));
+  console.log(`${server.url}${server.pageUrl({ ...target, props, route })}`);
   const stop = async () => { await server.close(); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);

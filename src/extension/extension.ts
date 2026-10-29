@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import { findUsages } from "../usages/findUsages.js";
+import { routeFor } from "../project/routeFor.js";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { PreviewServer } from "../server/createPreviewServer.js";
@@ -161,6 +163,7 @@ class PreviewPanel implements vscode.Disposable {
     let index = this.indexes.get(root);
     if (!index) { index = createUsageIndex(root, { readSource: server.readSource, version: server.version }); this.indexes.set(root, index); }
     const target = await this.targetFor(root, file, source, exportName);
+    target.route = await routeFor(root, file, target.exportName, undefined, (f: string, x?: string) => findUsages(root, f, x));
     const usages = await index.list(file, target.exportName);
     const schema = await propsSchema(file, target.exportName).catch(() => []);
     if (sequence !== this.showSequence || !this.panel) return;
@@ -336,8 +339,14 @@ function webviewHtml(origin: string, pageUrl: string): string {
   #bar .spacer { flex: 1; }
   #bar .source { opacity: .7; }
   #main { display: flex; flex: 1; min-height: 0; }
-  #stage { flex: 1; overflow: auto; min-width: 0; }
-  iframe { display: block; border: 0; background: #fff; width: 1280px; height: 800px; }
+  #stage { flex: 1; overflow: auto; min-width: 0; position: relative; background: var(--vscode-editorWidget-background, #1e1e1e); }
+  /* The preview keeps its real viewport size and is scaled to fit the panel; 1:1 shows it unscaled. */
+  #frameBox { position: relative; margin: 12px auto; box-shadow: 0 8px 30px rgba(0,0,0,.35); border-radius: 8px; overflow: hidden; }
+  iframe { display: block; border: 0; background: #fff; width: 1280px; height: 800px; transform-origin: top left; }
+  #status { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+  #status.error { background: var(--vscode-errorForeground); color: #fff; }
+  #bar .group { display: inline-flex; gap: 4px; align-items: center; }
+  #bar button.on { outline: 1px solid var(--vscode-focusBorder); }
   #verification { padding: 8px; border-top: 1px solid var(--vscode-panel-border); max-height: 45%; overflow: auto; }
   #verification:empty { display: none; }
   #verification .images { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -360,18 +369,34 @@ function webviewHtml(origin: string, pageUrl: string): string {
   <select id="viewport" aria-label="Viewport"><option value="mobile">Mobile · 390</option><option value="tablet">Tablet · 820</option><option value="desktop" selected>Desktop · 1280</option></select>
   <span class="source" id="source"></span>
   <span class="spacer"></span>
-  <button id="capture">Capture Baseline</button>
-  <button id="compare" disabled>Compare Changes</button>
+  <span id="status" title="Render status">loading</span>
+  <span class="group"><button id="fit" class="on" title="Scale the preview to fit the panel">Fit</button><button id="full" title="Show at the real size">1:1</button></span>
+  <span class="group"><button id="capture">Capture Baseline</button><button id="compare" disabled>Compare Changes</button></span>
   <button id="toggle" title="Edit props">Props</button>
 </div>
 <div id="main">
-  <div id="stage"><iframe id="preview" title="Component preview" src="${pageUrl}" allow="clipboard-read; clipboard-write"></iframe></div>
+  <div id="stage"><div id="frameBox"><iframe id="preview" title="Component preview" src="${pageUrl}" allow="clipboard-read; clipboard-write"></iframe></div></div>
   <div id="props"></div>
 </div>
 <div id="verification" role="status" aria-live="polite"></div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const frame = document.getElementById("preview");
+const stage = document.getElementById("stage"), frameBox = document.getElementById("frameBox"), statusChip = document.getElementById("status");
+let fitMode = true;
+/** Scales the real-size iframe to the panel width (or 1:1), so wide viewports stay readable in a narrow panel. */
+function layout() {
+  const vw = frame.offsetWidth || 1280, vh = frame.offsetHeight || 800;
+  const available = stage.clientWidth - 24;
+  const scale = fitMode ? Math.min(1, available / vw) : 1;
+  frame.style.transform = "scale(" + scale + ")";
+  frameBox.style.width = Math.round(vw * scale) + "px";
+  frameBox.style.height = Math.round(vh * scale) + "px";
+}
+new ResizeObserver(layout).observe(stage);
+new ResizeObserver(layout).observe(frame);
+document.getElementById("fit").onclick = () => { fitMode = true; document.getElementById("fit").classList.add("on"); document.getElementById("full").classList.remove("on"); layout(); };
+document.getElementById("full").onclick = () => { fitMode = false; document.getElementById("full").classList.add("on"); document.getElementById("fit").classList.remove("on"); layout(); };
 const form = document.getElementById("props");
 const exportSelect = document.getElementById("export");
 let state;
@@ -379,7 +404,11 @@ vscode.postMessage({ type: "ready" });
 
 addEventListener("message", (event) => {
   const data = event.data;
-  if (event.source === frame.contentWindow && data?.source === "arguseye") vscode.postMessage(data);        // from the preview page
+  if (event.source === frame.contentWindow && data?.source === "arguseye") {
+    vscode.postMessage(data);        // from the preview page
+    statusChip.textContent = data.status === "error" ? (data.errors?.length ?? 1) + " error" + ((data.errors?.length ?? 1) === 1 ? "" : "s") : data.status === "mounted" ? "rendered" : data.status;
+    statusChip.className = data.status === "error" ? "error" : "";
+  }
   else if (data?.type === "show") frame.contentWindow.postMessage({ type: "cp:show", target: data.target }, "*");
   else if (data?.type === "verification") {
     const host = document.getElementById("verification"); host.replaceChildren();
@@ -414,7 +443,6 @@ function renderBar() {
   document.getElementById("verification").replaceChildren();
   exportSelect.innerHTML = state.exports.map((n) => \`<option \${n === state.exportName ? "selected" : ""}>\${n}</option>\`).join("");
   document.getElementById("source").textContent = { usage: "props from a real usage", sample: "sample props from the type", given: "edited props", none: "" }[state.propsSource];
-  if (state.schema.length && !form.childElementCount) form.classList.add("open");
 }
 
 /** One control per prop, by kind; function props are not editable from here. */
