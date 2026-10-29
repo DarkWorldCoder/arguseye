@@ -55,6 +55,7 @@
     "dist",
     "shims",
     "skills",
+    "assets/icon.png",
     "README.md",
     "LICENSE",
     "node_modules/**"
