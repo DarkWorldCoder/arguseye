@@ -124,6 +124,8 @@ const explain = async (error, since) => {
 
 /** The frame is settled once fonts are ready and the component's images have loaded (or 3 s passed). */
 const settled = () => {
+  // Lazy images below the fold would never load in a headless viewport (and the wait would hit the cap every time).
+  for (const img of document.getElementById("root").querySelectorAll("img[loading=lazy]")) img.loading = "eager";
   const images = [...document.getElementById("root").querySelectorAll("img")].filter((img) => !img.complete);
   const loads = images.map((img) => new Promise((done) => { img.addEventListener("load", done, { once: true }); img.addEventListener("error", done, { once: true }); }));
   const timeout = new Promise((done) => setTimeout(done, 3000));
