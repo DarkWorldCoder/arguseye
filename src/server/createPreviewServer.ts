@@ -50,7 +50,9 @@ export type PreviewServer = {
    * Makes sure every package `file` needs is bundled, and returns the bundle generation. A page loaded
    * under an older generation must be reloaded before showing `file`, or it would mix two React copies.
    */
-  prepare(file: string, context?: { file: string; wrappers: Wrapper[] }): Promise<{ generation: number; cached: boolean }>;
+  prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }>;
+  /** Layout and template files that wrap a render for `route` (root first, project-relative). */
+  layoutsFor(route?: string): string[];
   /** Resolves when the start-up warm-up (if any) is done; `prepare` waits for it too. */
   ready(): Promise<void>;
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
@@ -82,7 +84,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const servedMtimes = new Map<string, number>();
   const hashes = new Map<string, string>();
   const moduleWarnings = new Map<string, string[]>();
-  const appContext = () => detectAppContext(options.root, (file) => overlay.get(file) ?? readFileSync(file, "utf8"));
+  const appContext = (route?: string) => detectAppContext(options.root, (file) => overlay.get(file) ?? readFileSync(file, "utf8"), route);
   const readSource = async (file: string) => {
     const buffered = overlay.get(file);
     if (buffered === undefined) servedMtimes.set(file, statSync(file).mtimeMs);
@@ -126,8 +128,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
   const startupWarnings: string[] = [];
 
-  async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }): Promise<{ generation: number; cached: boolean }> {
+  async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }> {
     await warming;
+    if (route) {
+      const routed = appContext(route);
+      await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss }));
+    }
     if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true }));
     (file.endsWith(".vue") ? ["vue"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"]).forEach((spec) => deps.add(spec));
     await graph.crawl(file);
@@ -205,8 +211,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return send(res, 200, "text/javascript", await graph.loadVirtual(contextFile(file), wrapperModule(wrappers, { markInnermost: true })));
       }
       if (url.pathname === "/@wrapper") {
-        const app = appContext();
-        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers)));
+        const route = url.searchParams.get("route") ?? undefined;
+        const app = appContext(route);
+        // Nested layouts' own global CSS (e.g. a template importing "swiper/css") loads with the wrapper.
+        const rootCss = new Set(appContext().globalCss);
+        const css = route ? app.globalCss.filter((f) => !rootCss.has(f)) : [];
+        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css })));
       }
       if (url.pathname === "/@errors") {
         return send(res, 200, "application/json", JSON.stringify(errorsSince(Number(url.searchParams.get("since") ?? 0))));
@@ -287,6 +297,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     errorsSince,
     prepare,
     ready: () => warming,
+    layoutsFor: (route) => appContext(route).layouts,
     close: () => new Promise((r) => { watcher?.close(); server.closeAllConnections(); server.close(() => r()); }),
   };
 }

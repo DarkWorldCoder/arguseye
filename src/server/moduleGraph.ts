@@ -142,7 +142,7 @@ export class ModuleGraph {
     const from = isShim(importer) ? pathJoin(this.root, "index.js") : importer;
     const { path, error } = this.resolver.resolveFileSync(from, specifier);
     if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer}: ${error}`);
-    if (path.includes("/node_modules/")) {
+    if (path.includes("/node_modules/") && !isStylesheet(path)) {
       this.deps.add(specifier);
       return `/@deps/${specifier}.js`;
     }

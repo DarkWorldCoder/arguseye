@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { defaultRouteFile } from "../project/appContext.js";
 import path from "node:path";
 import { compareCaptures, type DiffResult } from "./compareCaptures.js";
 import { chromium, type Browser, type CDPSession, type Locator, type Page } from "playwright-core";
@@ -55,6 +56,8 @@ export type RenderResult = {
   actionsApplied?: number;
   /** What changed since the previous render of the same target in this session (absent on the first render). */
   changes?: Changes;
+  /** Layout and template files the component was rendered inside, root first (project-relative). */
+  layoutsApplied?: string[];
 };
 
 export type Changes = {
@@ -127,7 +130,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   /** Navigates a page to `target`; the server bundles the packages it needs before responding. */
   async function load(page: Page, target: PreviewTarget) {
-    const { generation } = await server.prepare(target.file, prepareContext(target));
+    const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready, null, { timeout: 15000 });
     await page.evaluate(() => (window as any).__CP__.ready);
@@ -191,6 +194,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, ...rest }: RenderRequest, resolved?: Usage): Promise<RenderResult> {
       const started = performance.now();
       if (![viewport.width, viewport.height].every((v) => Number.isInteger(v) && v > 0 && v <= 8192)) throw new Error(`Invalid viewport "${viewport.width}x${viewport.height}"`);
+      // Disk edits are registered before anything (usage index, route lookup) reads the files and refreshes their mtimes.
+      server.syncDisk();
       rest.file = path.resolve(options.root, rest.file);
       const { props, propsSource, unresolved } = await resolveProps(rest, usage, resolved);
       const target: PreviewTarget = { fresh: true, ...rest, props, frame };
@@ -201,6 +206,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           target.contextFile = path.resolve(options.root, found.id.split(":")[0]);
         }
       }
+      // The page whose layouts and templates wrap the render: the usage's page, else a page that uses it, else the most common route.
+      const usageFile = (id: string) => path.resolve(options.root, id.split(":")[0]);
+      let route = usage ? usageFile(usage) : resolved ? usageFile(resolved.id) : undefined;
+      if (!route) {
+        const any = (await usages.list(rest.file, rest.exportName)).find((u) => /(^|\/)page\.[jt]sx?:/.test(u.id));
+        route = any ? usageFile(any.id) : rest.file.includes(`${path.sep}app${path.sep}`) ? rest.file : defaultRouteFile(options.root);
+      }
+      target.route = route;
       const contextApplied = target.context?.map((w) => (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
       const key = `${rest.file.endsWith(".vue") ? "vue" : "react"}:${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
@@ -220,7 +233,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (isNew && storage) await page.evaluate((t) => (window as any).__CP__.show(t), target); // mounted before the seed: show again
       if (!isNew) {
         const state = server.syncDisk();
-        const { generation } = await server.prepare(target.file, prepareContext(target));
+        const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
         if (generation !== generations.get(page)) {
           reloaded = true;
           await load(page, target);
@@ -279,6 +292,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
       const result: RenderResult = {
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        layoutsApplied: server.layoutsFor(target.route),
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({ file: rest.file, exportName: rest.exportName ?? "default", props }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,

@@ -10,6 +10,8 @@ export type PreviewTarget = {
   contextFile?: string;
   /** Render inside a box of this size and background, as a stand-in parent. */
   frame?: Frame;
+  /** The page file whose layouts/templates wrap this render (absolute); the root layout alone when absent. */
+  route?: string;
 };
 
 export type Frame = { width: number; height: number; background?: string; padding?: number };
@@ -132,12 +134,14 @@ const parentBox = async (target, since) => {
 };
 
 /** The root layout's providers, loaded once per epoch; a broken layout is reported and the component still renders. */
-let wrapperEpoch = -1, wrapper;
+let wrapperKey = "", wrapper;
 const appWrapper = async (since) => {
-  if (wrapperEpoch === cp.epoch && wrapper) return wrapper;
+  const route = cp.target.route ? "&route=" + encodeURIComponent(cp.target.route) : "";
+  const key = cp.epoch + route;
+  if (wrapperKey === key && wrapper) return wrapper;
   try {
-    wrapper = (await import("/@wrapper?e=" + cp.epoch)).default;
-    wrapperEpoch = cp.epoch;
+    wrapper = (await import("/@wrapper?e=" + cp.epoch + route)).default;
+    wrapperKey = key;
   } catch (error) {
     cp.errors.push(...(await explain(error, since)).map((e) => "Root layout providers could not be loaded: " + e));
     wrapper = ({ children }) => children;
