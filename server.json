@@ -3,12 +3,12 @@
   "name": "io.github.DarkWorldCoder/arguseye",
   "description": "Eyes for coding agents: render any React, Next.js or Vue component exactly as in the app, no dev server. Real props from call sites, states, parent context, changes since the last render.",
   "repository": { "url": "https://github.com/DarkWorldCoder/arguseye", "source": "github" },
-  "version_detail": { "version": "0.0.1" },
+  "version_detail": { "version": "0.0.3" },
   "packages": [
     {
       "registry_name": "npm",
       "name": "arguseye",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "runtime_hint": "npx",
       "package_arguments": [{ "type": "positional", "value": "mcp" }]
     }

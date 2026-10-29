@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.3
+
+- Fix Marketplace screenshots by serving real VS Code and component images from public Pages URLs instead of the private repository.
+- Interactive product site, expandable README setup guides, accessible SVG workflow and comparison illustrations, and public installation/compatibility/benchmark documentation.
+- npm release archive includes its documentation and visual assets; release manifests and lockfile agree on 0.0.3.
+
 ## 0.0.2
 
 - Gemini CLI install target; required function props get a stand-in in sample props; Marketplace publishing through trusted publishing; project site at darkworldcoder.github.io/arguseye.

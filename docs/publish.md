@@ -2,20 +2,20 @@
 
 These steps need your accounts and tokens; the repo is ready for each of them.
 
-## 1. GitHub (first push)
+## 1. GitHub and the product site
 
-```bash
-gh repo create DarkWorldCoder/arguseye --public --source . --remote origin --push \
-  --description "Eyes for coding agents: render any React, Next.js or Vue component exactly as in the app, no dev server. MCP + CLI + VS Code."
-```
-
-Then on github.com → repo → Settings → General → Social preview → upload `assets/social-preview.png` (1280×640). Add topics: `mcp`, `claude-code`, `codex`, `cursor`, `react`, `nextjs`, `vue`, `component-preview`, `ai-agents`.
+The existing repository is `DarkWorldCoder/arguseye`. The Pages workflow publishes `docs/` when those files change on `main`; the public site is https://darkworldcoder.github.io/arguseye/. Repository visibility is independent of Pages and npm publication. Public guide and image links use Pages so they do not require repository access.
 
 ## 2. npm (the MCP server and CLI)
 
 ```bash
-npm login
+npm test
+npm run typecheck
+npm run package                 # validate the extension archive too
+npm pack --dry-run --json        # inspect the npm file list
+npm login                       # only if npm whoami is not authenticated
 npm publish --access public     # runs the build first (prepublishOnly)
+npm view arguseye version        # confirm registry publication
 ```
 
 After this, `npx arguseye install claude` works for anyone.
@@ -51,7 +51,7 @@ Nothing to upload: the repo is the marketplace. Users run `claude plugin marketp
 
 ## Versioning
 
-Bump `version` in `package.json` and in `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` together; tag `v<version>`.
+Keep `package.json`, the root entries in `package-lock.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and the versions in `server.json` aligned. Published npm versions are immutable; use a new version for later changes. Tag `v<version>` for the release workflow. The npm CI job publishes only when `NPM_TOKEN` exists; an authenticated local publish is separate from Marketplace trusted publishing.
 
 ## Done on 2026-10-29
 

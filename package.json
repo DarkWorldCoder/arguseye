@@ -1,8 +1,8 @@
 {
   "name": "arguseye",
   "displayName": "Arguseye",
-  "description": "See any React, Next.js or Vue component live beside your code, as it looks in your app. No dev server.",
-  "version": "0.0.2",
+  "description": "Render React, browser-compatible Next.js, and Vue components from real source. Visual evidence for coding agents and VS Code, without starting the app.",
+  "version": "0.0.3",
   "publisher": "ayushniroula",
   "license": "MIT",
   "engines": {
@@ -52,10 +52,20 @@
     "arguseye": "dist/cli.mjs"
   },
   "files": [
+    "README.marketplace.md",
     "dist",
     "shims",
     "skills",
-    "assets/icon.png",
+    "assets",
+    "docs/install.md",
+    "docs/product.md",
+    "docs/technique.md",
+    "docs/agent-wishlist.md",
+    "benchmarks/README.md",
+    "benchmarks/latest.json",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "AGENTS.md",
     "LICENSE",
     "node_modules/**"
   ],

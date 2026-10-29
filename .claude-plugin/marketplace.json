@@ -7,7 +7,7 @@
     {
       "name": "arguseye",
       "description": "See any React, Next.js or Vue component exactly as it looks in the app, with no dev server.",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "author": { "name": "Ayush Niroula" },
       "source": ".",
       "category": "development",

@@ -1,72 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#121c33"/></linearGradient>
-    <radialGradient id="iris" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.55" stop-color="#f97316"/><stop offset="1" stop-color="#9a3412"/></radialGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#f97316" stop-opacity="0.35"/><stop offset="1" stop-color="#f97316" stop-opacity="0"/></radialGradient>
-    <clipPath id="editor"><rect x="40" y="76" width="470" height="304"/></clipPath>
-    <clipPath id="type1"><rect x="128" y="226" width="0" height="22"><animate attributeName="width" values="0;0;236;236;0;0" keyTimes="0;0.30;0.42;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></rect></clipPath>
-    <style>
-      .code { font-size: 14px; fill: #cbd5e1; }
-      .kw { fill: #c084fc; } .str { fill: #86efac; } .tag { fill: #7dd3fc; } .attr { fill: #fde68a; } .dim { fill: #64748b; } .ui { font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
-    </style>
-  </defs>
-  <rect width="1000" height="420" rx="22" fill="url(#bg)"/>
-
-  <!-- window chrome -->
-  <rect x="40" y="40" width="920" height="340" rx="14" fill="#0f172a" stroke="#1e293b"/>
-  <circle cx="62" cy="58" r="5" fill="#ef4444"/><circle cx="80" cy="58" r="5" fill="#f59e0b"/><circle cx="98" cy="58" r="5" fill="#22c55e"/>
-  <text x="130" y="62" class="ui" font-size="12" fill="#94a3b8">ProductCard.tsx</text>
-  <text x="640" y="62" class="ui" font-size="12" fill="#94a3b8">Arguseye · Preview: ProductCard.tsx</text>
-  <line x1="510" y1="76" x2="510" y2="380" stroke="#1e293b"/>
-
-  <!-- editor -->
-  <g clip-path="url(#editor)">
-    <text x="60" y="110" class="code"><tspan class="dim">1 </tspan><tspan class="kw">export function</tspan> ProductCard({ title, price }) {</text>
-    <text x="60" y="134" class="code"><tspan class="dim">2 </tspan>  <tspan class="kw">const</tspan> [count, setCount] = useState(0);</text>
-    <text x="60" y="158" class="code"><tspan class="dim">3 </tspan>  <tspan class="kw">return</tspan> (</text>
-    <text x="60" y="182" class="code"><tspan class="dim">4 </tspan>    &lt;<tspan class="tag">article</tspan> <tspan class="attr">className</tspan>=<tspan class="str">"card"</tspan>&gt;</text>
-    <text x="60" y="206" class="code"><tspan class="dim">5 </tspan>      &lt;<tspan class="tag">h2</tspan>&gt;{title}&lt;/<tspan class="tag">h2</tspan>&gt; &lt;<tspan class="tag">p</tspan>&gt;{format(price)}&lt;/<tspan class="tag">p</tspan>&gt;</text>
-    <!-- line 6: the edited line -->
-    <text x="60" y="230" class="code"><tspan class="dim">6 </tspan>      &lt;<tspan class="tag">button</tspan>&gt;</text>
-    <text x="128" y="230" class="code"><tspan class="str">Add to cart</tspan> ({count})&lt;/<tspan class="tag">button</tspan>&gt;<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.30;0.31;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
-    <g clip-path="url(#type1)"><text x="128" y="230" class="code"><tspan class="str">Buy now</tspan> ({count})&lt;/<tspan class="tag">button</tspan>&gt;</text></g>
-    <rect x="128" y="216" width="2" height="18" fill="#f8fafc"><animate attributeName="x" values="128;128;364;364;128;128" keyTimes="0;0.30;0.42;0.86;0.87;1" dur="9s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1s" repeatCount="indefinite"/></rect>
-    <text x="60" y="254" class="code"><tspan class="dim">7 </tspan>    &lt;/<tspan class="tag">article</tspan>&gt;</text>
-    <text x="60" y="278" class="code"><tspan class="dim">8 </tspan>  );</text>
-    <text x="60" y="302" class="code"><tspan class="dim">9 </tspan>}</text>
-    <text x="60" y="350" class="code dim" font-size="12">unsaved · the preview follows every keystroke</text>
-  </g>
-
-  <!-- preview pane -->
-  <rect x="528" y="76" width="416" height="36" fill="#0b1220"/>
-  <text x="540" y="99" class="ui" font-size="12" fill="#94a3b8">ProductCard ▾   app/page.tsx:9 ▾   Desktop · 1280 ▾</text>
-  <g>
-    <rect x="860" y="84" width="74" height="20" rx="10" fill="#1d4ed8"/>
-    <text x="897" y="98" class="ui" text-anchor="middle" font-size="11" fill="#fff">rendered<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.43;0.44;0.60;0.61;1" dur="9s" repeatCount="indefinite"/></text>
-  </g>
-  <text x="897" y="98" class="ui" text-anchor="middle" font-size="11" fill="#fff" opacity="0">38 ms<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.43;0.44;0.60;0.61;1" dur="9s" repeatCount="indefinite"/></text>
-
-  <!-- the rendered card -->
-  <rect x="560" y="130" width="250" height="150" rx="8" fill="#f97316" opacity="0" filter="blur(0)"><animate attributeName="opacity" values="0;0;0.35;0;0" keyTimes="0;0.42;0.44;0.52;1" dur="9s" repeatCount="indefinite"/></rect>
-  <rect x="570" y="140" width="230" height="130" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
-  <text x="590" y="174" class="ui" font-size="17" font-weight="700" fill="#0f172a">Wireless Headphones</text>
-  <text x="590" y="198" class="ui" font-size="15" fill="#166534">$99.00</text>
-  <rect x="590" y="214" width="118" height="28" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
-  <text x="604" y="233" class="ui" font-size="12" fill="#0f172a">Add to cart (3)<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.43;0.44;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
-  <text x="604" y="233" class="ui" font-size="12" fill="#0f172a" opacity="0">Buy now (3)<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.43;0.44;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
-  <text x="590" y="262" class="ui" font-size="11" fill="#64748b">state kept: count stays 3 across the edit</text>
-
-  <!-- agent line under the preview -->
-  <rect x="528" y="300" width="416" height="64" rx="8" fill="#0b1220" stroke="#1e293b"/>
-  <text x="542" y="324" font-size="12" fill="#64748b">agent › render_component Card.tsx usage app/page.tsx:9</text>
-  <text x="542" y="346" font-size="12" fill="#4ade80" opacity="0">changes: 2.3% pixels · + button "Buy now" · errors: none<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.46;0.48;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
-  <text x="542" y="346" font-size="12" fill="#94a3b8">waiting for an edit…<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.46;0.47;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
-
-  <!-- eye + glow, bottom right -->
-  <circle cx="900" cy="370" r="60" fill="url(#glow)"><animate attributeName="r" values="52;66;52" dur="4s" repeatCount="indefinite"/></circle>
-  <g>
-    <path d="M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z" fill="#f8fafc"><animate attributeName="d" values="M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z;M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z;M870 370 C880 368 920 368 930 370 C920 372 880 372 870 370 Z;M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z" keyTimes="0;0.9;0.94;1" dur="5s" repeatCount="indefinite"/></path>
-    <circle cx="900" cy="370" r="9" fill="url(#iris)"><animate attributeName="cx" values="900;900;894;894;900;900" keyTimes="0;0.28;0.32;0.6;0.64;1" dur="9s" repeatCount="indefinite"/></circle>
-    <circle cx="900" cy="370" r="4" fill="#0f172a"><animate attributeName="cx" values="900;900;894;894;900;900" keyTimes="0;0.28;0.32;0.6;0.64;1" dur="9s" repeatCount="indefinite"/></circle>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+<title id="title">Inspect the consequences of a UI edit</title><desc id="desc">An illustrative before-and-after comparison of the same component. The button changes from Add to cart to Buy now. Arguseye highlights the changed button and returns accessibility and error differences. Change is evidence to review, not automatic correctness.</desc>
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0.9" y2="1"><stop stop-color="#e3eef9"/><stop offset="0.6" stop-color="#f1f0fb"/><stop offset="1" stop-color="#f8fbfd"/></linearGradient>
+<linearGradient id="surface" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e3ecf9"/><stop offset="1" stop-color="#eae4f6"/></linearGradient>
+<pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#8298ae" opacity="0.2"/></pattern>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#30435c" flood-opacity="0.08"/></filter>
+<marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1 1 L6 4 L1 7" fill="none" stroke="#7b91ab" stroke-width="1.4"/></marker>
+<style>.signal{stroke-dasharray:4 7;animation:flow 8s linear infinite}.alive{animation:breathe 4s ease-in-out infinite}@keyframes flow{to{stroke-dashoffset:-110}}@keyframes breathe{50%{opacity:.45}}@media(prefers-reduced-motion:reduce){.signal,.alive{animation:none}}</style>
+</defs><rect x="0" y="0" width="1200" height="660" rx="24" fill="#f3f6fa" stroke="none" /><rect x="0" y="0" width="1200" height="660" rx="24" fill="url(#dots)" stroke="none" /><g transform="translate(55 45) scale(0.7)"><path d="M-18 0 Q0-24 18 0 Q0 24-18 0Z" fill="none" stroke="#273943" stroke-width="2.8"/><circle r="6.5" fill="#f39b50"/><circle r="2.5" fill="#273943"/></g><text x="80" y="52" fill="#25323c" font-size="22" font-weight="600" font-family="Arial, Helvetica, sans-serif" >Arguseye</text><text x="1148" y="50" fill="#526374" font-size="13" font-weight="400" font-family="Arial, Helvetica, sans-serif" text-anchor="end">Illustrative comparison</text><text x="48" y="108" fill="#263743" font-size="34" font-weight="600" font-family="Arial, Helvetica, sans-serif" >Make a change. See what changed.</text><text x="48" y="138" fill="#66717c" font-size="17" font-weight="400" font-family="Arial, Helvetica, sans-serif" >The same target, props and viewport. Fresh render evidence.</text><rect x="48" y="178" width="349" height="303" rx="12" fill="#fff" stroke="#dfe5ec" filter="url(#shadow)"/><rect x="48" y="178" width="349" height="40" rx="10" fill="#fafbfc" stroke="#dfe5ec" /><circle cx="66" cy="198" r="3.5" fill="#cbd3df"/><circle cx="80" cy="198" r="3.5" fill="#cbd3df"/><circle cx="94" cy="198" r="3.5" fill="#cbd3df"/><text x="124" y="203" fill="#52606e" font-size="13" font-weight="400" font-family="Arial, Helvetica, sans-serif" >Captured baseline</text><rect x="72" y="239" width="301" height="155" rx="8" fill="#f7f9fc" stroke="#e7ebf1" /><text x="92" y="277" fill="#263743" font-size="21" font-weight="600" font-family="Arial, Helvetica, sans-serif" >Studio headphones</text><text x="92" y="307" fill="#66717c" font-size="16" font-weight="400" font-family="Arial, Helvetica, sans-serif" >$99.00</text><rect x="92" y="329" width="214" height="42" rx="7" fill="#283d4d" stroke="none" /><text x="199" y="356" fill="#fff" font-size="16" font-weight="600" font-family="Arial, Helvetica, sans-serif" text-anchor="middle">Add to cart</text><text x="72" y="435" fill="#526374" font-size="14" font-weight="400" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" >ProductCard.tsx</text><text x="72" y="458" fill="#66717c" font-size="14" font-weight="400" font-family="Arial, Helvetica, sans-serif" >Same resolved inputs</text><rect x="427" y="178" width="349" height="303" rx="12" fill="#fff" stroke="#dfe5ec" filter="url(#shadow)"/><rect x="427" y="178" width="349" height="40" rx="10" fill="#fafbfc" stroke="#dfe5ec" /><circle cx="445" cy="198" r="3.5" fill="#cbd3df"/><circle cx="459" cy="198" r="3.5" fill="#cbd3df"/><circle cx="473" cy="198" r="3.5" fill="#cbd3df"/><text x="503" y="203" fill="#52606e" font-size="13" font-weight="400" font-family="Arial, Helvetica, sans-serif" >Current source</text><rect x="451" y="239" width="301" height="155" rx="8" fill="#f7f9fc" stroke="#e7ebf1" /><text x="471" y="277" fill="#263743" font-size="21" font-weight="600" font-family="Arial, Helvetica, sans-serif" >Studio headphones</text><text x="471" y="307" fill="#66717c" font-size="16" font-weight="400" font-family="Arial, Helvetica, sans-serif" >$99.00</text><rect x="471" y="329" width="214" height="42" rx="7" fill="#283d4d" stroke="none" /><text x="578" y="356" fill="#fff" font-size="16" font-weight="600" font-family="Arial, Helvetica, sans-serif" text-anchor="middle">Buy now</text><rect x="463" y="321" width="230" height="58" rx="10" fill="none" stroke="#8673ba" stroke-width="2" stroke-dasharray="5 4"/><text x="451" y="435" fill="#526374" font-size="14" font-weight="400" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" >ProductCard.tsx</text><text x="451" y="458" fill="#66717c" font-size="14" font-weight="400" font-family="Arial, Helvetica, sans-serif" >Same resolved inputs</text><rect x="806" y="178" width="346" height="303" rx="12" fill="#fff" stroke="#dfe5ec" filter="url(#shadow)"/><rect x="806" y="178" width="346" height="40" rx="10" fill="#fafbfc" stroke="#dfe5ec" /><circle cx="824" cy="198" r="3.5" fill="#cbd3df"/><circle cx="838" cy="198" r="3.5" fill="#cbd3df"/><circle cx="852" cy="198" r="3.5" fill="#cbd3df"/><text x="882" y="203" fill="#52606e" font-size="13" font-weight="400" font-family="Arial, Helvetica, sans-serif" >Comparison evidence</text><rect x="830" y="239" width="104" height="31" rx="7" fill="#eeebf8" stroke="none" /><text x="882" y="260" fill="#5c4b82" font-size="14" font-weight="600" font-family="Arial, Helvetica, sans-serif" text-anchor="middle">Changed</text><text x="830" y="302" fill="#263743" font-size="15" font-weight="600" font-family="Arial, Helvetica, sans-serif" >Accessibility</text><text x="830" y="331" fill="#86616c" font-size="15" font-weight="400" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" >− button &quot;Add to cart&quot;</text><text x="830" y="359" fill="#385f55" font-size="15" font-weight="400" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" >+ button &quot;Buy now&quot;</text><path d="M830 382 H1126" fill="none" stroke="#dfe5ec" /><text x="830" y="413" fill="#66717c" font-size="15" font-weight="400" font-family="Arial, Helvetica, sans-serif" >New errors</text><text x="1126" y="413" fill="#385f55" font-size="15" font-weight="600" font-family="Arial, Helvetica, sans-serif" text-anchor="end">none</text><text x="830" y="449" fill="#66717c" font-size="14" font-weight="400" font-family="Arial, Helvetica, sans-serif" >Review the highlighted change.</text><rect x="48" y="519" width="1104" height="93" rx="10" fill="#e9edf6" stroke="none" /><circle cx="82" cy="554" r="5" fill="#7e70ac" class="alive"/><text x="99" y="560" fill="#344858" font-size="21" font-weight="600" font-family="Arial, Helvetica, sans-serif" >An edit is visible. Its correctness is yours to assess.</text><text x="73" y="590" fill="#526374" font-size="15" font-weight="400" font-family="Arial, Helvetica, sans-serif" >Capture a baseline → edit your component → compare pixels, dimensions, accessibility and errors.</text>
 </svg>

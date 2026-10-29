@@ -1,7 +1,7 @@
 {
   "name": "arguseye",
   "description": "See any React, Next.js or Vue component exactly as it looks in the app, with no dev server: render, states, parent context, changes since the last render.",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "author": {
     "name": "Ayush Niroula"
   },

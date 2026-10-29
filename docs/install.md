@@ -18,9 +18,19 @@ npx arguseye install codex --project /path/to/app --dry-run
 | VS Code (Copilot agent mode) | `.vscode/mcp.json` (`servers`) | |
 | Antigravity (CLI and IDE) | `.agents/mcp_config.json` and `.agents/skills/arguseye` in the workspace | plugin: `agy plugin install https://github.com/DarkWorldCoder/arguseye` |
 
+## Prerequisites
+
+Use Node.js 22 or later and install the dependencies in the project you want to preview. Headless renders need a Playwright-compatible Chromium browser or Google Chrome. If neither is available, install Chromium:
+
+```bash
+npx playwright install chromium
+```
+
+Vue projects use their own Vue 3 runtime and `vue/compiler-sfc`. Server-only Next.js behavior and Nuxt application context are outside the isolated runtime.
+
 ## VS Code extension (the human panel)
 
-Marketplace listing: **Arguseye**. Cursor, Windsurf and VSCodium install the same extension from Open VSX. To install a local build: `npm run package` then `code --install-extension arguseye-*.vsix`.
+Marketplace listing: [**Arguseye**](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye). Compatible editors can install a platform-specific VSIX; an Open VSX release has not been verified. To install a local build: `npm run package` then `code --install-extension arguseye-*.vsix`.
 
 ## Skill only (no MCP)
 

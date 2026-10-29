@@ -1,62 +1,178 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Arguseye: your coding agent can see what it just built" width="1000">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/banner.svg" alt="Arguseye: your coding agent can see what it just built" width="1000">
 </p>
 
 <p align="center">
-  <a href="https://github.com/DarkWorldCoder/arguseye/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/DarkWorldCoder/arguseye/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://www.npmjs.com/package/arguseye"><img alt="npm" src="https://img.shields.io/npm/v/arguseye?color=f97316"></a>
+  <a href="https://www.npmjs.com/package/arguseye"><img alt="npm" src="https://img.shields.io/npm/v/arguseye?color=6476e9"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/ayushniroula.arguseye?label=VS%20Code&color=007acc"></a>
-  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
+  <a href="https://darkworldcoder.github.io/arguseye/guide.html#license"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
   <img alt="React, Next.js, Vue" src="https://img.shields.io/badge/React%20%C2%B7%20Next.js%20%C2%B7%20Vue-supported-22c55e">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-server-93c5fd">
-  <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-f8fafc"></a>
+  <a href="https://darkworldcoder.github.io/arguseye/guide.html#contributing"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-f8fafc"></a>
 </p>
 
 # Arguseye
 
-**Your coding agent can see what it just built.**
+**See your component. Change it. Inspect the consequences.**
 
-Arguseye renders any React, Next.js or Vue component from source, exactly as your app shows it, with the dev server off. Real props come from the places your code already uses the component; your theme, layouts and global CSS apply. The agent gets a cropped PNG, the accessibility tree, what changed since its last render, and errors with file paths, in one call that takes about 40 ms when warm.
+Arguseye gives coding agents eyes on real React, browser-renderable Next.js, and Vue 3 components, without starting your app or writing stories. It uses your source, installed packages, discovered usage props, and supported layout context. Each render returns a cropped PNG, accessibility text, and structured evidence—including unresolved inputs, warnings, and errors.
 
 ```bash
-npx arguseye install claude      # or codex, gemini, cursor, windsurf, vscode, antigravity, copilot, all
+npx arguseye install claude
 ```
 
-One command writes the MCP server and the skill where your agent reads them. Then tell the agent: *look at the card you just changed.* Site: [darkworldcoder.github.io/arguseye](https://darkworldcoder.github.io/arguseye/).
+Requires Node.js 22+, installed project dependencies, and Chromium or Google Chrome. Run this in your project, then restart your agent. Replace `claude` with `codex`, `cursor`, `gemini`, `windsurf`, `vscode`, `antigravity`, or `copilot`.
 
 <p align="center">
-  <img src="assets/hero.svg" alt="Editing a real home-page section of a production Next.js app: the desktop and mobile previews update beside the code, and the agent gets the measured change" width="1000">
+  <a href="https://darkworldcoder.github.io/arguseye/#demo"><img src="https://darkworldcoder.github.io/arguseye/assets/hero.svg" alt="Illustrated workflow: real component source, a cropped preview, and structured evidence returned to the coding agent. Open the interactive website demo." width="1000"></a>
 </p>
+
+<p align="center">
+  <a href="https://darkworldcoder.github.io/arguseye/#demo">Explore the interactive demo ↗</a> ·
+  <a href="#choose-your-setup">Choose your setup</a> ·
+  <a href="#verify-an-edit">Verify an edit</a> ·
+  <a href="#tools-mcp-server-arguseye">Tool reference</a> ·
+  <a href="#performance-and-boundaries">Performance & boundaries</a>
+</p>
+
+## Choose your setup
+
+Expand your client for a copyable recipe. These controls work directly on GitHub; the website has the live demo and installation tabs.
+
+<details open>
+<summary><strong>Claude Code</strong></summary>
+
+```bash
+npx arguseye install claude
+```
+
+Writes the project's `.mcp.json` and the skill in `~/.claude/skills/arguseye`. Restart Claude Code, then ask it to preview the component you are editing.
+
+</details>
+
+<details>
+<summary><strong>Codex</strong></summary>
+
+```bash
+npx arguseye install codex --project /path/to/app
+```
+
+Adds the MCP entry to `~/.codex/config.toml` and the skill to `~/.agents/skills/arguseye`. Restart Codex to load them.
+
+</details>
+
+<details>
+<summary><strong>Cursor, Windsurf, Gemini CLI, or Antigravity</strong></summary>
+
+Choose one command:
+
+```bash
+npx arguseye install cursor
+npx arguseye install windsurf
+npx arguseye install gemini
+npx arguseye install antigravity
+```
+
+The installer merges into the chosen client's existing configuration. See [the installation guide](https://darkworldcoder.github.io/arguseye/guide.html#install) for the exact file locations and verification status of each client.
+
+</details>
+
+<details>
+<summary><strong>VS Code and GitHub Copilot</strong></summary>
+
+For the visual editor panel, install [Arguseye from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye) and run **Preview Component** on a `.tsx`, `.jsx`, or `.vue` file.
+
+For Copilot's MCP tools:
+
+```bash
+npx arguseye install vscode
+```
+
+This writes `.vscode/mcp.json`. The visual extension and MCP server are two views of the same rendering engine.
+
+</details>
+
+<details>
+<summary><strong>CLI or another MCP client</strong></summary>
+
+```bash
+# Inspect a component without MCP.
+npx arguseye shot src/Card.tsx --export Card --out card.png --json
+
+# Print MCP configuration without changing files.
+npx arguseye install print
+
+# Preview exactly what an installer would change.
+npx arguseye install codex --project /path/to/app --dry-run
+```
+
+Requirements: **Node.js 22+**, installed project dependencies, and a Playwright-compatible Chromium browser or Google Chrome. If no browser is available, install one with `npx playwright install chromium`. Vue projects also need their own `vue/compiler-sfc`.
+
+</details>
+
+The [bundled skill](https://darkworldcoder.github.io/arguseye/guide.html#skill) teaches agents when to render, how to interpret evidence, and how to fall back to the CLI. [All installation options →](https://darkworldcoder.github.io/arguseye/guide.html#install)
+
+## Verify an edit
+
+Capture the component, edit its source, then compare against the saved baseline. The export, resolved props, and viewport stay fixed for the comparison.
+
+<p align="center"><a href="https://darkworldcoder.github.io/arguseye/#demo"><img src="https://darkworldcoder.github.io/arguseye/assets/hero-editor.svg" alt="Illustrative before and after comparison, with highlighted visual changes, accessibility changes, and error evidence" width="1000"></a></p>
+
+<details open>
+<summary><strong>Ask your coding agent</strong></summary>
+
+> Render `src/Card.tsx` using its real usage props and save the capture ID. After my edit, compare against that baseline. Show the before, after, and pixel diff; report accessibility changes, new errors, and any incomplete context.
+
+The agent uses `render_component` followed by `render_diff({ baselineId })`. MCP sessions retain the latest **64 captures**; expired IDs require a new baseline.
+
+</details>
+
+<details>
+<summary><strong>Save a baseline across CLI commands</strong></summary>
+
+```bash
+npx arguseye shot src/Card.tsx --export Card \
+  --capture-dir .arguseye/baseline --out .arguseye/before.png --json
+
+# Edit src/Card.tsx, then compare its current source.
+npx arguseye diff --baseline .arguseye/baseline \
+  --out .arguseye/comparison --json
+```
+
+The comparison directory contains before, after, and highlighted diff images plus JSON evidence. CLI captures persist in the directory you choose.
+
+</details>
+
+Results are **`unchanged`**, **`changed`**, or **`incomplete`**. A visual difference is evidence for review; it does not establish correctness. Runtime props, missing providers, unsupported framework behavior, and assets that did not settle remain visible in warnings and unresolved inputs.
 
 ## Why an agent needs eyes
 
-Coding agents write UI blind. They edit a component, read the code back, and declare it done. The button that wraps onto two lines, the card that lost its padding, the theme that never applied: none of that is visible in a diff. The usual remedy is to start the dev server, wait for it, navigate to the page, log in, click into the right state and take a screenshot. That is six to ten tool calls, it breaks whenever the app can't boot (a missing env var, a dead backend, another page that throws), and it only ever shows saved files.
+A source diff cannot show clipped text, missing padding, or a theme that failed to apply. Arguseye lets the agent inspect rendered output close to the component it changed.
 
-Arguseye turns that into one call. The agent names a component and a call site; it gets back what a person would see, plus the facts a person would have to squint for.
+| Task | Arguseye returns |
+|---|---|
+| Inspect a component | Cropped PNG, accessibility tree, errors, warnings, and timings |
+| Reuse real inputs | Discovered literal props, with runtime expressions reported as unresolved |
+| Inspect an edit | Pixel differences, dimension changes, accessibility changes, and new/resolved errors |
+| Check other usages | Paginated isolated renders, up to 12 per batch, with individual capture IDs |
+| Reproduce a state | Component actions, storage inputs, usage ancestors, or a stand-in parent frame |
+| Work in the editor | Unsaved-buffer previews, viewport presets, props controls, and baseline comparison |
 
-| Situation | Without Arguseye | With Arguseye |
-|---|---|---|
-| "Does my change look right?" | Dev server, navigate, log in, click, screenshot | `render_component`: PNG, tree, errors, ~40 ms warm |
-| The app can't boot | Stuck | Renders the component alone, inside the app's real providers |
-| Unsaved or just-written code | Invisible until saved and recompiled | Seen as typed, on disk or in the editor buffer |
-| Needs a state: open menu, filled form, hovered row | Scripted clicks through the whole app | `actions` and `storage` on the component itself |
-| Did the edit change anything? | Compare two screenshots by eye | `changes`: pixel share, tree diff, new or resolved errors |
-| Which other pages did I just affect? | Hope | `render_usages`: every call site, real props, one call |
-| What props does this take? | Read the type by hand | `describe_props`: schema and samples from TypeScript |
+<p align="center"><img src="https://darkworldcoder.github.io/arguseye/assets/agent-workflow.svg" alt="Three steps: discover source and usage inputs, render the actual component, then inspect visual and semantic change evidence" width="1000"></p>
 
-Compared with Storybook you write no stories; compared with Preview.js the props are real and the layouts are yours; compared with browser-automation MCPs nothing has to be running. The numbers behind this are in [benchmarks/](benchmarks/).
+These are **isolated component renders using discovered props**, not full-page integration tests. Browser automation and stories remain useful for complete application journeys and explicitly curated states.
 
 ## What it looks like
 
 <p align="center">
-  <img src="assets/vscode-panel.png" alt="The VS Code panel: a production home-page section rendered beside its code, scaled to fit, with export, usage and viewport pickers and a props form generated from the TypeScript type" width="900">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/vscode-panel.png" alt="The VS Code panel: a production home-page section rendered beside its code, scaled to fit, with export, usage and viewport pickers and a props form generated from the TypeScript type" width="900">
 </p>
 
 A real Next.js 14 app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered from source with no server running, inside the app's own theme and nested layouts:
 
 <p align="center">
-  <img src="assets/example-home-section.png" alt="A 641-line home-page section rendered headless with the app's theme" width="440">
-  <img src="assets/example-program-card.png" alt="A program card rendered headless with its real cover image and a function prop" width="440">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/example-home-section.png" alt="A 641-line home-page section rendered headless with the app's theme" width="440">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/example-program-card.png" alt="A program card rendered headless with its real cover image and a function prop" width="440">
 </p>
 
 ## Tools (MCP server `arguseye`)
@@ -65,51 +181,52 @@ A real Next.js 14 app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered fr
 |---|---|
 | `render_component {file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?}` | PNG cropped to the component, accessibility tree, `errors[]`, `warnings[]`, `timings`, `changes` since the previous render of the same target. `usage` takes the props of a real call site; `in_context` renders inside that call site's parent elements; `frame` is a stand-in parent box; `actions` and `storage` set the state first. Function props: `{"$fn": "(x) => …"}`. |
 | `list_usages {file, export?}` | Every call site with its literal props, the props that depend on runtime values, and the JSX ancestors. |
-| `render_usages {file, export?, viewport?}` | The component at every call site: the blast radius of a change in one call. |
+| `render_usages {file, export?, viewport?, cursor?, limit?, output?}` | Paginated isolated call-site renders, up to 12 per batch, with per-usage evidence and capture IDs. |
 | `describe_props {file, export?}` | The props schema from the TypeScript type, with sample values. |
-| `render_diff {baselineId}` | An explicit before/after against a `captureId`. |
+| `render_diff {baselineId, output?}` | Before, after, highlighted pixel differences, accessibility changes, errors, and completeness against a `captureId`. |
 
 CLI for agents without MCP: `npx arguseye shot src/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png`, `npx arguseye usages …`, `npx arguseye serve …` (live page with hot reload).
 
-## Setup per agent
-
-`npx arguseye install <client>` handles these; details in [docs/install.md](docs/install.md).
-
-| Agent | Where it reads |
-|---|---|
-| Claude Code | `.mcp.json` in the project, skill in `~/.claude/skills`; or the plugin: `claude plugin marketplace add DarkWorldCoder/arguseye` then `claude plugin install arguseye` |
-| Codex | `~/.codex/config.toml`, skill in `~/.agents/skills` |
-| Gemini CLI | `.gemini/settings.json` and `.gemini/skills` in the project |
-| Cursor | `~/.cursor/mcp.json`, skill in `.cursor/skills` |
-| Antigravity | `.agents/mcp_config.json` and `.agents/skills`; or `agy plugin install https://github.com/DarkWorldCoder/arguseye` |
-| GitHub Copilot | `.github/skills` and `.vscode/mcp.json` |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
-| Any other MCP client | `npx arguseye install print` prints the JSON |
-
-The skill (`skills/arguseye/SKILL.md`) follows the Agent Skills format and works on its own too: it tells the agent when to look, how to read a result, and how to use the CLI if MCP is unavailable.
-
 ## VS Code
 
-<p align="center"><img src="assets/hero-editor.svg" alt="Typing in the editor re-renders the component beside it; component state is kept" width="1000"></p>
+Open a `.tsx`, `.jsx` or `.vue` file and run **Preview Component** (the eye icon in the editor title, or `Ctrl+Alt+P`). The panel shows the component with the props from its first real usage, follows the file you edit, updates unsaved edits while preserving state during ordinary React refreshes and Vue template/style edits, scales the preview to fit (or 1:1), and has a props form built from the component's type. Install it from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye) (id `ayushniroula.arguseye`, Linux, macOS and Windows builds), or grab the VSIX from the [releases](https://github.com/DarkWorldCoder/arguseye/releases) for Cursor, Windsurf and VSCodium.
 
-Open a `.tsx`, `.jsx` or `.vue` file and run **Preview Component** (the eye icon in the editor title, or `Ctrl+Alt+P`). The panel shows the component with the props from its first real usage, follows the file you edit, re-renders in under 50 ms as you type with component state kept, scales the preview to fit (or 1:1), and has a props form built from the component's type. Install it from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye) (id `ayushniroula.arguseye`, Linux, macOS and Windows builds), or grab the VSIX from the [releases](https://github.com/DarkWorldCoder/arguseye/releases) for Cursor, Windsurf and VSCodium.
-
-## How it stays exact and fast
+## How rendering works
 
 - Your files run through [oxc](https://oxc.rs) one module at a time; your packages are pre-bundled once by [Rolldown](https://rolldown.rs) from your own `node_modules` in a worker process and cached by lockfile, so React, MUI and Tailwind are the versions your app uses. Next.js app-router projects run on Next's vendored React, like the app itself.
-- Root and nested layouts and templates wrap every render: global CSS, `<html>`/`<body>` classes, providers with their props (`theme={theme}` is re-imported), `CssBaseline`-style siblings. Tailwind v4 compiles with your theme, Tailwind v3 through your PostCSS config, plus Sass, CSS modules, `public/` assets, image imports and `NEXT_PUBLIC_*` env.
-- `next/link`, `next/image` and `next/navigation` render Next's markup; Chromium draws the pixels.
+- Supported root and nested layouts and templates supply context: global CSS, `<html>`/`<body>` classes, providers with their props (`theme={theme}` is re-imported), `CssBaseline`-style siblings. Tailwind v4 compiles with your theme, Tailwind v3 through your PostCSS config, plus Sass, CSS modules, `public/` assets, image imports and `NEXT_PUBLIC_*` env.
+- Framework shims handle browser-compatible `next/link`, `next/image`, and `next/navigation` behavior; Chromium draws the pixels. Server-only Next.js behavior is outside this isolated runtime.
 - Edits are hot-swapped with React Fast Refresh, from the editor or from disk. A target's whole import graph is preloaded in one batch; barrel imports of icon packages are rewritten per member; lazy images load eagerly so the frame settles in milliseconds.
 
-Measured on the 1,197-file app above: server ready in 2–11 s, first render 1.5 s, a full section 0.9 s, the same target again 0.3 s; the server stays around 500–750 MB. The technique is described in [docs/technique.md](docs/technique.md).
+## Performance and boundaries
+
+The [recorded benchmark](https://darkworldcoder.github.io/arguseye/guide.html#benchmarks) used Linux x64, an Intel Core i5-1235U, and Node v24.21.0 on 2026-10-27. **Twenty warm renders of the small React fixture measured p95 50 ms**, against a ≤100 ms gate. Edit-to-pixels has a separate 50 ms target; it is not a universal latency guarantee.
+
+| Recorded component-edit workflow | Calls | Elapsed | Response size |
+|---|---:|---:|---:|
+| Arguseye, warm | 2 | 145 ms | 48,669 bytes |
+| Playwright MCP + Vite, warm | 4 | 217 ms | 27,298 bytes |
+| Arguseye, cold | 2 | 2,105 ms | 49,076 bytes |
+| Playwright MCP + Vite, cold | 6 | 1,704 ms | 28,006 bytes |
+
+Arguseye returned a larger evidence bundle, including a pixel diff. This fixture run shows fewer calls and a faster warm workflow, alongside a slower cold path and larger responses. It is not a general performance ranking. [Method, machine, caveats, and raw samples →](https://darkworldcoder.github.io/arguseye/guide.html#benchmarks)
+
+The separate 1,197-file Next.js example above measured server readiness at 2–11 s, first render at 1.5 s, a section at 0.9 s, and the same target again at 0.3 s, with roughly 500–750 MB server memory. These are different workloads. See [the rendering technique](https://darkworldcoder.github.io/arguseye/guide.html#technique).
+
+<details>
+<summary><strong>What the isolated runtime cannot reconstruct</strong></summary>
+
+Runtime-only props, arbitrary provider values, authenticated or backend-dependent states, Next.js server execution, and Nuxt features may require explicit inputs or remain unsupported. Successful pixels can still have incomplete context; inspect warnings and unresolved inputs. Vue script changes remount the component and report the state reset. Verification renders start from fresh component state.
+
+</details>
 
 ## Roadmap
 
-What an agent would ask for next, in order: layout facts as text (boxes, overflow, clipping, contrast) with refs; element → source file and line; a frozen clock and seeded randomness for diffs you can trust; `next/font` and more framework shims; lower server memory. The full list, with reasoning, is in [docs/agent-wishlist.md](docs/agent-wishlist.md).
+What an agent would ask for next, in order: layout facts as text (boxes, overflow, clipping, contrast) with refs; element → source file and line; a frozen clock and seeded randomness for diffs you can trust; `next/font` and more framework shims; lower server memory. The full list, with reasoning, is in [docs/agent-wishlist.md](https://darkworldcoder.github.io/arguseye/guide.html#roadmap).
 
 ## Contributing
 
-Issues and pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) has the setup and the rules, [AGENTS.md](AGENTS.md) the engineering rules every change follows (humans and agents alike), [SECURITY.md](SECURITY.md) how to report a vulnerability.
+Issues and pull requests are welcome: [CONTRIBUTING.md](https://darkworldcoder.github.io/arguseye/guide.html#contributing) has the setup and the rules, [AGENTS.md](https://darkworldcoder.github.io/arguseye/guide.html#contributing) the engineering rules every change follows (humans and agents alike), [SECURITY.md](https://darkworldcoder.github.io/arguseye/guide.html#security) how to report a vulnerability.
 
 ```bash
 npm install && for d in test/fixtures/*/; do (cd "$d" && npm install); done
