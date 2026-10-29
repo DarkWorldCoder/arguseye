@@ -25,3 +25,14 @@ Marketplace listing: **Arguseye**. Cursor, Windsurf and VSCodium install the sam
 ## Skill only (no MCP)
 
 The skill at `skills/arguseye/SKILL.md` follows the Agent Skills format and also works on its own: it tells the agent to use the CLI (`npx arguseye shot …`) when the MCP tools are not available. Copy it to `~/.claude/skills/`, `~/.agents/skills/` or `.cursor/skills/`.
+
+## Verified end to end
+
+Checked on 2026-10-29 against the React fixture, each agent calling `render_component` through the MCP server and reading back the image, the accessibility tree and `errors[]`:
+
+| Agent | Result | Note |
+|---|---|---|
+| Claude Code (`claude -p … --mcp-config`) | works | allow the tools with `--allowedTools "mcp__arguseye__*"` in headless runs |
+| Codex (`codex exec`) | works | non-interactive runs need `--approve-for-me` (or an interactive session) because MCP tool calls ask for approval; `-a never` refuses them |
+| Gemini CLI | config written, not run | the Gemini CLI on the test machine required an Antigravity account |
+
