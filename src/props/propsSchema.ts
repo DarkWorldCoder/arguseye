@@ -40,11 +40,17 @@ export async function propsSchema(file: string, exportName = "default"): Promise
 export function sampleProps(schema: PropSchema[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const prop of schema) {
-    if (!prop.required || prop.kind === "function") continue;
+    if (!prop.required) continue;
     out[prop.name] = sample(prop);
   }
   return out;
 }
+
+/**
+ * A required function prop gets a stand-in the page revives (`{ "$fn": src }`): it echoes a primitive first
+ * argument (so formatters such as `format(amount)` render something) and returns undefined for events.
+ */
+export const SAMPLE_FUNCTION = { $fn: '(...a) => (typeof a[0] === "number" || typeof a[0] === "string" ? String(a[0]) : undefined)' };
 
 function sample(prop: PropSchema): unknown {
   const label = prop.name.charAt(0).toUpperCase() + prop.name.slice(1).replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -62,6 +68,8 @@ function sample(prop: PropSchema): unknown {
       return [];
     case "object":
       return sampleProps(prop.fields ?? []);
+    case "function":
+      return SAMPLE_FUNCTION;
     default:
       return label;
   }

@@ -38,5 +38,10 @@ describe("props inferred from the component's TypeScript type", () => {
 
     const cardSample = sampleProps(await propsSchema(card, "ProductCard"));
     expect(cardSample).toEqual({ title: "Title", price: 0 });
+
+    // A required function prop gets a revivable stand-in, so `format(amount)` style props render instead of throwing.
+    const fnSample = sampleProps([{ name: "format", kind: "function", required: true }]);
+    expect(fnSample.format).toEqual({ $fn: expect.stringContaining("=>") });
+    expect(new Function("return " + (fnSample.format as any).$fn)()(12)).toBe("12");
   });
 });
