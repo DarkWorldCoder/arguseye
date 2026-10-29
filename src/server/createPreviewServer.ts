@@ -7,6 +7,7 @@ import { ModuleGraph, readFromDisk } from "./moduleGraph.js";
 import { DepBundler } from "./depBundler.js";
 import { CssPipeline, isStylesheet } from "./cssPipeline.js";
 import { contentType } from "./assets.js";
+import { createFontContext } from "../project/createFontContext.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue)$/;
 import { existsSync } from "node:fs";
@@ -84,7 +85,18 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const servedMtimes = new Map<string, number>();
   const hashes = new Map<string, string>();
   const moduleWarnings = new Map<string, string[]>();
-  const appContext = (route?: string) => detectAppContext(options.root, (file) => overlay.get(file) ?? readFileSync(file, "utf8"), route);
+  const readContextSource = (file: string) => {
+    const source = overlay.get(file) ?? readFileSync(file, "utf8");
+    if (!overlay.has(file)) servedMtimes.set(file, statSync(file).mtimeMs);
+    hashes.set(file, createHash("sha256").update(source).digest("hex"));
+    return source;
+  };
+  const fonts = createFontContext(options.root, readContextSource);
+  const appContext = (route?: string) => detectAppContext(options.root, readContextSource, route, fonts.resolveClass);
+  const globalStyles = (app: ReturnType<typeof appContext>) => [
+    ...app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`),
+    ...(fonts.stylesheet() ? ["/@next-fonts?v=" + createHash("sha256").update(fonts.stylesheet()).digest("hex").slice(0, 12)] : []),
+  ];
   const readSource = async (file: string) => {
     const buffered = overlay.get(file);
     if (buffered === undefined) servedMtimes.set(file, statSync(file).mtimeMs);
@@ -204,13 +216,14 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         await prepare(target.file);
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         const app = appContext();
-        const globalCssUrls = app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`);
+        const globalCssUrls = globalStyles(app);
         return send(res, 200, "text/html", previewHtml(target, { state, env: publicEnv(options.root), globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
       if (url.pathname === "/@context") {
         const { file, wrappers } = decodeContext(url.searchParams.get("c") ?? "");
         return send(res, 200, "text/javascript", await graph.loadVirtual(contextFile(file), wrapperModule(wrappers, { markInnermost: true })));
       }
+      if (url.pathname === "/@next-fonts") return send(res, 200, "text/javascript", `let style = document.getElementById("cp-next-fonts"); if (!style) { style = document.createElement("style"); style.id = "cp-next-fonts"; document.head.append(style); } style.textContent = ${JSON.stringify(fonts.stylesheet())};`);
       if (url.pathname === "/@wrapper") {
         const route = url.searchParams.get("route") ?? undefined;
         const app = appContext(route);
@@ -294,7 +307,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   return {
     url: `http://127.0.0.1:${port}`,
-    context: () => { const app = appContext(); return { globalCssUrls: app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
+    context: () => { const app = appContext(); return { globalCssUrls: globalStyles(app), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
     warnings: (file) => {
       const app = appContext();
       const relevant = file ? new Set([...graph.filesFor(file), ...graph.filesFor(wrapperFile(app.entry)), ...(app.entry ? [app.entry] : [])]) : undefined;

@@ -43,6 +43,7 @@ export function detectAppContext(
   root: string,
   readSource: (file: string) => string = (file) => readFileSync(file, "utf8"),
   routeFile?: string,
+  resolveClass?: (file: string, value: any) => string | undefined,
 ): AppContext {
   const entry = ENTRIES.flatMap((e) => EXTS.map((x) => path.join(root, e + x))).find((f) => existsSync(f));
   if (!entry) return { globalCss: [], wrappers: [], warnings: [], layouts: [] };
@@ -59,19 +60,19 @@ export function detectAppContext(
       ...module.staticImports.map((imp) => imp.moduleRequest.value).filter((spec) => STYLE.test(spec)).flatMap((spec) => resolver.resolveFileSync(file, spec).path ?? []),
     );
     context.wrappers.push(...wrapperChain(program, code, warnings));
-    if (file === entry) readHtmlBodyClasses(program, context, entry, warnings);
+    if (file === entry) readHtmlBodyClasses(program, context, entry, warnings, resolveClass);
   }
   return context;
 }
 
-function readHtmlBodyClasses(program: any, context: AppContext, entry: string, warnings: string[]) {
+function readHtmlBodyClasses(program: any, context: AppContext, entry: string, warnings: string[], resolveClass?: (file: string, value: any) => string | undefined) {
   new Visitor({
     JSXOpeningElement(node: any) {
       if (node.name.type !== "JSXIdentifier" || (node.name.name !== "html" && node.name.name !== "body")) return;
       const className = node.attributes.find(
         (a: any) => a.type === "JSXAttribute" && a.name.name === "className",
       )?.value;
-      const value = literalClass(className);
+      const value = literalClass(className) ?? resolveClass?.(entry, className);
       if (className && value === undefined) warnings.push(`${entry}: runtime ${node.name.name} className could not be reconstructed.`);
       if (value !== undefined) context[node.name.name === "html" ? "htmlClass" : "bodyClass"] = value;
     },
@@ -175,7 +176,9 @@ function wrapperChain(program: any, code: string, warnings: string[]): Wrapper[]
     const name = el.openingElement.name;
     const props: Record<string, unknown> = {};
     const refs: Record<string, Ref> = {};
-    for (const attr of el.openingElement.attributes) {
+    // Root attributes are handled separately, including imported font classes.
+    const attributes = name.type === "JSXIdentifier" && HOST_SKIP.has(name.name) ? [] : el.openingElement.attributes;
+    for (const attr of attributes) {
       if (attr.type !== "JSXAttribute" || attr.name.type !== "JSXIdentifier") { warnings.push("Runtime provider input omitted: " + code.slice(attr.start, attr.end)); continue; }
       const expr = attr.value?.type === "JSXExpressionContainer" ? attr.value.expression : undefined;
       const ref = expr ? importedRef(expr, imports, code) : undefined;
