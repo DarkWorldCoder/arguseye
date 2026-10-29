@@ -29,7 +29,7 @@ const HELP = `arguseye: inspect React and Vue components and verify UI edits, no
   arguseye usages FILE [--export NAME] [--root DIR]
       Print every usage of a component with its real props (JSON)
 
-  arguseye install <claude|codex|cursor|windsurf|vscode|antigravity|copilot|print|all> [--project DIR] [--dry-run]
+  arguseye install <claude|codex|gemini|cursor|windsurf|vscode|antigravity|copilot|print|all> [--project DIR] [--dry-run]
       Write the MCP server entry and the skill where that agent reads them (merges existing config)
 
   arguseye serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]

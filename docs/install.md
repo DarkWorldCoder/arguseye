@@ -12,6 +12,7 @@ npx arguseye install codex --project /path/to/app --dry-run
 |---|---|---|
 | Claude Code | `.mcp.json` in the project; skill in `~/.claude/skills/arguseye` | `claude mcp add arguseye -- npx -y arguseye mcp`, or the plugin: `claude plugin marketplace add DarkWorldCoder/arguseye` then `claude plugin install arguseye` |
 | Codex | `[mcp_servers.arguseye]` in `~/.codex/config.toml`; skill in `~/.agents/skills/arguseye` | `codex mcp add arguseye -- npx -y arguseye mcp` |
+| Gemini CLI | `mcpServers.arguseye` in `.gemini/settings.json`; skill in `.gemini/skills/arguseye` | `gemini mcp add arguseye npx -y arguseye mcp --root .` |
 | Cursor | `~/.cursor/mcp.json`; skill in `.cursor/skills/arguseye` | Settings → MCP → add the JSON |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | |
 | VS Code (Copilot agent mode) | `.vscode/mcp.json` (`servers`) | |

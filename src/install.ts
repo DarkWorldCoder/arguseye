@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type Client = "claude" | "codex" | "cursor" | "windsurf" | "vscode" | "antigravity" | "copilot" | "print";
-export const CLIENTS: Client[] = ["claude", "codex", "cursor", "windsurf", "vscode", "antigravity", "copilot", "print"];
+export type Client = "claude" | "codex" | "gemini" | "cursor" | "windsurf" | "vscode" | "antigravity" | "copilot" | "print";
+export const CLIENTS: Client[] = ["claude", "codex", "gemini", "cursor", "windsurf", "vscode", "antigravity", "copilot", "print"];
 
 /** The MCP server entry any client can use, as JSON, for agents without a dedicated target (OpenCode, Cline, Roo, Amp…). */
 export function mcpSnippet(project: string): string {
@@ -72,6 +72,11 @@ export function install({ client, project, home = os.homedir(), dryRun = false }
         copySkill(path.join(home, ".agents", "skills", "arguseye"), "Codex (and Antigravity) read ~/.agents/skills");
         break;
       }
+      case "gemini":
+        // Gemini CLI reads project settings from .gemini/settings.json (merged with ~/.gemini/settings.json) and skills from .gemini/skills.
+        writeJsonMerge(path.join(root, ".gemini", "settings.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Gemini CLI reads .gemini/settings.json in the project");
+        copySkill(path.join(root, ".gemini", "skills", "arguseye"), "Gemini CLI reads project skills from .gemini/skills");
+        break;
       case "cursor":
         writeJsonMerge(path.join(home, ".cursor", "mcp.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = { type: "stdio", ...server }; }, "Cursor reads ~/.cursor/mcp.json");
         copySkill(path.join(root, ".cursor", "skills", "arguseye"), "Cursor reads project skills from .cursor/skills");

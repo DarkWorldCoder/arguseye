@@ -20,6 +20,8 @@ describe("install for agent clients", () => {
     expect(JSON.parse(readFileSync(path.join(project, ".vscode", "mcp.json"), "utf8")).servers["arguseye"].type).toBe("stdio");
     expect(existsSync(path.join(project, ".agents", "skills", "arguseye", "SKILL.md"))).toBe(true);
     expect(existsSync(path.join(project, ".github", "skills", "arguseye", "SKILL.md"))).toBe(true);
+    expect(JSON.parse(readFileSync(path.join(project, ".gemini", "settings.json"), "utf8")).mcpServers["arguseye"].command).toBe("npx");
+    expect(existsSync(path.join(project, ".gemini", "skills", "arguseye", "SKILL.md"))).toBe(true);
 
     // Running again keeps other servers and does not duplicate ours.
     const cursor = path.join(home, ".cursor", "mcp.json");

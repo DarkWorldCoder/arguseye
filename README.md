@@ -18,7 +18,7 @@
 Arguseye renders any React, Next.js or Vue component from source, exactly as your app shows it, with the dev server off. Real props come from the places your code already uses the component; your theme, layouts and global CSS apply. The agent gets a cropped PNG, the accessibility tree, what changed since its last render, and errors with file paths, in one call that takes about 40 ms when warm.
 
 ```bash
-npx arguseye install claude      # or codex, cursor, windsurf, vscode, antigravity, copilot, all
+npx arguseye install claude      # or codex, gemini, cursor, windsurf, vscode, antigravity, copilot, all
 ```
 
 One command writes the MCP server and the skill where your agent reads them. Then tell the agent: *look at the card you just changed.*
@@ -78,6 +78,7 @@ CLI for agents without MCP: `npx arguseye shot src/Card.tsx --export Card --usag
 |---|---|
 | Claude Code | `.mcp.json` in the project, skill in `~/.claude/skills`; or the plugin: `claude plugin marketplace add DarkWorldCoder/arguseye` then `claude plugin install arguseye` |
 | Codex | `~/.codex/config.toml`, skill in `~/.agents/skills` |
+| Gemini CLI | `.gemini/settings.json` and `.gemini/skills` in the project |
 | Cursor | `~/.cursor/mcp.json`, skill in `.cursor/skills` |
 | Antigravity | `.agents/mcp_config.json` and `.agents/skills`; or `agy plugin install https://github.com/DarkWorldCoder/arguseye` |
 | GitHub Copilot | `.github/skills` and `.vscode/mcp.json` |
