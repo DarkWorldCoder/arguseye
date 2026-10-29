@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#121c33"/></linearGradient>
+    <radialGradient id="iris" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.55" stop-color="#f97316"/><stop offset="1" stop-color="#9a3412"/></radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#f97316" stop-opacity="0.35"/><stop offset="1" stop-color="#f97316" stop-opacity="0"/></radialGradient>
+    <clipPath id="editor"><rect x="40" y="76" width="470" height="304"/></clipPath>
+    <clipPath id="type1"><rect x="128" y="226" width="0" height="22"><animate attributeName="width" values="0;0;236;236;0;0" keyTimes="0;0.30;0.42;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></rect></clipPath>
+    <style>
+      .code { font-size: 14px; fill: #cbd5e1; }
+      .kw { fill: #c084fc; } .str { fill: #86efac; } .tag { fill: #7dd3fc; } .attr { fill: #fde68a; } .dim { fill: #64748b; } .ui { font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+    </style>
+  </defs>
+  <rect width="1000" height="420" rx="22" fill="url(#bg)"/>
+
+  <!-- window chrome -->
+  <rect x="40" y="40" width="920" height="340" rx="14" fill="#0f172a" stroke="#1e293b"/>
+  <circle cx="62" cy="58" r="5" fill="#ef4444"/><circle cx="80" cy="58" r="5" fill="#f59e0b"/><circle cx="98" cy="58" r="5" fill="#22c55e"/>
+  <text x="130" y="62" class="ui" font-size="12" fill="#94a3b8">ProductCard.tsx</text>
+  <text x="640" y="62" class="ui" font-size="12" fill="#94a3b8">Arguseye · Preview: ProductCard.tsx</text>
+  <line x1="510" y1="76" x2="510" y2="380" stroke="#1e293b"/>
+
+  <!-- editor -->
+  <g clip-path="url(#editor)">
+    <text x="60" y="110" class="code"><tspan class="dim">1 </tspan><tspan class="kw">export function</tspan> ProductCard({ title, price }) {</text>
+    <text x="60" y="134" class="code"><tspan class="dim">2 </tspan>  <tspan class="kw">const</tspan> [count, setCount] = useState(0);</text>
+    <text x="60" y="158" class="code"><tspan class="dim">3 </tspan>  <tspan class="kw">return</tspan> (</text>
+    <text x="60" y="182" class="code"><tspan class="dim">4 </tspan>    &lt;<tspan class="tag">article</tspan> <tspan class="attr">className</tspan>=<tspan class="str">"card"</tspan>&gt;</text>
+    <text x="60" y="206" class="code"><tspan class="dim">5 </tspan>      &lt;<tspan class="tag">h2</tspan>&gt;{title}&lt;/<tspan class="tag">h2</tspan>&gt; &lt;<tspan class="tag">p</tspan>&gt;{format(price)}&lt;/<tspan class="tag">p</tspan>&gt;</text>
+    <!-- line 6: the edited line -->
+    <text x="60" y="230" class="code"><tspan class="dim">6 </tspan>      &lt;<tspan class="tag">button</tspan>&gt;</text>
+    <text x="128" y="230" class="code"><tspan class="str">Add to cart</tspan> ({count})&lt;/<tspan class="tag">button</tspan>&gt;<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.30;0.31;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
+    <g clip-path="url(#type1)"><text x="128" y="230" class="code"><tspan class="str">Buy now</tspan> ({count})&lt;/<tspan class="tag">button</tspan>&gt;</text></g>
+    <rect x="128" y="216" width="2" height="18" fill="#f8fafc"><animate attributeName="x" values="128;128;364;364;128;128" keyTimes="0;0.30;0.42;0.86;0.87;1" dur="9s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1s" repeatCount="indefinite"/></rect>
+    <text x="60" y="254" class="code"><tspan class="dim">7 </tspan>    &lt;/<tspan class="tag">article</tspan>&gt;</text>
+    <text x="60" y="278" class="code"><tspan class="dim">8 </tspan>  );</text>
+    <text x="60" y="302" class="code"><tspan class="dim">9 </tspan>}</text>
+    <text x="60" y="350" class="code dim" font-size="12">unsaved · the preview follows every keystroke</text>
+  </g>
+
+  <!-- preview pane -->
+  <rect x="528" y="76" width="416" height="36" fill="#0b1220"/>
+  <text x="540" y="99" class="ui" font-size="12" fill="#94a3b8">ProductCard ▾   app/page.tsx:9 ▾   Desktop · 1280 ▾</text>
+  <g>
+    <rect x="860" y="84" width="74" height="20" rx="10" fill="#1d4ed8"/>
+    <text x="897" y="98" class="ui" text-anchor="middle" font-size="11" fill="#fff">rendered<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.43;0.44;0.60;0.61;1" dur="9s" repeatCount="indefinite"/></text>
+  </g>
+  <text x="897" y="98" class="ui" text-anchor="middle" font-size="11" fill="#fff" opacity="0">38 ms<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.43;0.44;0.60;0.61;1" dur="9s" repeatCount="indefinite"/></text>
+
+  <!-- the rendered card -->
+  <rect x="560" y="130" width="250" height="150" rx="8" fill="#f97316" opacity="0" filter="blur(0)"><animate attributeName="opacity" values="0;0;0.35;0;0" keyTimes="0;0.42;0.44;0.52;1" dur="9s" repeatCount="indefinite"/></rect>
+  <rect x="570" y="140" width="230" height="130" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+  <text x="590" y="174" class="ui" font-size="17" font-weight="700" fill="#0f172a">Wireless Headphones</text>
+  <text x="590" y="198" class="ui" font-size="15" fill="#166534">$99.00</text>
+  <rect x="590" y="214" width="118" height="28" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="604" y="233" class="ui" font-size="12" fill="#0f172a">Add to cart (3)<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.43;0.44;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
+  <text x="604" y="233" class="ui" font-size="12" fill="#0f172a" opacity="0">Buy now (3)<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.43;0.44;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
+  <text x="590" y="262" class="ui" font-size="11" fill="#64748b">state kept: count stays 3 across the edit</text>
+
+  <!-- agent line under the preview -->
+  <rect x="528" y="300" width="416" height="64" rx="8" fill="#0b1220" stroke="#1e293b"/>
+  <text x="542" y="324" font-size="12" fill="#64748b">agent › render_component Card.tsx usage app/page.tsx:9</text>
+  <text x="542" y="346" font-size="12" fill="#4ade80" opacity="0">changes: 2.3% pixels · + button "Buy now" · errors: none<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.46;0.48;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
+  <text x="542" y="346" font-size="12" fill="#94a3b8">waiting for an edit…<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="0;0.46;0.47;0.86;0.87;1" dur="9s" repeatCount="indefinite"/></text>
+
+  <!-- eye + glow, bottom right -->
+  <circle cx="900" cy="370" r="60" fill="url(#glow)"><animate attributeName="r" values="52;66;52" dur="4s" repeatCount="indefinite"/></circle>
+  <g>
+    <path d="M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z" fill="#f8fafc"><animate attributeName="d" values="M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z;M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z;M870 370 C880 368 920 368 930 370 C920 372 880 372 870 370 Z;M870 370 C880 352 920 352 930 370 C920 388 880 388 870 370 Z" keyTimes="0;0.9;0.94;1" dur="5s" repeatCount="indefinite"/></path>
+    <circle cx="900" cy="370" r="9" fill="url(#iris)"><animate attributeName="cx" values="900;900;894;894;900;900" keyTimes="0;0.28;0.32;0.6;0.64;1" dur="9s" repeatCount="indefinite"/></circle>
+    <circle cx="900" cy="370" r="4" fill="#0f172a"><animate attributeName="cx" values="900;900;894;894;900;900" keyTimes="0;0.28;0.32;0.6;0.64;1" dur="9s" repeatCount="indefinite"/></circle>
+  </g>
+</svg>

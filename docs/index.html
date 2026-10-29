@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arguseye</title>
+<meta name="description" content="Your coding agent can see what it just built. Arguseye renders any React, Next.js or Vue component from source, exactly as your app shows it, with the dev server off: a cropped PNG, the accessibility tree, what changed, and errors with file paths, about 40 ms warm.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b1220">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://darkworldcoder.github.io/arguseye/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Arguseye: your coding agent can see what it just built">
+<meta property="og:description" content="Render any React, Next.js or Vue component from source, exactly as the app shows it, with no dev server. One MCP call: PNG, accessibility tree, changes, errors.">
+<meta property="og:url" content="https://darkworldcoder.github.io/arguseye/">
+<meta property="og:image" content="https://darkworldcoder.github.io/arguseye/assets/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@wiseadmitisfun">
+<meta name="twitter:image" content="https://darkworldcoder.github.io/arguseye/assets/social-preview.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --bg:#0b1220;--bg2:#0f172a;--card:#141d33;--line:#1e293b;--line2:#334155;
+  --text:#f1f5f9;--text2:#cbd5e1;--muted:#94a3b8;
+  --accent:#f97316;--accent2:#fdba74;--on-accent:#0b1220;--ok:#86efac;--sky:#7dd3fc;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --max:1120px;--pad:20px;--r:14px;--ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.65 var(--sans);overflow-x:hidden}
+img,svg,video{max-width:100%;height:auto;display:block}
+a{color:var(--sky);text-decoration:none;text-underline-offset:3px}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+button{cursor:pointer;font:inherit}
+code,pre{font-family:var(--mono);font-size:.92em}
+code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:.1em .4em;color:var(--accent2);white-space:nowrap}
+pre{margin:0;white-space:pre-wrap;word-break:break-word}
+h1,h2,h3{line-height:1.12;letter-spacing:-.02em;margin:0}
+h1{font-size:clamp(2.2rem,4.4vw,3.4rem);font-weight:800}
+h2{font-size:clamp(1.7rem,3.4vw,2.4rem);font-weight:750;margin-bottom:.35em;max-width:22ch}
+h3{font-size:1.1rem;font-weight:650;letter-spacing:-.01em}
+p{margin:.6em 0}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--pad)}
+section{padding:96px 0}
+.band{background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.lede{font-size:1.15rem;color:var(--text2);max-width:66ch}
+.note{color:var(--muted);font-size:.95rem;max-width:72ch;margin-top:26px}
+.kicker{color:var(--accent);font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.14em;margin:0 0 .9em}
+.ico{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* nav */
+nav{position:sticky;top:0;z-index:5;background:rgba(11,18,32,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:8px;min-height:64px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--text);font-weight:750;font-size:1.05rem;min-height:44px}
+.brand img{width:28px;height:28px;border-radius:7px}
+.brand:hover{text-decoration:none}
+nav ul{display:flex;gap:2px;list-style:none;margin:0 0 0 auto;padding:0}
+nav li a{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;color:var(--muted);font-size:.95rem;font-weight:500;border-radius:8px}
+nav li a:hover{color:var(--text);text-decoration:none}
+.chip{display:inline-flex;align-items:center;gap:10px;min-height:44px;margin-left:auto;padding:0 10px 0 14px;border:1px solid var(--line2);border-radius:10px;background:var(--bg2);color:var(--text2);font:500 .88rem var(--mono);opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .2s var(--ease),transform .2s var(--ease),visibility 0s .2s}
+.chip.on{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+.chip:hover{border-color:var(--accent);color:var(--text)}
+.chip .ico{width:18px;height:18px}
+.chip b{font-weight:500;color:var(--accent2)}
+.chip .done{display:none;color:var(--ok)}
+.chip.copied .done{display:inline}.chip.copied .ico,.chip.copied b{display:none}
+@media (max-width:900px){nav li.opt{display:none}}
+@media (max-width:640px){.chip b{display:none}.chip{padding:0 10px}.chip .ico{display:block}}
+
+/* hero */
+.hero{padding:64px 0 48px}
+.hero-grid{display:grid;gap:28px;grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "art" "rest";align-items:center}
+.hero-grid>*{min-width:0}
+.h-head{grid-area:head}.h-rest{grid-area:rest}.hero-art{grid-area:art}
+@media (min-width:1000px){.hero-grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr);grid-template-areas:"head art" "rest art";gap:0 48px;align-items:center}.h-head{align-self:end}.h-rest{align-self:start;padding-top:20px}.hero-art{align-self:center}}
+.hero .lede{margin:0 0 26px}
+.h-head h1{margin-bottom:0}
+.install{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--line2);border-radius:12px;padding:8px 8px 8px 16px;max-width:560px;font-family:var(--mono);font-size:1rem;color:var(--text)}
+.install .dollar{color:var(--muted);user-select:none}
+.install .cmd{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.install .cmd::-webkit-scrollbar{display:none}
+.install .cmd b{color:var(--accent2);font-weight:600}
+.copy{flex:none;display:inline-flex;align-items:center;gap:7px;min-height:44px;min-width:44px;padding:0 16px;background:var(--accent);color:var(--on-accent);border:0;border-radius:9px;font:650 .9rem var(--sans);transition:background .15s var(--ease)}
+.copy:hover{background:var(--accent2)}
+.copy.copied{background:var(--ok)}
+.copy .ico{width:18px;height:18px;stroke:var(--on-accent)}
+.alts{color:var(--muted);font-size:.95rem;margin:14px 0 0;max-width:560px}
+.alts code{color:var(--text2);font-size:.85em}
+.alts em{color:var(--text2)}
+.links{display:flex;flex-wrap:wrap;gap:4px 6px;margin:18px 0 0;padding:0;list-style:none}
+.links a{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 10px;margin-left:-10px;color:var(--text2);font-weight:600;font-size:.95rem;border-radius:8px}
+.links a:hover{color:var(--text);text-decoration:none}
+.links a .ico{width:18px;height:18px;stroke:var(--muted)}
+.links li+li a{margin-left:0}
+.hero-art{margin:0}
+.hero-art img{width:100%;aspect-ratio:5/3;border-radius:18px;border:1px solid var(--line);background:var(--bg2)}
+.hero-art figcaption{color:var(--muted);font-size:.9rem;margin-top:12px}
+
+/* one call in */
+.io{display:grid;gap:18px;grid-template-columns:1fr;margin-top:34px;align-items:start}
+@media (min-width:900px){.io{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}}
+.pane{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.pane-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);color:var(--muted);font:600 .8rem var(--sans);text-transform:uppercase;letter-spacing:.1em}
+.pane-h .ico{width:16px;height:16px}
+.pane pre{padding:16px 18px;font-size:.88rem;line-height:1.6;color:var(--text2)}
+.pane pre .k{color:var(--sky)}.pane pre .s{color:var(--ok)}.pane pre .f{color:var(--accent2)}.pane pre .c{color:var(--muted)}
+.pane .shot{position:relative;aspect-ratio:16/9;overflow:hidden;background:#f8f6f1;border-bottom:1px solid var(--line)}
+.pane .shot img{width:100%;height:auto;position:absolute;inset:0}
+.pane .tag{position:absolute;right:12px;bottom:12px;background:rgba(11,18,32,.88);color:var(--text2);font:500 .75rem var(--mono);padding:5px 9px;border-radius:6px;border:1px solid var(--line2)}
+.pane .out{display:grid;gap:0;grid-template-columns:1fr}
+@media (min-width:640px){.pane .out{grid-template-columns:1fr 1fr}.pane .out pre+pre{border-left:1px solid var(--line)}}
+
+/* table */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);margin-top:34px;-webkit-overflow-scrolling:touch;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:.95rem}
+th,td{text-align:left;vertical-align:top;padding:15px 18px;border-bottom:1px solid var(--line)}
+th{background:var(--bg2);color:var(--muted);font-weight:650;font-size:.78rem;text-transform:uppercase;letter-spacing:.1em}
+tr:last-child td{border-bottom:0}
+td:first-child{color:var(--text);font-weight:600;width:27%}
+td:nth-child(2){color:var(--muted)}
+td code{white-space:normal}
+
+/* cards */
+.grid{display:grid;gap:16px;margin-top:34px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr))}
+@media (min-width:960px){.span2{grid-column:span 2}.span3{grid-column:1/-1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px 22px 20px;transition:border-color .2s var(--ease)}
+.card:hover{border-color:var(--line2)}
+.card h3{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.card h3 code{font-size:.92em}
+.card p{margin:0;color:var(--muted);font-size:.97rem}
+.card .sig{display:block;color:var(--muted);font-family:var(--mono);font-size:.78rem;margin-top:12px;white-space:normal;word-break:break-word;opacity:.85}
+.card pre{margin-top:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.86rem;color:var(--accent2)}
+.card .where{display:block;margin-top:10px;font-size:.86rem;color:var(--muted)}
+.card .where code{color:var(--text2);white-space:normal;font-size:.85em}
+
+/* vscode */
+.two{display:grid;gap:20px;grid-template-columns:1fr;margin-top:34px}
+.shotbox{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg2)}
+.shotbox img{width:100%}
+.kbd{display:inline-block;background:var(--card);border:1px solid var(--line2);border-bottom-width:2px;border-radius:6px;padding:0 .45em;font:600 .85em var(--mono);color:var(--text2)}
+
+/* how */
+.how{list-style:none;padding:0;margin:34px 0 0;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+.how li{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px;color:var(--muted);font-size:.97rem}
+.how li b{display:flex;align-items:center;gap:10px;color:var(--text);margin-bottom:8px;font-size:1.05rem}
+.how li code{white-space:normal}
+
+/* film */
+.film{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#000;margin-top:34px;aspect-ratio:16/9}
+.film video,.film img{width:100%;height:100%;object-fit:cover}
+
+/* final cta */
+.cta{padding:96px 0;text-align:center}
+.cta .install{margin:28px auto 0;text-align:left}
+.cta .alts{margin:14px auto 0}
+
+/* footer */
+footer{border-top:1px solid var(--line);background:var(--bg2);padding:56px 0 40px;color:var(--muted);font-size:.95rem}
+.fgrid{display:grid;gap:32px;grid-template-columns:1fr}
+@media (min-width:480px){.fgrid{grid-template-columns:1fr 1fr}.fgrid>div:first-child{grid-column:1/-1}}
+@media (min-width:860px){.fgrid{grid-template-columns:1.6fr 1fr 1fr 1fr}.fgrid>div:first-child{grid-column:auto}}
+footer h4{margin:0 0 8px;color:var(--text);font-size:.85rem;text-transform:uppercase;letter-spacing:.1em}
+footer ul{list-style:none;margin:0;padding:0}
+footer li a{display:inline-flex;align-items:center;min-height:44px;color:var(--text2)}
+footer .tag{margin:10px 0 0;max-width:36ch}
+.fbottom a{display:inline-block;padding:10px 0}
+.fbottom{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;margin-top:44px;padding-top:22px;border-top:1px solid var(--line);font-size:.9rem}
+@media (max-width:480px){.copy span{display:none}.copy{padding:0;width:44px;justify-content:center}}
+@media (max-width:600px){
+  section,.cta{padding:72px 0}
+  .install{padding:8px;font-size:.92rem}
+  .card{padding:18px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></symbol>
+  <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1M16 21h1a2 2 0 0 0 2-2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/></symbol>
+  <symbol id="i-diff" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7M11 18H8a2 2 0 0 1-2-2V9"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></symbol>
+  <symbol id="i-paint" viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/><path d="M12 11v3a2 2 0 0 0 2 2h3a2 2 0 0 1 2 2v3M8 21h.01"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
+</svg>
+
+<nav aria-label="Site">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28">Arguseye</a>
+    <button class="chip" type="button" data-copy="npx arguseye install claude" aria-label="Copy the install command: npx arguseye install claude"><svg class="ico"><use href="#i-term"/></svg><b>npx arguseye install claude</b><span class="done">Copied</span><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg></button>
+    <ul>
+      <li class="opt"><a href="#why">Why</a></li>
+      <li class="opt"><a href="#tools">Tools</a></li>
+      <li class="opt"><a href="#agents">Install</a></li>
+      <li class="opt"><a href="#vscode">VS Code</a></li>
+      <li><a href="https://github.com/DarkWorldCoder/arguseye">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="h-head">
+      <p class="kicker">Eyes for coding agents · React, Next.js, Vue</p>
+      <h1>Your coding agent can see what it just built.</h1>
+    </div>
+    <div class="h-rest">
+      <p class="lede">Arguseye renders any React, Next.js or Vue component from source, exactly as your app shows it, with the dev server off. Real props come from the places your code already uses the component; your theme, layouts and global CSS apply. The agent gets a cropped PNG, the accessibility tree, what changed since its last render, and errors with file paths, in one call that takes about 40 ms when warm.</p>
+      <div class="install" id="install">
+        <span class="dollar" aria-hidden="true">$</span>
+        <span class="cmd">npx arguseye install <b>claude</b></span>
+        <button class="copy" type="button" data-copy="npx arguseye install claude" aria-label="Copy the install command"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+      </div>
+      <p class="alts">Also <code>codex</code>, <code>gemini</code>, <code>cursor</code>, <code>windsurf</code>, <code>vscode</code>, <code>antigravity</code>, <code>copilot</code> or <code>all</code>. One command writes the MCP server and the skill where your agent reads them. Then tell the agent: <em>look at the card you just changed.</em></p>
+      <ul class="links">
+        <li><a href="https://github.com/DarkWorldCoder/arguseye"><svg class="ico" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/arguseye"><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg>npm</a></li>
+        <li><a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg>VS Code Marketplace</a></li>
+      </ul>
+    </div>
+    <figure class="hero-art">
+      <picture>
+        <source srcset="assets/hero-frame.png" media="(prefers-reduced-motion: reduce)">
+        <img src="assets/hero.svg" alt="Editing a real home-page section of a production Next.js app: the desktop and mobile previews update beside the code, and the agent gets the measured change" width="1000" height="600" fetchpriority="high">
+      </picture>
+      <figcaption>A real section of a production Next.js app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered from an unsaved edit with no server running, on desktop and mobile, inside the app's own theme and nested layouts.</figcaption>
+    </figure>
+  </div>
+</header>
+
+<section id="call" class="band">
+  <div class="wrap">
+    <p class="kicker">One call in, pixels out</p>
+    <h2>Name a component. Get back what a person would see.</h2>
+    <p class="lede">The agent asks for a file and, optionally, a call site. Arguseye finds the real props, wraps the component in the app's providers and layouts, draws it in Chromium and answers with compact evidence.</p>
+    <div class="io">
+      <div class="pane">
+        <div class="pane-h"><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg>agent → arguseye</div>
+<pre><span class="f">render_component</span> {
+  <span class="k">"file"</span>: <span class="s">"src/page-components/home/components/AIEcosystem.tsx"</span>,
+  <span class="k">"viewport"</span>: <span class="s">"desktop"</span>,
+  <span class="k">"in_context"</span>: true
+}
+<span class="c">// props: the first real call site is used by default</span></pre>
+      </div>
+      <div class="pane">
+        <div class="pane-h"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg>arguseye → agent</div>
+        <div class="shot"><img src="assets/example-home-section.png" alt="The 641-line home-page section rendered headless with the app's theme: heading, product overview link and six feature cards" width="1280" height="1633" loading="lazy"><span class="tag">PNG, cropped to the component</span></div>
+        <div class="out">
+<pre><span class="c">// accessibility tree (excerpt)</span>
+heading <span class="s">"AI ecosystem to simplify international admissions from match to enrollment"</span>
+link <span class="s">"Download product overview"</span>
+heading <span class="s">"Instantly match students"</span>
+button <span class="s">"Check Your WiseScore®"</span>
+heading <span class="s">"AI-powered interviews"</span>
+heading <span class="s">"Verify &amp; validate"</span></pre>
+<pre><span class="k">errors</span>: []
+<span class="k">warnings</span>: []
+<span class="k">timings</span>: <span class="c">this section 0.9 s cold, 0.3 s again, ~40 ms warm capture</span>
+<span class="k">changes</span>: <span class="c">pixel share, tree diff and new or resolved errors since the previous render of the same target</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="why">
+  <div class="wrap">
+    <p class="kicker">The problem</p>
+    <h2>Why an agent needs eyes</h2>
+    <p class="lede">Coding agents write UI blind. They edit a component, read the code back, and declare it done. The button that wraps onto two lines, the card that lost its padding, the theme that never applied: none of that is visible in a diff. The usual remedy is to start the dev server, wait for it, navigate to the page, log in, click into the right state and take a screenshot. That is six to ten tool calls, it breaks whenever the app can't boot, and it only ever shows saved files.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Situation</th><th>Without Arguseye</th><th>With Arguseye</th></tr></thead>
+        <tbody>
+          <tr><td>"Does my change look right?"</td><td>Dev server, navigate, log in, click, screenshot</td><td><code>render_component</code>: PNG, tree, errors, ~40 ms warm</td></tr>
+          <tr><td>The app can't boot</td><td>Stuck</td><td>Renders the component alone, inside the app's real providers</td></tr>
+          <tr><td>Unsaved or just-written code</td><td>Invisible until saved and recompiled</td><td>Seen as typed, on disk or in the editor buffer</td></tr>
+          <tr><td>Needs a state: open menu, filled form, hovered row</td><td>Scripted clicks through the whole app</td><td><code>actions</code> and <code>storage</code> on the component itself</td></tr>
+          <tr><td>Did the edit change anything?</td><td>Compare two screenshots by eye</td><td><code>changes</code>: pixel share, tree diff, new or resolved errors</td></tr>
+          <tr><td>Which other pages did I just affect?</td><td>Hope</td><td><code>render_usages</code>: every call site, real props, one call</td></tr>
+          <tr><td>What props does this take?</td><td>Read the type by hand</td><td><code>describe_props</code>: schema and samples from TypeScript</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Compared with Storybook you write no stories; compared with Preview.js the props are real and the layouts are yours; compared with browser-automation MCPs nothing has to be running. The numbers behind this are in <a href="https://github.com/DarkWorldCoder/arguseye/tree/main/benchmarks">benchmarks/</a>.</p>
+  </div>
+</section>
+
+<section id="tools" class="band">
+  <div class="wrap">
+    <p class="kicker">MCP server <code>arguseye</code></p>
+    <h2>What the agent gets back</h2>
+    <p class="lede">Five tools. Each returns compact evidence: text and a cropped image, never a whole page.</p>
+    <div class="grid g3">
+      <div class="card span2">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg><code>render_component</code></h3>
+        <p>PNG cropped to the component, accessibility tree, <code>errors[]</code>, <code>warnings[]</code>, <code>timings</code>, and <code>changes</code> since the previous render of the same target. <code>usage</code> takes the props of a real call site; <code>in_context</code> renders inside that call site's parent elements; <code>frame</code> is a stand-in parent box; <code>actions</code> and <code>storage</code> set the state first. Function props: <code>{"$fn": "(x) => …"}</code>.</p>
+        <span class="sig">{file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?}</span>
+      </div>
+      <div class="card">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-list"/></svg><code>list_usages</code></h3>
+        <p>Every call site with its literal props, the props that depend on runtime values, and the JSX ancestors.</p>
+        <span class="sig">{file, export?}</span>
+      </div>
+      <div class="card">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-layers"/></svg><code>render_usages</code></h3>
+        <p>The component at every call site: the blast radius of a change in one call.</p>
+        <span class="sig">{file, export?, viewport?}</span>
+      </div>
+      <div class="card">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-braces"/></svg><code>describe_props</code></h3>
+        <p>The props schema from the TypeScript type, with sample values.</p>
+        <span class="sig">{file, export?}</span>
+      </div>
+      <div class="card">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-diff"/></svg><code>render_diff</code></h3>
+        <p>An explicit before/after against a <code>captureId</code>.</p>
+        <span class="sig">{baselineId}</span>
+      </div>
+      <div class="card span3">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-term"/></svg>CLI, for agents without MCP</h3>
+        <p><code>shot</code>, <code>usages</code>, <code>serve</code> (a live page with hot reload), <code>diff</code> and <code>install</code>.</p>
+        <pre>npx arguseye shot src/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="agents">
+  <div class="wrap">
+    <p class="kicker">Setup per agent</p>
+    <h2>Works with the agent you already use</h2>
+    <p class="lede"><code>npx arguseye install &lt;client&gt;</code> writes the MCP server entry and the skill where each client reads them. It merges into existing config and can be run again safely.</p>
+    <div class="grid g3">
+      <div class="card"><h3>Claude Code</h3><pre>npx arguseye install claude</pre><span class="where"><code>.mcp.json</code> in the project, skill in <code>~/.claude/skills</code>. Or the plugin: <code>claude plugin marketplace add DarkWorldCoder/arguseye</code> then <code>claude plugin install arguseye</code>.</span></div>
+      <div class="card"><h3>Codex</h3><pre>npx arguseye install codex</pre><span class="where"><code>~/.codex/config.toml</code>, skill in <code>~/.agents/skills</code>.</span></div>
+      <div class="card"><h3>Gemini CLI</h3><pre>npx arguseye install gemini</pre><span class="where"><code>.gemini/settings.json</code> and <code>.gemini/skills</code> in the project.</span></div>
+      <div class="card"><h3>Cursor</h3><pre>npx arguseye install cursor</pre><span class="where"><code>~/.cursor/mcp.json</code>, skill in <code>.cursor/skills</code>.</span></div>
+      <div class="card"><h3>Windsurf</h3><pre>npx arguseye install windsurf</pre><span class="where"><code>~/.codeium/windsurf/mcp_config.json</code>.</span></div>
+      <div class="card"><h3>Antigravity</h3><pre>npx arguseye install antigravity</pre><span class="where"><code>.agents/mcp_config.json</code> and <code>.agents/skills</code>. Or <code>agy plugin install https://github.com/DarkWorldCoder/arguseye</code>.</span></div>
+      <div class="card"><h3>GitHub Copilot</h3><pre>npx arguseye install copilot</pre><span class="where"><code>.github/skills</code> and <code>.vscode/mcp.json</code>.</span></div>
+      <div class="card"><h3>VS Code</h3><pre>npx arguseye install vscode</pre><span class="where"><code>.vscode/mcp.json</code> for Copilot agent mode. The human panel is the <a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye">extension</a>, id <code>ayushniroula.arguseye</code>.</span></div>
+      <div class="card"><h3>Any MCP client</h3><pre>npx arguseye install print</pre><span class="where">Prints the server JSON to paste into your client. <code>install all</code> does every client above.</span></div>
+    </div>
+    <p class="note">The skill (<code>skills/arguseye/SKILL.md</code>) follows the Agent Skills format and works on its own too: it tells the agent when to look, how to read a result, and how to use the CLI if MCP is unavailable. Details in <a href="https://github.com/DarkWorldCoder/arguseye/blob/main/docs/install.md">docs/install.md</a>.</p>
+  </div>
+</section>
+
+<section id="vscode" class="band">
+  <div class="wrap">
+    <p class="kicker">For people</p>
+    <h2>The same renderer, beside your code</h2>
+    <p class="lede">Open a <code>.tsx</code>, <code>.jsx</code> or <code>.vue</code> file and run <b>Preview Component</b> (the eye icon in the editor title, or <span class="kbd">Ctrl</span>+<span class="kbd">Alt</span>+<span class="kbd">P</span>). The panel shows the component with the props from its first real usage, follows the file you edit, re-renders in under 50 ms as you type with component state kept, scales the preview to fit (or 1:1), and has a props form built from the component's type.</p>
+    <div class="two">
+      <div class="shotbox"><picture><source srcset="assets/hero-editor-frame.png" media="(prefers-reduced-motion: reduce)"><img src="assets/hero-editor.svg" alt="Typing in the editor re-renders the component beside it; component state is kept" width="1000" height="420" loading="lazy"></picture></div>
+      <div class="shotbox"><img src="assets/vscode-panel.png" alt="The VS Code panel: a production home-page section rendered beside its code, scaled to fit, with export, usage and viewport pickers and a props form generated from the TypeScript type" width="1600" height="1000" loading="lazy"></div>
+    </div>
+    <p class="note">Extension id <code>ayushniroula.arguseye</code> on the <a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye">Marketplace</a> and Open VSX (Cursor, Windsurf, VSCodium).</p>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <p class="kicker">Under the hood</p>
+    <h2>How it stays exact and fast</h2>
+    <ul class="how">
+      <li><b><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg>Your toolchain, one build</b>Your files run through <a href="https://oxc.rs">oxc</a> one module at a time; your packages are pre-bundled once by <a href="https://rolldown.rs">Rolldown</a> from your own <code>node_modules</code> in a worker process and cached by lockfile, so React, MUI and Tailwind are the versions your app uses. Next.js app-router projects run on Next's vendored React, like the app itself.</li>
+      <li><b><svg class="ico" aria-hidden="true"><use href="#i-paint"/></svg>Your layouts and CSS</b>Root and nested layouts and templates wrap every render: global CSS, <code>&lt;html&gt;</code>/<code>&lt;body&gt;</code> classes, providers with their props, <code>CssBaseline</code>-style siblings. Tailwind v4 compiles with your theme, Tailwind v3 through your PostCSS config, plus Sass, CSS modules, <code>public/</code> assets, image imports and <code>NEXT_PUBLIC_*</code> env.</li>
+      <li><b><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg>Real pixels</b><code>next/link</code>, <code>next/image</code> and <code>next/navigation</code> render Next's markup; Chromium draws the pixels. The capture is a clip to the component's box with transitions ended and animations settled.</li>
+      <li><b><svg class="ico" aria-hidden="true"><use href="#i-zap"/></svg>Hot swaps</b>Edits are hot-swapped with React Fast Refresh, from the editor or from disk. A target's whole import graph is preloaded in one batch; barrel imports of icon packages are rewritten per member; lazy images load eagerly so the frame settles in milliseconds.</li>
+    </ul>
+    <p class="note">Measured on the 1,197-file app above: server ready in 2–11 s, first render 1.5 s, a full section 0.9 s, the same target again 0.3 s; the server stays around 500–750 MB. The technique is described in <a href="https://github.com/DarkWorldCoder/arguseye/blob/main/docs/technique.md">docs/technique.md</a>.</p>
+  </div>
+</section>
+
+<section id="watch" class="band">
+  <div class="wrap">
+    <p class="kicker">60 seconds</p>
+    <h2>See it work</h2>
+    <div class="film" id="filmbox">
+      <video id="film" controls preload="metadata" playsinline poster="assets/hero-frame.png" width="1280" height="720" aria-label="The Arguseye launch film">
+        <source src="video/arguseye-launch.mp4" type="video/mp4">
+      </video>
+    </div>
+  </div>
+</section>
+
+<section class="cta" id="start">
+  <div class="wrap">
+    <p class="kicker">Get started</p>
+    <h2 style="margin:0 auto">Give your agent eyes.</h2>
+    <p class="lede" style="margin:14px auto 0">Free, MIT licensed, nothing to run. One command, then ask the agent to look.</p>
+    <div class="install">
+      <span class="dollar" aria-hidden="true">$</span>
+      <span class="cmd">npx arguseye install <b>claude</b></span>
+      <button class="copy" type="button" data-copy="npx arguseye install claude" aria-label="Copy the install command"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+    </div>
+    <p class="alts">Replace <code>claude</code> with your client, or use <code>all</code>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="24" height="24">Arguseye</a>
+        <p class="tag">Your coding agent can see what it just built. React, Next.js and Vue components rendered from source, with the dev server off.</p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/DarkWorldCoder/arguseye">GitHub</a></li>
+          <li><a href="https://www.npmjs.com/package/arguseye">npm</a></li>
+          <li><a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye">VS Code Marketplace</a></li>
+          <li><a href="https://github.com/DarkWorldCoder/arguseye/blob/main/CHANGELOG.md">Changelog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Docs</h4>
+        <ul>
+          <li><a href="https://github.com/DarkWorldCoder/arguseye/blob/main/docs/install.md">Install per agent</a></li>
+          <li><a href="https://github.com/DarkWorldCoder/arguseye/blob/main/docs/technique.md">How it renders</a></li>
+          <li><a href="https://github.com/DarkWorldCoder/arguseye/tree/main/benchmarks">Benchmarks</a></li>
+          <li><a href="https://github.com/DarkWorldCoder/arguseye/blob/main/docs/agent-wishlist.md">Roadmap</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Author</h4>
+        <ul>
+          <li><a href="https://ayushniroula.com.np">Ayush Niroula</a></li>
+          <li><a href="https://github.com/DarkWorldCoder">@DarkWorldCoder</a></li>
+          <li><a href="https://x.com/wiseadmitisfun">@wiseadmitisfun</a></li>
+          <li><a href="https://github.com/DarkWorldCoder/arguseye/blob/main/CONTRIBUTING.md">Contributing</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="fbottom">
+      <span>MIT licensed. Made by <a href="https://ayushniroula.com.np">Ayush Niroula</a>.</span>
+      <span><a href="https://github.com/DarkWorldCoder/arguseye/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/DarkWorldCoder/arguseye/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  function copy(t,ok){
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(ok,function(){legacy(t,ok);});}else{legacy(t,ok);}
+  }
+  function legacy(t,ok){var a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();try{document.execCommand('copy');ok();}catch(e){}document.body.removeChild(a);}
+  document.querySelectorAll('[data-copy]').forEach(function(b){
+    var label=b.querySelector('span:not(.done)');
+    b.addEventListener('click',function(){copy(b.getAttribute('data-copy'),function(){
+      b.classList.add('copied');if(label)label.textContent='Copied';
+      setTimeout(function(){b.classList.remove('copied');if(label)label.textContent='Copy';},1600);
+    });});
+  });
+  // Sticky install command: appears in the nav once the hero's command box has scrolled away.
+  var chip=document.querySelector('.chip'),box=document.getElementById('install');
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(function(e){chip.classList.toggle('on',!e[0].isIntersecting&&e[0].boundingClientRect.top<0);}).observe(box);
+  }else{chip.classList.add('on');}
+  // The film is dropped into video/ later: until the file exists, show the poster alone.
+  var v=document.getElementById('film'),src=v.querySelector('source');
+  function poster(){if(!v.parentNode)return;var i=new Image();i.src=v.getAttribute('poster');i.alt='Arguseye: the editor on the left, the rendered component on desktop and mobile on the right';i.width=1280;i.height=720;v.replaceWith(i);}
+  src.addEventListener('error',poster);
+  v.addEventListener('error',poster);
+  if(v.networkState===3&&v.readyState===0)poster();else setTimeout(function(){if(v.networkState===3&&v.readyState===0)poster();},1500);
+})();
+</script>
+</body>
+</html>
