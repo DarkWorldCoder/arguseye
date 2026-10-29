@@ -12,13 +12,15 @@ The existing repository is `DarkWorldCoder/arguseye`. The Pages workflow publish
 npm test
 npm run typecheck
 npm run package                 # validate the extension archive too
-npm pack --dry-run --json        # inspect the npm file list
+npm run pack:npm                 # scoped CLI archive in artifacts/
 npm login                       # only if npm whoami is not authenticated
-npm publish --access public     # runs the build first (prepublishOnly)
-npm view arguseye version        # confirm registry publication
+npm run publish:npm              # publishes @ayushniroula/arguseye
+npm view @ayushniroula/arguseye version        # confirm registry publication
 ```
 
-After this, `npx arguseye install claude` works for anyone.
+The root package keeps the unscoped VS Code identity; `scripts/packNpm.mjs` creates a separate scoped npm manifest. The unscoped npm name is unavailable because of a similar-name registry restriction.
+
+After this, `npx @ayushniroula/arguseye install claude` works for anyone.
 
 ## 3. VS Code Marketplace
 

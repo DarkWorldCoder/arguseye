@@ -2,6 +2,8 @@
 
 ## 0.0.3
 
+- Publish the CLI and MCP server as `@ayushniroula/arguseye`; generated client configuration, documentation, skills, plugins, and release automation use that registry package while the extension retains `ayushniroula.arguseye`.
+
 - Fix Marketplace screenshots by serving real VS Code and component images from public Pages URLs instead of the private repository.
 - Interactive product site, expandable README setup guides, accessible SVG workflow and comparison illustrations, and public installation/compatibility/benchmark documentation.
 - npm release archive includes its documentation and visual assets; release manifests and lockfile agree on 0.0.3.

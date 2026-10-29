@@ -14,7 +14,7 @@ describe("install for agent clients", () => {
       expect.arrayContaining([".claude/skills/arguseye/SKILL.md", ".codex/config.toml", ".agents/skills/arguseye/SKILL.md", ".cursor/mcp.json", ".codeium/windsurf/mcp_config.json"]),
     );
     const claude = JSON.parse(readFileSync(path.join(project, ".mcp.json"), "utf8"));
-    expect(claude.mcpServers["arguseye"]).toEqual({ command: "npx", args: ["-y", "arguseye", "mcp", "--root", project] });
+    expect(claude.mcpServers["arguseye"]).toEqual({ command: "npx", args: ["-y", "@ayushniroula/arguseye", "mcp", "--root", project] });
     expect(readFileSync(path.join(home, ".codex", "config.toml"), "utf8")).toContain("[mcp_servers.arguseye]");
     expect(readFileSync(path.join(home, ".claude", "skills", "arguseye", "SKILL.md"), "utf8")).toMatch(/^---\nname: arguseye/);
     expect(JSON.parse(readFileSync(path.join(project, ".vscode", "mcp.json"), "utf8")).servers["arguseye"].type).toBe("stdio");
@@ -43,6 +43,6 @@ describe("install for agent clients", () => {
 
   it("prints a generic MCP snippet for agents without a dedicated target", () => {
     const steps = install({ client: "print", project: "/tmp/app", home: tmp(), dryRun: true });
-    expect(JSON.parse(steps[0].note!).mcpServers.arguseye.args).toEqual(["-y", "arguseye", "mcp", "--root", "/tmp/app"]);
+    expect(JSON.parse(steps[0].note!).mcpServers.arguseye.args).toEqual(["-y", "@ayushniroula/arguseye", "mcp", "--root", "/tmp/app"]);
   });
 });

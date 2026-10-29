@@ -33,5 +33,5 @@
     <rect x="670" y="200" width="140" height="30" rx="15" class="pill"/><text x="740" y="220" text-anchor="middle" class="pt">~40 ms warm</text>
     <rect x="820" y="200" width="150" height="30" rx="15" class="pill"/><text x="895" y="220" text-anchor="middle" class="pt">MCP · CLI · VS Code</text>
   </g>
-  <text x="304" y="262" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="15" fill="#64748b">$ <tspan fill="#e2e8f0">npx arguseye install claude</tspan></text>
+  <text x="304" y="262" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="15" fill="#64748b">$ <tspan fill="#e2e8f0">npx @ayushniroula/arguseye install claude</tspan></text>
 </svg>

@@ -22,7 +22,7 @@ export type InstallOptions = {
 
 export type InstallStep = { file: string; action: "write" | "merge" | "copy"; note?: string };
 
-const SERVER = { command: "npx", args: ["-y", "arguseye", "mcp", "--root"] };
+const SERVER = { command: "npx", args: ["-y", "@ayushniroula/arguseye", "mcp", "--root"] };
 const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /**

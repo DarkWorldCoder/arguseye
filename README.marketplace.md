@@ -32,7 +32,7 @@ These screenshots show components rendered from a Next.js project using its own 
 The MCP server and CLI use the same rendering engine as the extension. Run this from your project, then restart the chosen agent:
 
 ```bash
-npx arguseye install claude
+npx @ayushniroula/arguseye install claude
 ```
 
 Replace `claude` with `codex`, `cursor`, `gemini`, `windsurf`, `vscode`, `copilot`, or `antigravity`. Use `print` for another MCP client.

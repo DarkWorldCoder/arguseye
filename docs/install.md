@@ -1,18 +1,18 @@
 # Install Arguseye for your agent or editor
 
-Everything runs through one MCP server: `npx arguseye mcp` (started in the project directory, or with `--root <dir>`). The `install` command writes the server entry and the skill where each client reads them; it merges into existing config and can be run again safely.
+Everything runs through one MCP server: `npx @ayushniroula/arguseye mcp` (started in the project directory, or with `--root <dir>`). The `install` command writes the server entry and the skill where each client reads them; it merges into existing config and can be run again safely.
 
 ```bash
-npx arguseye install all          # every client below
-npx arguseye install claude       # one client
-npx arguseye install codex --project /path/to/app --dry-run
+npx @ayushniroula/arguseye install all          # every client below
+npx @ayushniroula/arguseye install claude       # one client
+npx @ayushniroula/arguseye install codex --project /path/to/app --dry-run
 ```
 
 | Client | What `install` writes | Alternative |
 |---|---|---|
-| Claude Code | `.mcp.json` in the project; skill in `~/.claude/skills/arguseye` | `claude mcp add arguseye -- npx -y arguseye mcp`, or the plugin: `claude plugin marketplace add DarkWorldCoder/arguseye` then `claude plugin install arguseye` |
-| Codex | `[mcp_servers.arguseye]` in `~/.codex/config.toml`; skill in `~/.agents/skills/arguseye` | `codex mcp add arguseye -- npx -y arguseye mcp` |
-| Gemini CLI | `mcpServers.arguseye` in `.gemini/settings.json`; skill in `.gemini/skills/arguseye` | `gemini mcp add arguseye npx -y arguseye mcp --root .` |
+| Claude Code | `.mcp.json` in the project; skill in `~/.claude/skills/arguseye` | `claude mcp add arguseye -- npx -y @ayushniroula/arguseye mcp`, or the plugin: `claude plugin marketplace add DarkWorldCoder/arguseye` then `claude plugin install arguseye` |
+| Codex | `[mcp_servers.arguseye]` in `~/.codex/config.toml`; skill in `~/.agents/skills/arguseye` | `codex mcp add arguseye -- npx -y @ayushniroula/arguseye mcp` |
+| Gemini CLI | `mcpServers.arguseye` in `.gemini/settings.json`; skill in `.gemini/skills/arguseye` | `gemini mcp add arguseye npx -y @ayushniroula/arguseye mcp --root .` |
 | Cursor | `~/.cursor/mcp.json`; skill in `.cursor/skills/arguseye` | Settings → MCP → add the JSON |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | |
 | VS Code (Copilot agent mode) | `.vscode/mcp.json` (`servers`) | |
@@ -34,7 +34,7 @@ Marketplace listing: [**Arguseye**](https://marketplace.visualstudio.com/items?i
 
 ## Skill only (no MCP)
 
-The skill at `skills/arguseye/SKILL.md` follows the Agent Skills format and also works on its own: it tells the agent to use the CLI (`npx arguseye shot …`) when the MCP tools are not available. Copy it to `~/.claude/skills/`, `~/.agents/skills/` or `.cursor/skills/`.
+The skill at `skills/arguseye/SKILL.md` follows the Agent Skills format and also works on its own: it tells the agent to use the CLI (`npx @ayushniroula/arguseye shot …`) when the MCP tools are not available. Copy it to `~/.claude/skills/`, `~/.agents/skills/` or `.cursor/skills/`.
 
 ## Verified end to end
 

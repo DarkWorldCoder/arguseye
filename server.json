@@ -7,7 +7,7 @@
   "packages": [
     {
       "registry_name": "npm",
-      "name": "arguseye",
+      "name": "@ayushniroula/arguseye",
       "version": "0.0.3",
       "runtime_hint": "npx",
       "package_arguments": [{ "type": "positional", "value": "mcp" }]

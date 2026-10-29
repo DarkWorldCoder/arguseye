@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/arguseye"><img alt="npm" src="https://img.shields.io/npm/v/arguseye?color=6476e9"></a>
+  <a href="https://www.npmjs.com/package/@ayushniroula/arguseye"><img alt="npm" src="https://img.shields.io/npm/v/@ayushniroula/arguseye?color=6476e9"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/ayushniroula.arguseye?label=VS%20Code&color=007acc"></a>
   <a href="https://darkworldcoder.github.io/arguseye/guide.html#license"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
   <img alt="React, Next.js, Vue" src="https://img.shields.io/badge/React%20%C2%B7%20Next.js%20%C2%B7%20Vue-supported-22c55e">
@@ -18,7 +18,7 @@
 Arguseye gives coding agents eyes on real React, browser-renderable Next.js, and Vue 3 components, without starting your app or writing stories. It uses your source, installed packages, discovered usage props, and supported layout context. Each render returns a cropped PNG, accessibility text, and structured evidence—including unresolved inputs, warnings, and errors.
 
 ```bash
-npx arguseye install claude
+npx @ayushniroula/arguseye install claude
 ```
 
 Requires Node.js 22+, installed project dependencies, and Chromium or Google Chrome. Run this in your project, then restart your agent. Replace `claude` with `codex`, `cursor`, `gemini`, `windsurf`, `vscode`, `antigravity`, or `copilot`.
@@ -43,7 +43,7 @@ Expand your client for a copyable recipe. These controls work directly on GitHub
 <summary><strong>Claude Code</strong></summary>
 
 ```bash
-npx arguseye install claude
+npx @ayushniroula/arguseye install claude
 ```
 
 Writes the project's `.mcp.json` and the skill in `~/.claude/skills/arguseye`. Restart Claude Code, then ask it to preview the component you are editing.
@@ -54,7 +54,7 @@ Writes the project's `.mcp.json` and the skill in `~/.claude/skills/arguseye`. R
 <summary><strong>Codex</strong></summary>
 
 ```bash
-npx arguseye install codex --project /path/to/app
+npx @ayushniroula/arguseye install codex --project /path/to/app
 ```
 
 Adds the MCP entry to `~/.codex/config.toml` and the skill to `~/.agents/skills/arguseye`. Restart Codex to load them.
@@ -67,10 +67,10 @@ Adds the MCP entry to `~/.codex/config.toml` and the skill to `~/.agents/skills/
 Choose one command:
 
 ```bash
-npx arguseye install cursor
-npx arguseye install windsurf
-npx arguseye install gemini
-npx arguseye install antigravity
+npx @ayushniroula/arguseye install cursor
+npx @ayushniroula/arguseye install windsurf
+npx @ayushniroula/arguseye install gemini
+npx @ayushniroula/arguseye install antigravity
 ```
 
 The installer merges into the chosen client's existing configuration. See [the installation guide](https://darkworldcoder.github.io/arguseye/guide.html#install) for the exact file locations and verification status of each client.
@@ -85,7 +85,7 @@ For the visual editor panel, install [Arguseye from the VS Code Marketplace](htt
 For Copilot's MCP tools:
 
 ```bash
-npx arguseye install vscode
+npx @ayushniroula/arguseye install vscode
 ```
 
 This writes `.vscode/mcp.json`. The visual extension and MCP server are two views of the same rendering engine.
@@ -97,13 +97,13 @@ This writes `.vscode/mcp.json`. The visual extension and MCP server are two view
 
 ```bash
 # Inspect a component without MCP.
-npx arguseye shot src/Card.tsx --export Card --out card.png --json
+npx @ayushniroula/arguseye shot src/Card.tsx --export Card --out card.png --json
 
 # Print MCP configuration without changing files.
-npx arguseye install print
+npx @ayushniroula/arguseye install print
 
 # Preview exactly what an installer would change.
-npx arguseye install codex --project /path/to/app --dry-run
+npx @ayushniroula/arguseye install codex --project /path/to/app --dry-run
 ```
 
 Requirements: **Node.js 22+**, installed project dependencies, and a Playwright-compatible Chromium browser or Google Chrome. If no browser is available, install one with `npx playwright install chromium`. Vue projects also need their own `vue/compiler-sfc`.
@@ -131,11 +131,11 @@ The agent uses `render_component` followed by `render_diff({ baselineId })`. MCP
 <summary><strong>Save a baseline across CLI commands</strong></summary>
 
 ```bash
-npx arguseye shot src/Card.tsx --export Card \
+npx @ayushniroula/arguseye shot src/Card.tsx --export Card \
   --capture-dir .arguseye/baseline --out .arguseye/before.png --json
 
 # Edit src/Card.tsx, then compare its current source.
-npx arguseye diff --baseline .arguseye/baseline \
+npx @ayushniroula/arguseye diff --baseline .arguseye/baseline \
   --out .arguseye/comparison --json
 ```
 
@@ -185,7 +185,7 @@ A real Next.js 14 app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered fr
 | `describe_props {file, export?}` | The props schema from the TypeScript type, with sample values. |
 | `render_diff {baselineId, output?}` | Before, after, highlighted pixel differences, accessibility changes, errors, and completeness against a `captureId`. |
 
-CLI for agents without MCP: `npx arguseye shot src/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png`, `npx arguseye usages …`, `npx arguseye serve …` (live page with hot reload).
+CLI for agents without MCP: `npx @ayushniroula/arguseye shot src/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png`, `npx @ayushniroula/arguseye usages …`, `npx @ayushniroula/arguseye serve …` (live page with hot reload).
 
 ## VS Code
 
