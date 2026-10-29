@@ -13,6 +13,8 @@ Preview React, browser-renderable Next.js, and Vue 3 components from your projec
 
 Your project's dependencies must be installed. Headless CLI and MCP use also require Node.js 22+ and Chromium or Google Chrome. [Installation and prerequisites](https://darkworldcoder.github.io/arguseye/guide.html#install).
 
+Release builds target **Windows x64, macOS Apple Silicon, and Linux x64**. Screenshots below were captured in a real VS Code extension host on Linux; Windows and macOS builds are packaged separately. Images use public HTTPS URLs and load independently of your operating system.
+
 ## A preview that follows your work
 
 - **Your source and packages.** Render with your project's React or Vue runtime, global styles, CSS modules, Tailwind, Sass, and assets.
@@ -20,6 +22,34 @@ Your project's dependencies must be installed. Headless CLI and MCP use also req
 - **Unsaved edits.** Preview the buffer as you work. Ordinary React refreshes and Vue template/style changes preserve component state; Vue script changes remount and report the reset.
 - **Responsive checks.** Switch mobile, tablet, and desktop presets; fit the preview or inspect it at 1:1.
 - **Before and after.** Capture a baseline, edit the source, and inspect changed pixels, dimensions, accessibility text, and new or resolved errors.
+
+## Real VS Code screenshots
+
+These captures use existing WiseAdmit and CSCA.ai production source files, their installed packages, and their own styles and assets. The source editor and Arguseye panel are both visible. They are isolated component previews.
+
+### A responsive page section
+
+WiseAdmit's `AIEcosystem.tsx` at desktop and mobile widths. The mobile preview uses the component's existing accordion layout.
+
+![WiseAdmit AIEcosystem source beside its desktop component preview in the real VS Code extension](https://darkworldcoder.github.io/arguseye/assets/vscode-desktop.png)
+
+![The same WiseAdmit component rendered at the mobile viewport in VS Code](https://darkworldcoder.github.io/arguseye/assets/vscode-mobile.png)
+
+### Inspect an unsaved change
+
+Capture a baseline, edit the heading without saving, then choose **Compare Changes**. The panel shows before, after, changed pixels, and context warnings. This example reports incomplete evidence because its Next.js provider uses unsupported server/font behavior; the warning remains visible.
+
+![An unsaved heading edit in WiseAdmit with before, after, changed pixels, and the incomplete-context warning in VS Code](https://darkworldcoder.github.io/arguseye/assets/vscode-compare.png)
+
+### More components from CSCA.ai
+
+The existing `HeroSection.tsx`, `CscaProvide.tsx`, and `ExamEssentials.tsx` from CSCA.ai's `cscanew/csca` codebase. Their Next font variables use the project's cached Nunito and Manrope font faces. If matching cached Next font assets are unavailable, font context remains explicitly unresolved.
+
+![CSCA.ai HeroSection production source beside its real panda illustration, typography, and call to action in VS Code](https://darkworldcoder.github.io/arguseye/assets/vscode-csca-hero-desktop.png)
+
+![CSCA.ai production practice and learning feature cards with their existing imagery rendered beside CscaProvide source in VS Code](https://darkworldcoder.github.io/arguseye/assets/vscode-csca-features-desktop.png)
+
+![CSCA.ai ExamEssentials production source and its exam-information card grid in the VS Code preview](https://darkworldcoder.github.io/arguseye/assets/vscode-csca-exam-desktop.png)
 
 ## Real component output
 

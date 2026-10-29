@@ -25,3 +25,5 @@ These are isolated component renders using discovered inputs, not full applicati
 
 ## Measured performance
 [Benchmark method and recorded samples](https://darkworldcoder.github.io/arguseye/guide.html#benchmarks). The 2026-10-27 small React fixture measured p95 50 ms over 20 warm renders on an Intel Core i5-1235U with Node v24.21.0. A separate 1,197-file Next.js project measured about 0.3 s for the same target again. These are different workloads, not universal latency guarantees.
+
+- [Real VS Code screenshot gallery](https://darkworldcoder.github.io/arguseye/gallery.html)

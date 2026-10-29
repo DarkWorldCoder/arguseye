@@ -1,0 +1,68 @@
+{
+  "capturedOn": "2026-10-29",
+  "editor": "Visual Studio Code 1.144.0 extension development host",
+  "platform": "Linux x64",
+  "method": "Existing project source and installed packages rendered by Arguseye. Screenshots capture the actual editor window. No rendered UI was reconstructed or painted over. Comparison edits remained unsaved and were discarded.",
+  "captures": [
+    {
+      "image": "vscode-desktop.png",
+      "project": "WiseAdmit/latest-front",
+      "source": "src/page-components/home/components/AIEcosystem.tsx",
+      "view": "desktop",
+      "sha256": "82da55ece48220cc587a820f8ad31075e4b42e7d968b57f22972b2fdf01ce581"
+    },
+    {
+      "image": "vscode-mobile.png",
+      "project": "WiseAdmit/latest-front",
+      "source": "src/page-components/home/components/AIEcosystem.tsx",
+      "view": "mobile",
+      "sha256": "cdb422d4bd203a005413ca01fc8319b0cd2727aa494e9ad5e99d5a57b413d965"
+    },
+    {
+      "image": "vscode-compare.png",
+      "project": "WiseAdmit/latest-front",
+      "source": "src/page-components/home/components/AIEcosystem.tsx",
+      "view": "mobile comparison",
+      "sha256": "97ed5ebeb37954a709c49714da9d7d2c9f69bbb816cb641fdf005b8043b55570",
+      "edit": {
+        "before": "AI ecosystem",
+        "after": "An AI ecosystem",
+        "saved": false,
+        "comparisonStatus": "incomplete",
+        "changedPixels": 2904,
+        "warning": "Next.js server/font behavior in CurrencyProvider requires the application runtime."
+      }
+    },
+    {
+      "image": "vscode-csca-hero-desktop.png",
+      "project": "CSCA.ai/cscanew/csca",
+      "source": "src/components/web/Home/HeroSection.tsx",
+      "view": "desktop",
+      "sha256": "726df73d8c1a865d87260ac015028f77af6f3ce9849f5b331c3b72ca58e3d88f"
+    },
+    {
+      "image": "vscode-csca-features-desktop.png",
+      "project": "CSCA.ai/cscanew/csca",
+      "source": "src/components/web/Home/CscaProvides/CscaProvide.tsx",
+      "view": "desktop",
+      "sha256": "ae13713c5f241112f2e8c8d0b179c553dbbbcff0179f337c1c759c3715647789"
+    },
+    {
+      "image": "vscode-csca-exam-desktop.png",
+      "project": "CSCA.ai/cscanew/csca",
+      "source": "src/components/web/Home/ExamEssentials.tsx",
+      "view": "desktop",
+      "sha256": "0ce264840d2c02e599066380d81b94f722d6a528867c257b085fb89aa3efbd92"
+    }
+  ],
+  "fontVerification": {
+    "project": "CSCA.ai/cscanew/csca",
+    "loadedFontFaces": [
+      "Nunito",
+      "Manrope"
+    ],
+    "bodyFamily": "Manrope",
+    "headingFamily": "Nunito",
+    "fontSource": "Project .next/static font faces and media"
+  }
+}

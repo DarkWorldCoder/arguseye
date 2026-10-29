@@ -10,6 +10,7 @@
 <li>Immutable baselines and before/after comparisons of pixels, dimensions, accessibility snapshots and errors. Comparisons report change or incomplete evidence, never automatic correctness.</li>
 <li>Paginated usage rendering, with a maximum of 12 isolated variants per batch and an incremental source index.</li>
 <li>A VS Code panel with export/usage selection, typed React prop controls, viewport presets, capture and comparison controls. Verification uses the shared renderer and unsaved source.</li>
+<li>Imported root Next Google font variables can reuse matching cached font faces from the project’s <code>.next/static</code> build. Missing font assets remain unresolved; fonts are not downloaded or compiled.</li>
 </ul>
 <h3>Product constraints</h3>
 <p>Warm render p95 must stay at or below 100 ms over 20 measured renders on a documented machine. The edit-to-pixels target is 50 ms; current live-edit tests enforce a looser 100 ms bound. New work on either path needs a timing assertion.</p>

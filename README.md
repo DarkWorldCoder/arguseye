@@ -193,6 +193,30 @@ CLI for agents without MCP: `npx @ayushniroula/arguseye shot src/Card.tsx --expo
 
 Open a `.tsx`, `.jsx` or `.vue` file and run **Preview Component** (the eye icon in the editor title, or `Ctrl+Alt+P`). The panel shows the component with the props from its first real usage, follows the file you edit, updates unsaved edits while preserving state during ordinary React refreshes and Vue template/style edits, scales the preview to fit (or 1:1), and has a props form built from the component's type. Install it from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye) (id `ayushniroula.arguseye`, Linux, macOS and Windows builds), or grab the VSIX from the [releases](https://github.com/DarkWorldCoder/arguseye/releases) for Cursor, Windsurf and VSCodium.
 
+Build targets: **Linux x64, Windows x64, and macOS Apple Silicon**. The following screenshots were captured in the real extension host on Linux, using existing production components from WiseAdmit and CSCA.ai.
+
+<details>
+<summary><strong>Real VS Code gallery: responsive layouts, unsaved changes, and CSCA.ai components</strong></summary>
+
+**WiseAdmit — desktop and mobile.** The same existing `AIEcosystem.tsx` component uses its own responsive layout and assets.
+
+![WiseAdmit production source and desktop component preview](https://darkworldcoder.github.io/arguseye/assets/vscode-desktop.png)
+![WiseAdmit production source and mobile accordion preview](https://darkworldcoder.github.io/arguseye/assets/vscode-mobile.png)
+
+**Before and after an unsaved edit.** The comparison retains an incomplete-context warning for unsupported Next.js provider behavior.
+
+![Unsaved heading edit with before, after, pixel differences, and context warning](https://darkworldcoder.github.io/arguseye/assets/vscode-compare.png)
+
+**CSCA.ai — existing hero, feature cards, and exam-information grid.** These are the actual `HeroSection.tsx`, `CscaProvide.tsx`, and `ExamEssentials.tsx` from `cscanew/csca`, rendered with their own assets and cached Next font faces.
+
+![CSCA.ai production hero source and component preview in VS Code](https://darkworldcoder.github.io/arguseye/assets/vscode-csca-hero-desktop.png)
+![CSCA.ai production feature-card source and preview in VS Code](https://darkworldcoder.github.io/arguseye/assets/vscode-csca-features-desktop.png)
+![CSCA.ai production exam-information card grid in VS Code](https://darkworldcoder.github.io/arguseye/assets/vscode-csca-exam-desktop.png)
+
+These are isolated frontend previews, not full application journeys. Next Google font variables can reuse matching font assets from an existing `.next/static` build. Without those assets, root font classes remain unresolved and the render reports incomplete context.
+
+</details>
+
 ## How rendering works
 
 - Your files run through [oxc](https://oxc.rs) one module at a time; your packages are pre-bundled once by [Rolldown](https://rolldown.rs) from your own `node_modules` in a worker process and cached by lockfile, so React, MUI and Tailwind are the versions your app uses. Next.js app-router projects run on Next's vendored React, like the app itself.

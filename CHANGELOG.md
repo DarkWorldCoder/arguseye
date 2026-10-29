@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.4
+
+- Reconstruct imported root Next Google font variables using matching cached font faces from the project's `.next/static` build; keep missing font context visible.
+- Add genuine VS Code captures of WiseAdmit's responsive section and unsaved-edit comparison, plus CSCA.ai's existing hero, feature cards, and exam-information grid.
+- Clarify the Windows x64, macOS Apple Silicon, and Linux x64 release targets and the screenshot validation platform.
+
 ## 0.0.3
 
 - Publish the CLI and MCP server as `@ayushniroula/arguseye`; generated client configuration, documentation, skills, plugins, and release automation use that registry package while the extension retains `ayushniroula.arguseye`.
