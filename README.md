@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://darkworldcoder.github.io/arguseye/assets/banner.svg" alt="Arguseye: your coding agent can see what it just built" width="1000">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/og-hero.png" alt="Arguseye: your coding agent can see what it just built" width="1000">
 </p>
 
 <p align="center">
@@ -11,9 +11,11 @@
   <a href="https://darkworldcoder.github.io/arguseye/guide.html#contributing"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-f8fafc"></a>
 </p>
 
-# Arguseye
+# Arguseye — component previews for agents and VS Code
 
 **See your component. Change it. Inspect the consequences.**
+
+[Watch the 42-second walkthrough](https://darkworldcoder.github.io/arguseye/#film) · [Agent setup and downloadable skill](https://darkworldcoder.github.io/arguseye/agents.html) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
 
 Arguseye gives coding agents eyes on real React, browser-renderable Next.js, and Vue 3 components, without starting your app or writing stories. It uses your source, installed packages, discovered usage props, and supported layout context. Each render returns a cropped PNG, accessibility text, and structured evidence—including unresolved inputs, warnings, and errors.
 

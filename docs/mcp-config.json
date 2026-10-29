@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "arguseye": {
+      "command": "npx",
+      "args": ["-y", "@ayushniroula/arguseye", "mcp"]
+    }
+  }
+}

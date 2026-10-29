@@ -1,0 +1,53 @@
+{
+  "name": "Arguseye",
+  "version": "0.0.3",
+  "homepage": "https://darkworldcoder.github.io/arguseye/",
+  "installation": "npx @ayushniroula/arguseye install <client>",
+  "runtime": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "@ayushniroula/arguseye",
+      "mcp"
+    ],
+    "transport": "stdio",
+    "requirements": [
+      "Node.js >=22",
+      "Installed project dependencies",
+      "Chromium or Google Chrome"
+    ]
+  },
+  "clients": [
+    "claude",
+    "codex",
+    "gemini",
+    "cursor",
+    "windsurf",
+    "vscode",
+    "copilot",
+    "antigravity",
+    "print"
+  ],
+  "tools": [
+    "render_component",
+    "list_usages",
+    "render_usages",
+    "describe_props",
+    "render_diff"
+  ],
+  "outputs": [
+    "image",
+    "summary",
+    "both"
+  ],
+  "limits": {
+    "usageBatch": 12,
+    "sessionCaptures": 64
+  },
+  "resources": {
+    "skill": "https://darkworldcoder.github.io/arguseye/skills/arguseye/SKILL.md",
+    "guide": "https://darkworldcoder.github.io/arguseye/agents.html",
+    "mcpConfig": "https://darkworldcoder.github.io/arguseye/mcp-config.json"
+  },
+  "coverage": "Isolated component renders, not full-page integration tests. Inspect unresolved inputs, warnings and errors."
+}

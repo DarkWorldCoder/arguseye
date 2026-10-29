@@ -6,14 +6,14 @@ One line: **Your coding agent can see what it just built.** Category: eyes for c
 ## Audiences and the one thing each cares about
 | Audience | What they feel today | What to show first |
 |---|---|---|
-| Claude Code / Codex / Cursor users shipping UI | "The agent said done and the button was broken" | the hero: a real edit, the preview updating, `changes: 0.5%` |
+| Claude Code / Codex / Cursor users shipping UI | "The agent said done and the button was broken" | the hero: a real edit, the preview updating, recorded visual change evidence |
 | Teams running agents in CI or on large codebases | "Every visual check means booting the app" | `render_usages` across call sites; 1,197-file app numbers |
-| VS Code users (humans) | "I restart the dev server to see a small change" | the editor loop: typing, state kept, 38 ms |
-| MCP tool builders and plugin authors | "What can my agent call?" | the tools table, `npx arguseye install print` |
+| VS Code users (humans) | "I restart the dev server to see a small change" | the editor loop: typing, supported state preservation and measured project-specific latency |
+| MCP tool builders and plugin authors | "What can my agent call?" | the tools table, `npx @ayushniroula/arguseye install print` |
 
 ## Launch sequence
 1. **Make the repo public**, upload the social preview, pin the hero.
-2. **npm publish** so `npx arguseye install claude` works for everyone. **VS Code Marketplace + Open VSX** so the panel is one click.
+2. **npm publish** so `npx @ayushniroula/arguseye install claude` works for everyone. **VS Code Marketplace + Open VSX** so the panel is one click.
 3. **MCP registries and directories**: the official MCP Registry (`server.json` in the repo; `mcp-publisher login github` then `mcp-publisher publish`), Smithery, mcp.so, PulseMCP, Glama, the Awesome MCP Servers lists; Claude Code plugin marketplace is the repo itself; Antigravity plugin via `agy plugin install`.
 4. **Show HN**: "Show HN: Arguseye – eyes for coding agents: render any React/Next/Vue component as the app does, no dev server". Lead with the real-app hero and the benchmark; answer "why not Storybook/Playwright" in the first comment.
 5. **X thread** (6 posts): the problem (agents build UI blind) → the 1-call demo GIF → the real production app render → `changes` after an edit → install one-liner per agent → repo link. **LinkedIn**: the "agent wrote it, nobody looked" story.

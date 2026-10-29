@@ -1,0 +1,3 @@
+Generated with the built-in imagegen tool on 2026-10-29.
+Prompt: An original wide impressionist meadow beside a calm pale-blue pond, rolling green hills, expressive painterly brushstrokes, soft blue sky with large white clouds, pink/lavender/yellow/white wildflowers at the foreground and outer edges, an open center for floating interface cards. Bright natural daylight, sage and forest greens, soft cerulean, pastel flowers. Fine handcrafted oil-painting texture. No UI, text, logo or watermark.
+Source PNG: meadow-painterly.png. Web background: meadow-painterly.webp.

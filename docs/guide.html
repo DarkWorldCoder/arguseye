@@ -1,0 +1,338 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Arguseye — installation and guide</title><meta name="description" content="Install Arguseye, verify component edits, and understand rendering compatibility and recorded benchmarks."><link rel="icon" href="assets/icon.svg"><style>:root{color-scheme:light;--ink:#293139;--muted:#626c76;--line:#e4e8ec;--blue:#4a60bd}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:30px}body{margin:0;background:#fafbfc;color:var(--ink);font:16px/1.75 system-ui,-apple-system,Segoe UI,sans-serif}a{color:var(--blue);text-underline-offset:3px}a:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:4px}header,main,footer{width:min(100% - 40px,960px);margin:auto}header{padding:36px 0 25px;border-bottom:1px solid var(--line)}header>a{font-weight:700;text-decoration:none;font-size:20px;color:var(--ink)}header p{color:var(--muted);max-width:65ch}h1,h2,h3{line-height:1.25;letter-spacing:-.025em;color:var(--ink)}h1{font-size:32px}h2{font-size:25px;margin-top:36px}h3{font-size:20px}nav{display:flex;flex-wrap:wrap;gap:8px 20px;padding:22px 0}nav a{font-size:14px}section{padding:32px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}pre{overflow-x:auto;padding:20px;background:#eef1f6;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.6}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.88em}table{display:block;overflow-x:auto;border-collapse:collapse;font-size:14px;max-width:100%}th,td{text-align:left;vertical-align:top;padding:11px;border-bottom:1px solid var(--line);min-width:110px}th{background:#edf0f5}blockquote{border-left:3px solid #aab4d4;margin-left:0;padding-left:20px;color:var(--muted)}img{max-width:100%;height:auto}.back{font-size:13px;padding-top:20px}footer{padding:35px 0;color:var(--muted);font-size:13px}details{padding:12px 0}summary{cursor:pointer}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}</style><link rel="canonical" href="https://darkworldcoder.github.io/arguseye/guide.html"><meta property="og:type" content="website"><meta property="og:url" content="https://darkworldcoder.github.io/arguseye/guide.html"><meta property="og:title" content="Arguseye documentation — install and verify UI edits"><meta property="og:description" content="Install the MCP server or VS Code extension, inspect component edits, and understand compatibility and measured performance."><meta property="og:image" content="https://darkworldcoder.github.io/arguseye/assets/og-hero.png"><meta property="og:image:alt" content="Arguseye component preview documentation"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Arguseye documentation — install and verify UI edits"><meta name="twitter:description" content="Installation, component previews, visual diffs, compatibility, and measured performance."><meta name="twitter:image" content="https://darkworldcoder.github.io/arguseye/assets/og-hero.png"><meta name="twitter:image:alt" content="Arguseye component preview documentation"></head><body><header id="contents"><a href="index.html">◉ Arguseye</a><h1>Arguseye documentation: install and preview components.</h1><p>Installation, compatibility, rendering details, and measured results. Start with your agent’s recipe, then inspect a real component.</p><nav aria-label="Guide contents"><a href="#install">Installation</a><a href="#compatibility">Compatibility and product scope</a><a href="#technique">How rendering works</a><a href="#benchmarks">Recorded benchmark</a><a href="#roadmap">Roadmap</a><a href="#skill">Agent skill</a><a href="#contributing">Contributing</a><a href="#security">Security</a><a href="#conduct">Code of conduct</a><a href="#license">MIT license</a></nav><a href="https://www.npmjs.com/package/@ayushniroula/arguseye">npm package ↗</a></header><main><section id="install" aria-label="Installation"><h2>Install Arguseye for your agent or editor</h2>
+<p>Everything runs through one MCP server: <code>npx @ayushniroula/arguseye mcp</code> (started in the project directory, or with <code>--root &lt;dir&gt;</code>). The <code>install</code> command writes the server entry and the skill where each client reads them; it merges into existing config and can be run again safely.</p>
+<pre><code class="language-bash">npx @ayushniroula/arguseye install all          # every client below
+npx @ayushniroula/arguseye install claude       # one client
+npx @ayushniroula/arguseye install codex --project /path/to/app --dry-run
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Client</th>
+<th>What <code>install</code> writes</th>
+<th>Alternative</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Claude Code</td>
+<td><code>.mcp.json</code> in the project; skill in <code>~/.claude/skills/arguseye</code></td>
+<td><code>claude mcp add arguseye -- npx -y @ayushniroula/arguseye mcp</code>, or the plugin: <code>claude plugin marketplace add DarkWorldCoder/arguseye</code> then <code>claude plugin install arguseye</code></td>
+</tr>
+<tr>
+<td>Codex</td>
+<td><code>[mcp_servers.arguseye]</code> in <code>~/.codex/config.toml</code>; skill in <code>~/.agents/skills/arguseye</code></td>
+<td><code>codex mcp add arguseye -- npx -y @ayushniroula/arguseye mcp</code></td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td><code>mcpServers.arguseye</code> in <code>.gemini/settings.json</code>; skill in <code>.gemini/skills/arguseye</code></td>
+<td><code>gemini mcp add arguseye npx -y @ayushniroula/arguseye mcp --root .</code></td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td><code>~/.cursor/mcp.json</code>; skill in <code>.cursor/skills/arguseye</code></td>
+<td>Settings → MCP → add the JSON</td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td><code>~/.codeium/windsurf/mcp_config.json</code></td>
+<td></td>
+</tr>
+<tr>
+<td>VS Code (Copilot agent mode)</td>
+<td><code>.vscode/mcp.json</code> (<code>servers</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Antigravity (CLI and IDE)</td>
+<td><code>.agents/mcp_config.json</code> and <code>.agents/skills/arguseye</code> in the workspace</td>
+<td>plugin: <code>agy plugin install https://github.com/DarkWorldCoder/arguseye</code></td>
+</tr>
+</tbody></table>
+<h3>Prerequisites</h3>
+<p>Use Node.js 22 or later and install the dependencies in the project you want to preview. Headless renders need a Playwright-compatible Chromium browser or Google Chrome. If neither is available, install Chromium:</p>
+<pre><code class="language-bash">npx playwright install chromium
+</code></pre>
+<p>Vue projects use their own Vue 3 runtime and <code>vue/compiler-sfc</code>. Server-only Next.js behavior and Nuxt application context are outside the isolated runtime.</p>
+<h3>VS Code extension (the human panel)</h3>
+<p>Marketplace listing: <a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye">Arguseye</a>. Compatible editors can install a platform-specific VSIX; an Open VSX release has not been verified. To install a local build: <code>npm run package</code> then <code>code --install-extension arguseye-*.vsix</code>.</p>
+<h3>Skill only (no MCP)</h3>
+<p>The skill at <code>skills/arguseye/SKILL.md</code> follows the Agent Skills format and also works on its own: it tells the agent to use the CLI (<code>npx @ayushniroula/arguseye shot …</code>) when the MCP tools are not available. Copy it to <code>~/.claude/skills/</code>, <code>~/.agents/skills/</code> or <code>.cursor/skills/</code>.</p>
+<h3>Verified end to end</h3>
+<p>Checked on 2026-10-29 against the React fixture, each agent calling <code>render_component</code> through the MCP server and reading back the image, the accessibility tree and <code>errors[]</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Result</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Claude Code (<code>claude -p … --mcp-config</code>)</td>
+<td>works</td>
+<td>allow the tools with <code>--allowedTools &quot;mcp__arguseye__*&quot;</code> in headless runs</td>
+</tr>
+<tr>
+<td>Codex (<code>codex exec</code>)</td>
+<td>works</td>
+<td>non-interactive runs need <code>--approve-for-me</code> (or an interactive session) because MCP tool calls ask for approval; <code>-a never</code> refuses them</td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td>config written, not run</td>
+<td>the Gemini CLI on the test machine required an Antigravity account</td>
+</tr>
+</tbody></table>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="compatibility" aria-label="Compatibility and product scope"><h2>Product: why Arguseye exists</h2>
+<p>Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.</p>
+<h3>What is implemented</h3>
+<ul>
+<li>Your actual React/Next.js browser component or Vue 3 SFC, using the project&#39;s packages and Chromium.</li>
+<li>Literal props from real JSX and Vue template usages, including aliases and local barrel re-exports. Runtime values remain explicitly unresolved.</li>
+<li>Global styles, Tailwind v3/v4, PostCSS, Sass, CSS modules, assets, and statically reconstructable layout wrappers. Incomplete context is reported.</li>
+<li>Warm browser pages and per-module compilation. Unsaved editor buffers update the live page; React refresh and Vue template/style updates preserve state. Vue script edits reset state with a warning.</li>
+<li>MCP and CLI render evidence: PNG, accessibility snapshot, resolved inputs, source fingerprint, timing, warnings and errors. Responses can omit images.</li>
+<li>Immutable baselines and before/after comparisons of pixels, dimensions, accessibility snapshots and errors. Comparisons report change or incomplete evidence, never automatic correctness.</li>
+<li>Paginated usage rendering, with a maximum of 12 isolated variants per batch and an incremental source index.</li>
+<li>A VS Code panel with export/usage selection, typed React prop controls, viewport presets, capture and comparison controls. Verification uses the shared renderer and unsaved source.</li>
+</ul>
+<h3>Product constraints</h3>
+<p>Warm render p95 must stay at or below 100 ms over 20 measured renders on a documented machine. The edit-to-pixels target is 50 ms; current live-edit tests enforce a looser 100 ms bound. New work on either path needs a timing assertion.</p>
+<p>App modules are transformed with oxc; Vue SFCs use the project&#39;s matching compiler. Dependencies are pre-bundled by Rolldown. CSS processing uses the project&#39;s toolchain and Lightning CSS where appropriate. Browser pages stay warm. Chromium provides the rendering engine; the VS Code webview is the interactive human view.</p>
+<p>Render failures return <code>errors: string[]</code>. Invalid IDs and inputs name the offending value. Source fingerprints describe files read by this preview session, not the whole application&#39;s external state. Successful rendering can still be incomplete because of runtime props, provider gaps, or unsettled assets.</p>
+<h3>Where this competes</h3>
+<p>Storybook&#39;s MCP exposes component discovery, previews and testing. Playwright MCP provides browser interaction, snapshots and screenshots. Preview.js established the instant editor-preview workflow. MCP support or unsaved previewing alone is not a unique claim.</p>
+<p>Our focus is the combination of direct source rendering, discovered usage inputs, low-latency local feedback, compact evidence, and edit verification without authored stories or an application server. These are product goals to validate against real projects, not claims of universal compatibility or competitive superiority.</p>
+<p>References checked on 2026-10-27:</p>
+<ul>
+<li><a href="https://storybook.js.org/docs/ai/mcp/api">https://storybook.js.org/docs/ai/mcp/api</a></li>
+<li><a href="https://playwright.dev/docs/getting-started-mcp">https://playwright.dev/docs/getting-started-mcp</a></li>
+<li><a href="https://previewjs.com/docs/faq">https://previewjs.com/docs/faq</a></li>
+<li><a href="https://vuejs.org/guide/scaling-up/tooling.html#lower-level-packages">https://vuejs.org/guide/scaling-up/tooling.html#lower-level-packages</a></li>
+</ul>
+<h3>Validation and next boundaries</h3>
+<p><code>npm test</code> covers server HTTP, updates/timing, headless rendering, MCP contracts and installed fixtures. <code>npm run test:vscode</code> checks the panel workflow in the real extension host. <code>npm run benchmark</code> records the same fixture-edit task through our MCP and Playwright MCP plus Vite. Raw results and limitations live in <code>benchmarks/latest.json</code>; no fixed speedup or token saving is promised.</p>
+<p>The MVP is local. Next.js server execution, Nuxt application context, arbitrary provider reconstruction, backend/auth-dependent states, agent interaction scripting, cloud review and team dashboards remain outside this release. See README.md for the exact compatibility limits and setup commands.</p>
+<h3>State (2026-10-29)</h3>
+<p>Added: render inside the call site&#39;s parent box (<code>list_usages</code> context, <code>render_component in_context</code>, <code>frame</code>), states before capture (<code>actions</code>, <code>storage</code>), function props (<code>$fn</code>), <code>NEXT_PUBLIC_*</code> env, Next app-router previews on Next&#39;s vendored React canary, settled-frame capture (fonts, images). Verified on WiseAdmit: Footer, Navbar and the 641-line AIEcosystem section render with no errors. Cold starts on a large provider chain are 7–32 s per new package set: next is a one-time project-wide package warm-up at server start, then automatic <code>changes</code> on re-render, layout facts with refs, element→source. See docs/agent-wishlist.md.</p>
+<h3>Performance (2026-10-29, WiseAdmit latest-front, 1,197 files)</h3>
+<p>Before: warm-up 32 s and skipped, first render 11–13 s, server 1.8–2.8 GB. After: ready 2–11 s, first render 1.5 s, section 0.9 s, warm 0.3 s, server ~500–750 MB. Levers: crawl once per file version, bundle worker process, cjs-module-lexer, package CSS inlined, minified bundles, modulepreload graph, route page pre-warm, usage index in warm-up, barrel rewrite, eager lazy images. Still open: server memory (transform cache + usage index + bundles in memory), V8 code cache via a persistent browser profile, HTTP/2 for module fetches.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="technique" aria-label="How rendering works"><h2>Mirror rendering: how Arguseye shows a component as the app shows it</h2>
+<p>No dev server, no stories, no mocks. The technique has five parts; each is ours, and together they are what no other tool does. The pixels come from Chromium, on purpose: &quot;exactly as in the app&quot; is only true when the same engine draws it.</p>
+<h3>1. Real props from the code that already exists</h3>
+<p>Every JSX call site of the component is found by parsing the project (oxc), following imports and barrel re-exports back to the file. Literal props are read as values; props that depend on runtime data are reported as &quot;unresolved&quot; text. The first call site with props is what the preview shows by default, so the component appears the way the app already uses it. When nothing uses it yet, the TypeScript parameter type is read (aliases, interfaces with <code>extends</code>, imported types, enums, nested objects, defaults from destructuring) and sample props are made for the required ones.</p>
+<h3>2. The app&#39;s context, reconstructed statically</h3>
+<p>The root layout (<code>app/layout.tsx</code>, <code>pages/_app.tsx</code>, <code>src/main.tsx</code>) is parsed once: its global stylesheets, <code>&lt;html&gt;</code>/<code>&lt;body&gt;</code> classes, and the chain of providers around <code>{children}</code> with the literal props the layout passes. A generated wrapper module nests the component inside that same chain, so themes, contexts, fonts and host elements match. Stylesheets are compiled the way the app&#39;s bundler would: Sass, then the project&#39;s own Tailwind (v4 directly with its theme, v3 through its PostCSS config), then CSS modules via Lightning CSS. Framework modules that cannot run outside the app (<code>next/link</code>, <code>next/image</code>, <code>next/navigation</code>) are replaced by shims that render Next&#39;s markup.</p>
+<h3>3. One build, one React</h3>
+<p>Project files are transformed one module at a time (oxc, about 1 ms each) and served as native ES modules. Packages are bundled once by Rolldown from the project&#39;s own <code>node_modules</code> into shared chunks and cached on disk by package set, lockfile and bundler version. Before the first paint, the component&#39;s import graph and the providers&#39; are crawled so every package is in that single build; if a later edit introduces a new package, the build generation changes and the page reloads instead of mixing two copies of React. ESM-or-CommonJS is decided from the file the bundler actually uses, and Node built-ins become empty modules.</p>
+<h3>4. A warm page that swaps targets</h3>
+<p>The preview page stays open. A new component, new props or a new usage is swapped in with <code>show(target)</code>, not a navigation. Unsaved editor buffers overlay the disk; an edit re-transforms only that file and React Fast Refresh swaps the component in place, so its state survives (about 35 ms from keystroke to pixels). CSS edits re-apply their <code>&lt;style&gt;</code>. Files changed on disk by an agent are picked up by comparing served mtimes before each render.</p>
+<h3>5. The settled frame, cheaply</h3>
+<p>For agents, the capture is the DevTools protocol directly: a clip to the component&#39;s box, transitions ended, finite animations jumped to their end state, caret hidden, and the screenshot and accessibility snapshot taken in parallel (about 40 ms warm). The result is token-cheap: a cropped PNG, a text tree, and <code>errors[]</code> with real file paths, including the server&#39;s reason when a module could not be served.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="benchmarks" aria-label="Recorded benchmark"><h2>Measured component-edit workflow</h2>
+<p>Run <code>npm run benchmark</code> after installing the root and React fixture dependencies. The script copies the installed fixture into temporary projects and uses real stdio MCP clients. Source edits never touch the fixture itself. Raw results are in <code>latest.json</code>.</p>
+<p>The task is to capture <code>ProductCard</code> with title <code>Desk</code> and price <code>3</code>, edit its button label, and inspect the rendered result. Playwright receives a minimal Vite app with a known URL and no login. Arguseye renders the source directly and also returns an automated pixel/semantic comparison.</p>
+<h3>Result: 2026-10-27</h3>
+<p>Linux x64; Intel Core i5-1235U; 12 logical CPUs; Node v24.21.0. All four workflows verified the expected result.</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th align="right">Tool calls</th>
+<th align="right">Startup</th>
+<th align="right">Workflow</th>
+<th align="right">Total</th>
+<th align="right">Response bytes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Arguseye, cold</td>
+<td align="right">2</td>
+<td align="right">1,172 ms</td>
+<td align="right">933 ms</td>
+<td align="right">2,105 ms</td>
+<td align="right">49,076</td>
+</tr>
+<tr>
+<td>Playwright MCP + Vite, cold</td>
+<td align="right">6</td>
+<td align="right">576 ms</td>
+<td align="right">1,128 ms</td>
+<td align="right">1,704 ms</td>
+<td align="right">28,006</td>
+</tr>
+<tr>
+<td>Arguseye, warm</td>
+<td align="right">2</td>
+<td align="right">0 ms</td>
+<td align="right">145 ms</td>
+<td align="right">145 ms</td>
+<td align="right">48,669</td>
+</tr>
+<tr>
+<td>Playwright MCP + Vite, warm</td>
+<td align="right">4</td>
+<td align="right">0 ms</td>
+<td align="right">217 ms</td>
+<td align="right">217 ms</td>
+<td align="right">27,298</td>
+</tr>
+</tbody></table>
+<p>Arguseye returned four images across the two calls: initial capture, before, after, and highlighted changes. Playwright returned two component screenshots. The response sizes therefore compare different evidence bundles. Both workflows included accessibility text; Arguseye also included structured provenance and comparison metadata.</p>
+<p>Twenty additional warm Arguseye renders measured <strong>p95 50 ms</strong> against the 100 ms gate. Every sample is retained in the JSON result.</p>
+<p>This run shows fewer tool calls and a shorter warm workflow, alongside larger default responses and a slower total cold path. It does not establish a general performance ranking. Cold means a fresh process/browser, with packages installed and OS caches potentially warm. Text-token estimates use characters/4, include text blocks and structured JSON, and exclude image tokens. No LLM reasoning, model billing, login journey, or full Next.js startup was measured. Summary-only output is available but was not used for these workflow measurements.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="roadmap" aria-label="Roadmap"><h2>If I were the agent: what I&#39;d want from this tool</h2>
+<p>Written from the point of view of a coding agent that just edited a component and has one tool call to spend.</p>
+<h3>1. &quot;Did my change look right?&quot; in one call</h3>
+<p>After an edit, calling <code>render_component</code> again should tell me what changed, without me keeping baseline ids: changed-pixel ratio, the regions that changed, and a text diff of the accessibility tree. <code>render_diff</code> with a <code>captureId</code> exists; the automatic version (<code>changes</code> on every re-render of the same target) is the ergonomic one.</p>
+<h3>2. The state I care about, not the default one</h3>
+<p>A dropdown closed, a form empty, a card not hovered: that is rarely the state I&#39;m fixing. I want <code>actions</code> before capture (<code>click</code>, <code>hover</code>, <code>fill</code>, <code>press</code>, <code>scroll</code>, <code>wait</code>) addressed by role/text/ref, plus <code>storage</code>/<code>cookies</code> for logged-in or feature-flagged states, <code>viewport</code>, <code>colorScheme</code> and <code>prefersReducedMotion</code>, all in the same call.</p>
+<h3>3. The box it lives in</h3>
+<p>A component alone on white lies: width, height and background come from the parent. <code>in_context</code> renders inside the call site&#39;s ancestors; <code>frame</code> is the stand-in when there is no usage yet.</p>
+<h3>4. Layout facts as text</h3>
+<p>Pixels cost tokens and I can&#39;t measure them. I want <code>[ref=e3] button &quot;Add&quot; 120×36 at (24,180)</code>, and flags I would otherwise miss: text truncated, element overflowing its parent, zero-size element, low contrast, image failed to load.</p>
+<h3>5. From pixel to file</h3>
+<p><code>inspect ref</code> returning <code>in ProductCard (components/ProductCard.tsx:19)</code> and the computed styles that matter, so a wrong margin becomes a line to change.</p>
+<h3>6. Errors that say what to do</h3>
+<p><code>Cannot resolve &quot;./Icon&quot; from components/Card.tsx</code> with the file and the line, missing <code>NEXT_PUBLIC_X</code>, a provider that threw: each with the fix it suggests, not a browser&#39;s &quot;failed to fetch&quot;.</p>
+<h3>7. Every usage, only the ones that differ</h3>
+<p>After a change to a shared component, render it at every call site but group identical outcomes, and show pixels changed per usage, so the blast radius is three lines, not twelve screenshots.</p>
+<h3>8. Captures I can trust to diff</h3>
+<p>Fonts loaded, images loaded, animations settled (done), and also <code>Date.now</code> and <code>Math.random</code> frozen, so &quot;changed&quot; means my edit changed it.</p>
+<h3>9. Speed that lets me iterate</h3>
+<p>Warm renders under 50 ms (done) and a cold start under a second, with the server living across tool calls (done).</p>
+<h3>10. The tool telling me the next step</h3>
+<p>&quot;3 usages exist, 2 with runtime props; call <code>render_usages</code>&quot; or &quot;required prop <code>price</code> missing; <code>describe_props</code> lists it&quot;. Hints in results, so I don&#39;t have to remember the tool surface.</p>
+<p>Order of building: 2 (actions + storage) and 1 (automatic changes) first, then 4 and 5 (facts and source), then 8, 7, 10.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="skill" aria-label="Agent skill"><h2>Arguseye</h2>
+<p>Render component source in Chromium with the project&#39;s packages, styles, assets and statically reconstructable layouts. Inspect a cropped PNG, accessibility snapshot, resolved inputs, warnings and errors. The application server and authored stories are unnecessary; project dependencies and a compatible Chromium browser are still required. Startup and warm render times vary with the project; read the returned timings.</p>
+<h3>When to use it</h3>
+<ul>
+<li>After editing a component: render it again; the result says what changed (<code>changes</code>) since the last render of the same target.</li>
+<li>For a shared component: inspect relevant call-site variants with <code>render_usages</code>, following pagination when broader coverage is needed. Use <code>usage</code> plus <code>in_context: true</code> to reconstruct its parent elements.</li>
+<li>When a component needs a state: pass <code>actions</code> (click, hover, fill, press, scroll, wait) and <code>storage</code> (localStorage/sessionStorage flags). Storage seeds do not reconstruct a backend or an authenticated application journey.</li>
+<li>When a component has no usage yet: <code>describe_props</code> gives the schema and sample props; <code>frame</code> gives it a parent box of a chosen size and background.</li>
+</ul>
+<h3>Tools (MCP server <code>arguseye</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>render_component {file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?, output?}</code></td>
+<td>Render with a discovered usage or explicit props. <code>viewport</code>: <code>mobile</code>, <code>tablet</code>, <code>desktop</code> or <code>WxH</code>. Without supplied inputs, required props may be generated from TypeScript samples.</td>
+</tr>
+<tr>
+<td><code>list_usages {file, export?}</code></td>
+<td>Every call site with literal props, unresolved runtime props, and the JSX ancestors (<code>context</code>).</td>
+</tr>
+<tr>
+<td><code>render_usages {file, export?, viewport?, cursor?, limit?, output?}</code></td>
+<td>A page of isolated literal-prop variants, not full-page integration tests. <code>limit</code> is 1–12; pass the returned <code>nextCursor</code> as <code>cursor</code> until it is null.</td>
+</tr>
+<tr>
+<td><code>describe_props {file, export?}</code></td>
+<td>Props from the TypeScript type, with sample values.</td>
+</tr>
+<tr>
+<td><code>render_diff {baselineId, output?}</code></td>
+<td>Compare current code with a successful render&#39;s <code>captureId</code>, reusing resolved props and viewport. Returns before/after/highlighted images and change evidence.</td>
+</tr>
+</tbody></table>
+<p>Function props are passed as <code>{ &quot;$fn&quot;: &quot;(x) =&gt; ...&quot; }</code>. Paths are relative to the project root the server was started with.</p>
+<p>For render tools, <code>output</code> is <code>&quot;image&quot;</code>, <code>&quot;summary&quot;</code> or <code>&quot;both&quot;</code> (default). Use summary for a compact text response, image for visual inspection, or both when needed. Structured evidence remains available separately from image bytes.</p>
+<h3>Reading a result</h3>
+<ul>
+<li><code>errors[]</code> are real: a resolve error names the import and the importer; a render error carries the component stack. Fix them before trusting the pixels.</li>
+<li>Read <code>warnings[]</code>, <code>unresolved[]</code>, <code>propsSource</code> and <code>complete</code> before trusting context. Generated samples are not real application data; provider gaps, runtime values or unsettled assets can make a successful render incomplete.</li>
+<li><code>changes</code> and explicit diffs report <code>unchanged</code>, <code>changed</code> or <code>incomplete</code>, with pixel, accessibility and error evidence. None of these establishes that the intended behavior is correct.</li>
+<li><code>timings</code> (prepare, show, settle, capture) tell you whether a slow render is loading, rendering or waiting for images.</li>
+<li><code>layoutsApplied</code> and <code>contextApplied</code> list the layouts/templates and the call-site ancestors the component was wrapped in.</li>
+<li><code>sourceRevision</code> fingerprints files read by this preview session, not the whole application&#39;s external state or a Git commit.</li>
+</ul>
+<h3>Baselines and comparison limits</h3>
+<p>Successful renders return an immutable <code>captureId</code>. The renderer retains the latest 64 captures per session; restarting the server or eviction makes an old ID unavailable. Capture again when the error names an unknown or expired baseline.</p>
+<p>An explicit <code>render_diff</code> reuses the file, export, resolved props and viewport. It does <strong>not</strong> replay <code>actions</code>, <code>storage</code>, <code>frame</code> or call-site parent context. For stateful/contextual comparisons, render again with the same explicit inputs and inspect <code>changes</code>; do not assume a saved baseline restores the live editor&#39;s interaction state. Next.js server execution, Nuxt context and arbitrary runtime providers require the application environment.</p>
+<h3>Without MCP (CLI)</h3>
+<pre><code class="language-bash">npx @ayushniroula/arguseye shot src/components/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png
+npx @ayushniroula/arguseye usages src/components/Card.tsx --export Card
+npx @ayushniroula/arguseye serve src/components/Card.tsx --export Card --port 4321
+</code></pre>
+<p>Use <code>shot --json</code> for structured metadata and <code>--output summary</code> to omit the ordinary PNG output. CLI baselines survive separate commands when explicitly saved in a chosen directory:</p>
+<pre><code class="language-bash">npx @ayushniroula/arguseye shot src/components/Card.tsx --export Card --capture-dir /tmp/arguseye-before --json --output summary
+# Edit the component in the same project, then compare:
+npx @ayushniroula/arguseye diff --baseline /tmp/arguseye-before --out /tmp/arguseye-diff --json
+</code></pre>
+<p>The baseline directory contains <code>capture.json</code> and <code>capture.png</code>; comparison writes <code>before.png</code>, <code>after.png</code>, <code>diff.png</code> and <code>diff.json</code>. The same replay limits apply to saved CLI baselines.</p>
+<h3>Workflow</h3>
+<ol>
+<li><code>list_usages</code> for the component you changed.</li>
+<li><code>render_component</code> with the first usage and <code>in_context: true</code>; read <code>errors</code>, then the snapshot, then the PNG.</li>
+<li>Edit; render the same target again and read <code>changes</code>.</li>
+<li>Inspect relevant <code>render_usages</code> pages when the component is shared; report incomplete context and the variants actually checked.</li>
+</ol>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="contributing" aria-label="Contributing"><h2>Contributing to Arguseye</h2>
+<p>Thanks for helping agents see. This page is the short version; the rules every change follows are in <a href="#contributing">AGENTS.md</a> (they apply to humans too).</p>
+<h3>Set up</h3>
+<pre><code class="language-bash">git clone https://github.com/DarkWorldCoder/arguseye &amp;&amp; cd arguseye
+npm install
+for d in test/fixtures/*/; do (cd &quot;$d&quot; &amp;&amp; npm install); done
+npx playwright-core install chromium-headless-shell   # or have Chrome installed
+npm test              # unit + headless browser tests
+npm run test:vscode   # the panel in a real VS Code (downloads one on first run)
+</code></pre>
+<p>Node 22 or newer. Linux, macOS and Windows should all work; the native pieces (oxc, Rolldown, Lightning CSS) ship binaries for each.</p>
+<h3>How changes land</h3>
+<ol>
+<li>Open an issue first for anything bigger than a fix, so the approach is agreed before code.</li>
+<li>Work test-first at one of the agreed seams (preview server HTTP, update timing, headless render, MCP contract, VS Code suite). A failing test comes before the code that makes it pass.</li>
+<li>Keep the speed budgets: a warm render stays under 100 ms in the test, and anything on the per-render or per-keystroke path ships with a timing assertion.</li>
+<li>Fidelity first: render the user&#39;s real code with the user&#39;s real packages. Shims are for framework modules that cannot run outside the app, and they mirror the real module&#39;s exports.</li>
+<li>One slice per pull request, <code>npm test</code> and <code>npm run typecheck</code> green, a one-line commit message saying what the user gets.</li>
+</ol>
+<h3>Good first contributions</h3>
+<ul>
+<li>A framework shim that is missing (<code>next/font</code>, <code>next/script</code>, Vue router stubs).</li>
+<li>A barrel package to add to the per-member import rewrite.</li>
+<li>A fixture app that reproduces a styling setup we don&#39;t cover yet (CSS-in-JS libraries, Less, UnoCSS).</li>
+<li>Items from <a href="#roadmap">docs/agent-wishlist.md</a>: layout facts with refs, element → source, a frozen clock for deterministic diffs.</li>
+</ul>
+<h3>Reporting a bug</h3>
+<p>Use the bug template. The most useful report includes the component file, how it is used (<code>list_usages</code> output), the <code>errors[]</code> and <code>warnings[]</code> from the render result, and the framework versions from your <code>package.json</code>.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="security" aria-label="Security"><h2>Security</h2>
+<p>Arguseye runs your project&#39;s code in a local Chromium and starts a local HTTP server bound to <code>127.0.0.1</code>. It never sends your code anywhere. Rendering a component executes that component and its imports, so treat untrusted repositories as you would when running their dev server.</p>
+<h3>Reporting a vulnerability</h3>
+<p>Please do not open a public issue. Email <a href="mailto:tech@wiseadmit.io">tech@wiseadmit.io</a> with the details and, if possible, a reproduction. You will get an acknowledgement within three working days and a fix or mitigation plan as soon as the issue is confirmed. Credit is given in the release notes unless you prefer otherwise.</p>
+<h3>Scope</h3>
+<p>In scope: the <code>arguseye</code> npm package (MCP server, CLI, preview server), the VS Code extension, and the skill and plugin manifests in this repository. Out of scope: vulnerabilities in the frameworks or packages of the project being previewed.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="conduct" aria-label="Code of conduct"><h2>Code of Conduct</h2>
+<p>Everyone taking part in this project, in issues, pull requests, discussions and reviews, agrees to:</p>
+<ul>
+<li>Be direct and kind. Critique code and ideas, never people.</li>
+<li>Assume good intent, and ask before concluding.</li>
+<li>Welcome newcomers and the questions that come with them.</li>
+<li>Keep private information private.</li>
+</ul>
+<p>Harassment, personal attacks, discriminatory remarks and sustained disruption are not accepted. The maintainers may edit or remove contributions and may block repeat offenders. Report concerns to the maintainer at <a href="mailto:tech@wiseadmit.io">tech@wiseadmit.io</a>; reports are handled confidentially.</p>
+<p>This policy is adapted from the Contributor Covenant, version 2.1.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section><section id="license" aria-label="MIT license"><p>MIT License</p>
+<p>Copyright (c) 2026 Ayush Niroula</p>
+<p>Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the &quot;Software&quot;), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:</p>
+<p>The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.</p>
+<p>THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</p>
+<p class="back"><a href="#contents">Back to contents ↑</a></p></section></main><footer>Arguseye · MIT licensed · <a href="index.html">Back to the product</a></footer></body></html>

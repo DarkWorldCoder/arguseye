@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-27T16:19:44.259Z",
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 12,
+    "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+    "node": "v24.21.0"
+  },
+  "task": "Capture ProductCard(title=Desk, price=3), edit its button label, inspect the rendered result",
+  "limitations": [
+    "Scripted tool workflows; no LLM reasoning or model image-token consumption is measured.",
+    "Playwright gets a minimal Vite app with a known URL and no authentication; this is not a universal app-startup comparison.",
+    "Cold means a fresh browser/server process; installed packages and OS caches remain warm.",
+    "Text characters include text blocks and structured JSON evidence. Approximate text tokens use characters/4, exclude images and are not a billing measurement."
+  ],
+  "results": [
+    {
+      "engine": "Arguseye MCP",
+      "phase": "cold",
+      "startupMs": 1172,
+      "workflowMs": 933,
+      "verified": true,
+      "status": "changed",
+      "calls": 2,
+      "responseBytes": 49076,
+      "textCharacters": 2143,
+      "images": 4,
+      "toolNames": [
+        "render_component",
+        "render_diff"
+      ],
+      "approximateTextTokens": 536
+    },
+    {
+      "engine": "Playwright MCP + Vite",
+      "phase": "cold",
+      "startupMs": 576,
+      "workflowMs": 1128,
+      "verified": true,
+      "screenshot": "component article",
+      "calls": 6,
+      "responseBytes": 28006,
+      "textCharacters": 1787,
+      "images": 2,
+      "toolNames": [
+        "browser_navigate",
+        "browser_wait_for",
+        "browser_snapshot",
+        "browser_take_screenshot",
+        "browser_wait_for",
+        "browser_take_screenshot"
+      ],
+      "approximateTextTokens": 447
+    },
+    {
+      "engine": "Arguseye MCP",
+      "phase": "warm",
+      "startupMs": 0,
+      "workflowMs": 145,
+      "verified": true,
+      "status": "changed",
+      "calls": 2,
+      "responseBytes": 48669,
+      "textCharacters": 2132,
+      "images": 4,
+      "toolNames": [
+        "render_component",
+        "render_diff"
+      ],
+      "approximateTextTokens": 533
+    },
+    {
+      "engine": "Playwright MCP + Vite",
+      "phase": "warm",
+      "startupMs": 0,
+      "workflowMs": 217,
+      "verified": true,
+      "screenshot": "component article",
+      "calls": 4,
+      "responseBytes": 27298,
+      "textCharacters": 1180,
+      "images": 2,
+      "toolNames": [
+        "browser_snapshot",
+        "browser_take_screenshot",
+        "browser_wait_for",
+        "browser_take_screenshot"
+      ],
+      "approximateTextTokens": 295
+    }
+  ],
+  "renderPerformance": {
+    "samplesMs": [
+      49,
+      59,
+      49,
+      47,
+      47,
+      32,
+      33,
+      31,
+      33,
+      46,
+      38,
+      50,
+      48,
+      49,
+      49,
+      47,
+      44,
+      32,
+      36,
+      45
+    ],
+    "p95Ms": 50,
+    "thresholdMs": 100,
+    "passed": true
+  }
+}

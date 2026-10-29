@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" width="1000" height="300" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#162036"/></linearGradient>
+    <radialGradient id="iris" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.55" stop-color="#f97316"/><stop offset="1" stop-color="#9a3412"/></radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#f97316" stop-opacity="0.28"/><stop offset="1" stop-color="#f97316" stop-opacity="0"/></radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#1e293b" stroke-width="1"/></pattern>
+    <style>
+      .pill { fill: #0f172a; stroke: #1e293b; }
+      .pt { font-size: 13px; fill: #cbd5e1; }
+    </style>
+  </defs>
+  <rect width="1000" height="300" rx="22" fill="url(#bg)"/>
+  <rect width="1000" height="300" rx="22" fill="url(#grid)" opacity="0.5"/>
+  <!-- mark -->
+  <circle cx="150" cy="150" r="110" fill="url(#glow)"><animate attributeName="r" values="100;118;100" dur="5s" repeatCount="indefinite"/></circle>
+  <path d="M92 104 L58 150 L92 196" fill="none" stroke="#94a3b8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M208 104 L242 150 L208 196" fill="none" stroke="#94a3b8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <g>
+    <path d="M100 150 C118 116 182 116 200 150 C182 184 118 184 100 150 Z" fill="#f8fafc">
+      <animate attributeName="d" values="M100 150 C118 116 182 116 200 150 C182 184 118 184 100 150 Z;M100 150 C118 116 182 116 200 150 C182 184 118 184 100 150 Z;M100 150 C118 147 182 147 200 150 C182 153 118 153 100 150 Z;M100 150 C118 116 182 116 200 150 C182 184 118 184 100 150 Z" keyTimes="0;0.9;0.94;1" dur="6s" repeatCount="indefinite"/>
+    </path>
+    <circle cx="150" cy="150" r="24" fill="url(#iris)"><animate attributeName="cx" values="150;150;142;142;150;150" keyTimes="0;0.3;0.34;0.6;0.64;1" dur="8s" repeatCount="indefinite"/></circle>
+    <circle cx="150" cy="150" r="10" fill="#0f172a"><animate attributeName="cx" values="150;150;142;142;150;150" keyTimes="0;0.3;0.34;0.6;0.64;1" dur="8s" repeatCount="indefinite"/></circle>
+    <circle cx="158" cy="140" r="4" fill="#fff"><animate attributeName="cx" values="158;158;150;150;158;158" keyTimes="0;0.3;0.34;0.6;0.64;1" dur="8s" repeatCount="indefinite"/></circle>
+  </g>
+  <!-- wordmark -->
+  <text x="300" y="128" font-size="72" font-weight="800" fill="#f8fafc" letter-spacing="-2">Arguseye</text>
+  <text x="304" y="170" font-size="26" fill="#cbd5e1">Your coding agent can see what it just built.</text>
+  <!-- pills -->
+  <g>
+    <rect x="304" y="200" width="150" height="30" rx="15" class="pill"/><text x="379" y="220" text-anchor="middle" class="pt">no dev server</text>
+    <rect x="464" y="200" width="196" height="30" rx="15" class="pill"/><text x="562" y="220" text-anchor="middle" class="pt">exactly as in the app</text>
+    <rect x="670" y="200" width="140" height="30" rx="15" class="pill"/><text x="740" y="220" text-anchor="middle" class="pt">~40 ms warm</text>
+    <rect x="820" y="200" width="150" height="30" rx="15" class="pill"/><text x="895" y="220" text-anchor="middle" class="pt">MCP · CLI · VS Code</text>
+  </g>
+  <text x="304" y="262" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="15" fill="#64748b">$ <tspan fill="#e2e8f0">npx @ayushniroula/arguseye install claude</tspan></text>
+</svg>

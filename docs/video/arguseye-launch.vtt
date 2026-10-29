@@ -1,0 +1,45 @@
+WEBVTT
+
+button-wrap
+00:00:00.300 --> 00:00:01.700
+The button that wraps.
+
+diff-limits
+00:00:02.200 --> 00:00:03.920
+None of that shows up in a diff.
+
+intro
+00:00:05.200 --> 00:00:08.240
+Meet Arguseye. Eyes for coding agents.
+
+real-props
+00:00:11.200 --> 00:00:13.200
+Real props from your own call sites.
+
+real-styles
+00:00:13.400 --> 00:00:16.760
+Your theme, your layouts, your global CSS.
+
+evidence
+00:00:17.300 --> 00:00:24.660
+The agent gets back a cropped screenshot, the accessibility tree, what changed since its last render, and errors with file paths.
+
+vscode
+00:00:25.200 --> 00:00:29.800
+And in VS Code, the preview lives beside your code and updates as you type.
+
+no-server
+00:00:30.200 --> 00:00:31.160
+No dev server.
+
+no-stories
+00:00:31.300 --> 00:00:32.180
+No stories.
+
+clients
+00:00:32.200 --> 00:00:38.000
+It works with Claude Code, Codex, Cursor, Gemini, Copilot, any MCP client.
+
+outro
+00:00:38.300 --> 00:00:41.530
+Arguseye. Open source. One command to install.

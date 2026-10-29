@@ -1,0 +1,10 @@
+{
+  "retrieved": "2026-10-29",
+  "note": "Official product assets identify supported frameworks and tools; no endorsement is implied.",
+  "sources": {
+    "react.ico": "https://react.dev/favicon.ico",
+    "next.ico": "https://nextjs.org/favicon.ico",
+    "vue.svg": "https://vuejs.org/logo.svg",
+    "vscode.png": "https://code.visualstudio.com/assets/branding/code-stable.png"
+  }
+}

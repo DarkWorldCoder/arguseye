@@ -1,0 +1,27 @@
+# Arguseye
+
+> Local component previews and UI edit evidence for coding agents and VS Code developers.
+
+Arguseye renders real React, browser-renderable Next.js, and Vue 3 components using the project's installed packages. No running app or authored stories are required. Node.js 22+, installed project dependencies, and Chromium or Google Chrome are required.
+
+## Agent resources
+- [Agent setup](https://darkworldcoder.github.io/arguseye/agents.html)
+- [Portable skill](https://darkworldcoder.github.io/arguseye/skills/arguseye/SKILL.md)
+- [Capabilities JSON](https://darkworldcoder.github.io/arguseye/agent.json)
+
+## Start
+- [Product and interactive examples](https://darkworldcoder.github.io/arguseye/)
+- [Installation and compatibility guide](https://darkworldcoder.github.io/arguseye/guide.html)
+- [npm package](https://www.npmjs.com/package/@ayushniroula/arguseye)
+- [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
+
+Run `npx @ayushniroula/arguseye install claude` in the project. Other targets: codex, cursor, gemini, windsurf, vscode, copilot, antigravity, print. Restart the chosen agent. For the human panel, install extension `ayushniroula.arguseye` and run Preview Component on a .tsx, .jsx, or .vue file.
+
+## Agent evidence
+Five MCP tools: render_component, list_usages, render_usages, describe_props, render_diff. Outputs include cropped PNG, accessibility snapshot, resolved props, unresolved inputs, source revision, viewport, timings, warnings, and errors. Image, summary, and both outputs are supported. Render usages are paginated, up to 12 per batch. The latest 64 captures are retained per MCP session; CLI baselines persist in an explicit directory.
+
+## Boundaries
+These are isolated component renders using discovered inputs, not full application integration tests. Runtime-only props, arbitrary providers, backend/auth states, Next.js server execution, and Nuxt application context may remain incomplete. Compare results are changed, unchanged, or incomplete; a visual change is evidence for review, not proof of correctness.
+
+## Measured performance
+[Benchmark method and recorded samples](https://darkworldcoder.github.io/arguseye/guide.html#benchmarks). The 2026-10-27 small React fixture measured p95 50 ms over 20 warm renders on an Intel Core i5-1235U with Node v24.21.0. A separate 1,197-file Next.js project measured about 0.3 s for the same target again. These are different workloads, not universal latency guarantees.
