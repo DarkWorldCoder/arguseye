@@ -219,6 +219,18 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const css = route ? app.globalCss.filter((f) => !rootCss.has(f)) : [];
         return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css })));
       }
+      if (url.pathname === "/@graph") {
+        // Everything a target will import, so the page can preload it in one parallel batch instead of a waterfall.
+        const file = url.searchParams.get("file") ?? "";
+        const route = url.searchParams.get("route") ?? undefined;
+        const urls = new Set<string>(file && file !== "/@empty" ? graph.reachableUrls(file) : []);
+        const app = appContext(route);
+        for (const u of graph.reachableUrls(wrapperFile(app.entry))) urls.add(u);
+        return send(res, 200, "application/json", JSON.stringify([...urls]));
+      }
+      if (url.pathname === "/@fs/@empty") {
+        return send(res, 200, "text/javascript", "export default function Empty() { return null; }");
+      }
       if (url.pathname === "/@errors") {
         return send(res, 200, "application/json", JSON.stringify(errorsSince(Number(url.searchParams.get("since") ?? 0))));
       }

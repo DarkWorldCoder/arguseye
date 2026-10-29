@@ -8,6 +8,7 @@ import type { DepBundler } from "./depBundler.js";
 import { isStylesheet, type CssPipeline } from "./cssPipeline.js";
 import { assetModule, importsImagesAsObjects } from "./assets.js";
 import { isShim, shimFor } from "./shims.js";
+import { modularizeBarrelImports } from "./modularize.js";
 import { createResolver } from "./resolver.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue)$/;
@@ -21,6 +22,8 @@ export class ModuleGraph {
   private transformed = new Map<string, { source: string; code: string }>();
   /** Project files each module imports, from its last load; feeds `crawl`. */
   private projectImports = new Map<string, string[]>();
+  /** Every import URL a module was served with (project and package), for `reachableUrls`. */
+  private importUrls = new Map<string, string[]>();
   /** File → version query it was last crawled at. */
   private crawled = new Map<string, string>();
 
@@ -41,6 +44,22 @@ export class ModuleGraph {
     if (seen.has(file)) return [];
     seen.add(file);
     return [file, ...(this.projectImports.get(file) ?? []).flatMap((dep) => this.filesFor(dep, seen))];
+  }
+
+  /** Module URLs reachable from `file` (project files and the package entries they import), for modulepreload. */
+  reachableUrls(file: string): string[] {
+    const urls = new Set<string>();
+    const seen = new Set<string>();
+    const walk = (f: string) => {
+      if (seen.has(f)) return;
+      seen.add(f);
+      for (const url of this.importUrls.get(f) ?? []) {
+        urls.add(url);
+        if (url.startsWith("/@fs")) walk(decodeURIComponent(url.slice(4).split("?")[0]));
+      }
+    };
+    walk(file);
+    return [...urls];
   }
 
   /** True when the module only registers components, so Fast Refresh can swap it in place. */
@@ -95,7 +114,8 @@ export class ModuleGraph {
     if (!cached || cached.source !== source) {
       const vue = file.endsWith(".vue");
       const input = vue ? await this.vue.compile(file, source) : source;
-      const { code, errors } = await transform(vue ? file + ".ts" : file, input, {
+      const modular = vue ? input : modularizeBarrelImports(file, input, this.resolver);
+      const { code, errors } = await transform(vue ? file + ".ts" : file, modular, {
         sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: !vue },
       });
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
@@ -130,15 +150,18 @@ export class ModuleGraph {
     let out = "";
     let last = 0;
     const project: string[] = [];
+    const urls: string[] = [];
     for (const imp of imports) {
       if (imp.type === "import-meta" || imp.specifier === undefined) continue;
       const url = this.urlFor(file, imp.specifier);
+      urls.push(url);
       if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
       // A dynamic import's span includes its quotes; a static import's does not.
       out += code.slice(last, imp.start) + (imp.type === "dynamic" ? JSON.stringify(url) : url);
       last = imp.end;
     }
     this.projectImports.set(file, project);
+    this.importUrls.set(file, urls);
     return out + code.slice(last);
   }
 

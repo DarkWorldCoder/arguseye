@@ -115,6 +115,26 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   /** Last result per target signature, so a re-render can say what changed without a baseline id. */
   const lastResults = new Map<string, RenderResult>();
 
+  /**
+   * After the package warm-up, the default page is opened with the most common route's providers already
+   * loaded, so the first component render only has to load its own modules.
+   */
+  const prewarmed: Promise<void> = (async () => {
+    await server.ready();
+    if (!options.warmup) return;
+    try {
+      // The usage index parses the whole project on its first use (seconds on a large codebase): do it now.
+      await usages.list(path.join(options.root, "package.json"), "default");
+      const route = defaultRouteFile(options.root);
+      const viewport = { width: 1280, height: 800 };
+      const key = `react:${viewport.width}x${viewport.height}`;
+      if (!pages.has(key)) pages.set(key, warmPage(viewport, { file: "/@empty", exportName: "default", route }));
+      await pages.get(key);
+    } catch {
+      // the first render will load the page itself
+    }
+  })();
+
   /** Bundle generation each warm page was loaded under. */
   const generations = new WeakMap<Page, number>();
 
@@ -164,7 +184,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     server,
     listUsages: (file, exportName) => usages.list(file, exportName),
     describeProps,
-    ready: () => server.ready(),
+    ready: () => prewarmed,
     render: (request) => serial(() => render(request)),
     renderUsages: (request) => serial(async () => {
       const { offset = 0, limit = 12, ...target } = request;

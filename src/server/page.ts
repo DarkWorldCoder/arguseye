@@ -95,6 +95,23 @@ const reviveProps = (value) => {
   return value;
 };
 
+/** Fetches the target's whole import graph in parallel (modulepreload), so a deep import tree costs one round, not one per level. */
+const preloaded = new Set();
+const preload = async (target) => {
+  try {
+    const q = "file=" + encodeURIComponent(target.file) + (target.route ? "&route=" + encodeURIComponent(target.route) : "");
+    const urls = await (await fetch("/@graph?" + q)).json();
+    const fresh = urls.filter((u) => !preloaded.has(u));
+    for (const u of fresh) {
+      preloaded.add(u);
+      const link = document.createElement("link");
+      link.rel = "modulepreload";
+      link.href = u;
+      document.head.append(link);
+    }
+  } catch {}
+};
+
 /** A failed import() only says "failed to fetch"; the server kept the real reason. */
 const explain = async (error, since) => {
   if (!/Failed to fetch|Importing a module script failed|error loading dynamically imported module/i.test(String(error))) return [String(error?.stack ?? error)];
@@ -156,7 +173,8 @@ cp.show = async (target, state) => {
   cp.status = "loading";
   const since = Date.now();
   try {
-    const mod = await import(moduleUrl(target.file));
+    await preload(target);
+    const mod = await import(target.file === "/@empty" ? "/@fs/@empty" : moduleUrl(target.file));
     const name = target.exportName ?? "default";
     const Component = mod[name];
     if (typeof Component !== "function" && (typeof Component !== "object" || Component === null)) {

@@ -93,4 +93,15 @@ describe("dependency pre-bundling", () => {
     expect(react.body).toMatch(/export\s*\{[^}]*\bcache\b/);
     expect(react.body).toMatch(/__vendored/);
   });
+
+  it("rewrites barrel imports of known icon/utility packages to per-member paths, as Next's optimizePackageImports does", async () => {
+    server = await createPreviewServer({ root });
+    const { body } = await get(server.moduleUrl(path.join(root, "components/IconButtons.tsx")));
+    expect(body).toContain('"/@deps/@mui/icons-material/Add.js"');
+    expect(body).toContain('"/@deps/@mui/icons-material/Remove.js"');
+    expect(body).not.toContain('"/@deps/@mui/icons-material.js"');
+    const add = await get("/@deps/@mui/icons-material/Add.js");
+    expect(add.status).toBe(200);
+    expect(add.body).not.toContain("__HUGE_MARKER__");
+  });
 });
