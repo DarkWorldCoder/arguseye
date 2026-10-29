@@ -27,7 +27,7 @@ After this, `npx arguseye install claude` works for anyone.
 3. Publish a platform build (the native binaries are per platform):
 
 ```bash
-npx vsce login ayushniroula          # paste the token
+npx vsce login ayushniroula          # paste the token (needs an Azure DevOps org, which now needs an Azure subscription)
 npm run package                      # arguseye-linux-x64-<version>.vsix
 npx vsce publish --packagePath arguseye-linux-x64-*.vsix
 ```
@@ -52,3 +52,9 @@ Nothing to upload: the repo is the marketplace. Users run `claude plugin marketp
 ## Versioning
 
 Bump `version` in `package.json` and in `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` together; tag `v<version>`.
+
+## Done on 2026-10-29
+
+- 0.0.1 (linux-x64) was uploaded through the Marketplace web uploader (publisher page -> New extension -> Visual Studio Code -> drop the VSIX). No token is needed for that route; the built-in browser can show the dialog but the file drop is manual.
+- Future releases: a **Trusted Publishing** policy on the publisher page (repo DarkWorldCoder/arguseye, workflow `release.yml`) lets the `marketplace` job in `.github/workflows/release.yml` run `npx @vscode/vsce publish --oidc` on every `v*` tag with no PAT. The policy must see one successful run within 48 hours of being created while the repo is private.
+

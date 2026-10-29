@@ -43,6 +43,22 @@ jobs:
           files: artifacts/**/*.vsix
           generate_release_notes: true
 
+  marketplace:
+    # Trusted publishing: the Marketplace policy for this repo + workflow exchanges the GitHub OIDC token, no PAT.
+    needs: vsix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - run: for f in artifacts/*/*.vsix; do npx @vscode/vsce publish --oidc --packagePath "$f"; done
+
   npm:
     runs-on: ubuntu-latest
     steps:
