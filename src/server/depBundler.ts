@@ -46,7 +46,7 @@ function requireExportNames(file: string): string[] {
   }
 }
 /** Bump when the bundle output format changes, so stale on-disk bundles are not reused. */
-const BUNDLER_VERSION = 1;
+const BUNDLER_VERSION = 2;
 /** Builds with at least this many packages run in a worker process (memory), smaller ones in-process (latency). */
 const WORKER_THRESHOLD = 12;
 const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
@@ -242,6 +242,8 @@ export class DepBundler {
         format: "esm",
         entryFileNames: "[name].js",
         chunkFileNames: "_chunk-[hash].js",
+        // Smaller bundles parse faster in the browser; names are kept so React component names stay readable.
+        minify: { compress: true, mangle: false, codegen: { removeWhitespace: true } },
       }));
     } finally {
       await bundle.close(); // a failed build must not keep its whole module graph in memory

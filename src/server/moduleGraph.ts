@@ -88,6 +88,7 @@ export class ModuleGraph {
 
   async load(file: string): Promise<string> {
     if (!SCRIPT_EXT.test(file) && !isStylesheet(file)) return assetModule(file, this.imagesAsObjects);
+
     const source = await this.readSource(file);
     if (isStylesheet(file)) return cssModule(file, await this.css.process(file, source));
     let cached = this.transformed.get(file);

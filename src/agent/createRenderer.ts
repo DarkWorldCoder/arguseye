@@ -58,6 +58,8 @@ export type RenderResult = {
   changes?: Changes;
   /** Layout and template files the component was rendered inside, root first (project-relative). */
   layoutsApplied?: string[];
+  /** Where the time went, in ms: bundling/crawl, page load or swap, settling (fonts, images), capture. */
+  timings?: { prepare: number; show: number; settle: number; capture: number };
 };
 
 export type Changes = {
@@ -223,6 +225,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const errors = pageErrors.get(page)!;
       errors.length = 0;
       let reloaded = false;
+      const marks: number[] = [performance.now()];
       // Storage is per render: cleared, then seeded, so one render's state never leaks into the next.
       await page.evaluate((s) => {
         localStorage.clear();
@@ -260,6 +263,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         }
       }
 
+      marks.push(performance.now());
       const actionsApplied = await runActions(page, actions, errors);
 
       const warnings: string[] = server.warnings(rest.file);
@@ -277,6 +281,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"]);
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
+      marks.push(performance.now());
       const { box, inPage, runtimeWarnings } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the whole root.
         const r = (document.querySelector("[data-cp-box]") ?? document.getElementById("root")!).getBoundingClientRect();
@@ -293,6 +298,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const result: RenderResult = {
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         layoutsApplied: server.layoutsFor(target.route),
+        timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({ file: rest.file, exportName: rest.exportName ?? "default", props }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,
@@ -392,12 +398,22 @@ async function capture(session: CDPSession, box: { x: number; y: number; width: 
   return Buffer.from(data, "base64");
 }
 
+/** Playwright's headless shell (a stripped Chromium) when installed: lighter and quicker to start than full Chrome. */
 async function launchChrome(): Promise<Browser> {
-  try {
-    return await chromium.launch({ channel: "chrome" });
-  } catch {
-    return await chromium.launch();
+  const attempts: Array<() => Promise<Browser>> = [
+    () => chromium.launch({ channel: "chromium-headless-shell" }),
+    () => chromium.launch({ channel: "chrome" }),
+    () => chromium.launch(),
+  ];
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+    }
   }
+  throw lastError;
 }
 
 const unique = (xs: string[]) => [...new Set(xs)];

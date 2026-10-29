@@ -50,7 +50,7 @@ describe("dependency pre-bundling", () => {
     const runtime = await get("/@deps/react/jsx-dev-runtime.js");
     expect(runtime.body).toMatch(/\bjsxDEV\b/);
     // react and its jsx runtime import the same shared chunk instead of each bundling React
-    const reactChunk = react.body.match(/from "(\.\/_chunk-[^"]+)"/)?.[1];
+    const reactChunk = react.body.match(/from\s*"(\.\/_chunk-[^"]+)"/)?.[1];
     expect(reactChunk).toBeDefined();
     expect(runtime.body).toContain(reactChunk);
   });
