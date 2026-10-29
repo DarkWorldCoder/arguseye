@@ -137,3 +137,17 @@ Install fixture dependencies with `npm ci --prefix test/fixtures/<app>` before r
 The reproducible benchmark uses real MCP clients, a real Vite app, and the same fixture edit. Results and machine details are saved in `benchmarks/latest.json`. It measures scripted calls, response bytes, elapsed time, and an explicitly approximate text-token count. It does not measure LLM reasoning, model image tokens, or establish a general competitive ranking.
 
 Contributors and coding agents follow `AGENTS.md`, including red → green slices and the approved test seams. MIT licensed.
+
+## Performance on a large codebase
+
+Measured on a real Next.js 14 app (1,197 source files, MUI + Emotion, Redux, React Query, next-auth, 109 packages), same laptop, 2026-10-29:
+
+| | First ever start | Later starts |
+|---|---|---|
+| Server ready (packages bundled, usage index built, route page pre-warmed) | ~11 s | 2–7 s |
+| First component render (Footer, 83 modules incl. a 10 MB SVG file) | ~1.5 s | ~1.5 s |
+| A 641-line home section | ~0.9 s | ~0.9 s |
+| Same target again | ~0.3 s | ~0.3 s |
+| Memory: preview server / Chromium | ~500–750 MB / ~600 MB | |
+
+How: every source file is transformed once and cached; the union of the project's packages is bundled by Rolldown in a **worker process** (so its ~1.5 GB working memory is returned to the OS) and cached on disk by lockfile; CommonJS exports are read with `cjs-module-lexer` instead of executing packages; barrel imports of icon/utility packages (`@mui/icons-material`, `@mui/material`, `lodash`, `date-fns`) are rewritten per member like Next's `optimizePackageImports`; the page preloads a target's whole import graph in one parallel batch (`modulepreload`); the route's providers are loaded at start; lazy images are loaded eagerly so the frame settles in milliseconds. The pixels come from Chromium (headless shell when installed) because "exactly as in the app" needs a real engine; engines without layout and paint (Lightpanda) cannot produce them.

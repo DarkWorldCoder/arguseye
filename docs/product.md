@@ -41,3 +41,6 @@ The MVP is local. Next.js server execution, Nuxt application context, arbitrary 
 
 ## State (2026-10-29)
 Added: render inside the call site's parent box (`list_usages` context, `render_component in_context`, `frame`), states before capture (`actions`, `storage`), function props (`$fn`), `NEXT_PUBLIC_*` env, Next app-router previews on Next's vendored React canary, settled-frame capture (fonts, images). Verified on WiseAdmit: Footer, Navbar and the 641-line AIEcosystem section render with no errors. Cold starts on a large provider chain are 7–32 s per new package set: next is a one-time project-wide package warm-up at server start, then automatic `changes` on re-render, layout facts with refs, element→source. See docs/agent-wishlist.md.
+
+## Performance (2026-10-29, WiseAdmit latest-front, 1,197 files)
+Before: warm-up 32 s and skipped, first render 11–13 s, server 1.8–2.8 GB. After: ready 2–11 s, first render 1.5 s, section 0.9 s, warm 0.3 s, server ~500–750 MB. Levers: crawl once per file version, bundle worker process, cjs-module-lexer, package CSS inlined, minified bundles, modulepreload graph, route page pre-warm, usage index in warm-up, barrel rewrite, eager lazy images. Still open: server memory (transform cache + usage index + bundles in memory), V8 code cache via a persistent browser profile, HTTP/2 for module fetches.
