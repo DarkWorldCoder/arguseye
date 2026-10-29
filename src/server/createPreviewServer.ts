@@ -123,7 +123,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       await deps.ensureBuilt();
     } catch (error) {
       deps.restore(before);
-      startupWarnings.push(`Project-wide package warm-up skipped: ${String((error as Error).message ?? error).split("\n")[0]}`);
+      const reason = String((error as Error).message ?? error).split("\n").filter((l) => l.trim() && !/^\s+at /.test(l)).slice(0, 4).join(" ");
+      startupWarnings.push(`Project-wide package warm-up skipped: ${reason}`);
     }
   }
   const startupWarnings: string[] = [];

@@ -21,6 +21,8 @@ export class ModuleGraph {
   private transformed = new Map<string, { source: string; code: string }>();
   /** Project files each module imports, from its last load; feeds `crawl`. */
   private projectImports = new Map<string, string[]>();
+  /** File → version query it was last crawled at. */
+  private crawled = new Map<string, string>();
 
   constructor(
     private readSource: (file: string) => Promise<string>,
@@ -53,10 +55,15 @@ export class ModuleGraph {
   async crawl(file: string, seen = new Set<string>()): Promise<void> {
     if (seen.has(file) || !SCRIPT_EXT.test(file)) return;
     seen.add(file);
-    try {
-      await this.load(file);
-    } catch {
-      return; // the error is reported when the page requests the module
+    // Each file version is transformed once: a project-wide crawl must not re-walk shared subgraphs per entry.
+    const version = this.query(file);
+    if (this.crawled.get(file) !== version) {
+      try {
+        await this.load(file);
+      } catch {
+        return; // the error is reported when the page requests the module
+      }
+      this.crawled.set(file, version);
     }
     for (const dep of this.projectImports.get(file) ?? []) await this.crawl(dep, seen);
   }

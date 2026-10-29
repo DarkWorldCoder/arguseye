@@ -15,6 +15,11 @@ const cli = await rolldown({ input: { cli: "src/cli.ts" }, platform: "node", ext
 await cli.write({ dir: "dist", format: "esm", entryFileNames: "[name].mjs", banner: "#!/usr/bin/env node" });
 await cli.close();
 
+// The dependency bundle worker: a separate process so Rolldown's memory is released after each large build.
+const worker = await rolldown({ input: { "bundle-worker": "src/server/bundleWorker.ts" }, platform: "node", external });
+await worker.write({ dir: "dist", format: "esm", entryFileNames: "[name].mjs" });
+await worker.close();
+
 // The extension host loads CommonJS; the ESM-only deps are loaded lazily with import() inside it.
 const extension = await rolldown({ input: { extension: "src/extension/extension.ts" }, platform: "node", external });
 await extension.write({ dir: "dist", format: "cjs", entryFileNames: "[name].cjs", chunkFileNames: "[name]-[hash].cjs" });

@@ -1,5 +1,8 @@
 import { builtinModules, createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { init as initCjsLexer, parse as parseCjs } from "cjs-module-lexer";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { rolldown } from "rolldown";
@@ -7,8 +10,45 @@ import { ResolverFactory } from "oxc-resolver";
 import { init, parse } from "es-module-lexer";
 
 const FACADE = "\0facade:";
+const cjsLexerReady = initCjsLexer();
+
+/**
+ * Named exports of a CommonJS file without running it (browser-only packages touch `window` on load):
+ * the same lexer Node uses for `import` of CJS, following `module.exports = require(...)` re-exports.
+ * Falls back to executing the module only when the lexer finds nothing.
+ */
+async function cjsExportNames(file: string, depth = 0): Promise<string[]> {
+  await cjsLexerReady;
+  const source = readFileSync(file, "utf8");
+  let names: string[] = [];
+  let reexports: string[] = [];
+  try {
+    ({ exports: names, reexports } = parseCjs(source));
+  } catch {
+    return requireExportNames(file);
+  }
+  if (depth < 3) {
+    const req = createRequire(file);
+    for (const spec of reexports) {
+      try {
+        names.push(...(await cjsExportNames(req.resolve(spec), depth + 1)));
+      } catch {}
+    }
+  }
+  return names.length ? [...new Set(names)] : requireExportNames(file);
+}
+
+function requireExportNames(file: string): string[] {
+  try {
+    return Object.keys(createRequire(file)(file));
+  } catch {
+    return [];
+  }
+}
 /** Bump when the bundle output format changes, so stale on-disk bundles are not reused. */
 const BUNDLER_VERSION = 1;
+/** Builds with at least this many packages run in a worker process (memory), smaller ones in-process (latency). */
+const WORKER_THRESHOLD = 12;
 const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
 // CommonJS on purpose: named imports from it become `undefined` at runtime instead of a build-time missing-export error.
 const EMPTY = "\0node-builtin-empty.cjs";
@@ -88,17 +128,44 @@ export class DepBundler {
     return [...this.wanted].some((s) => !this.built.has(s));
   }
 
-  async ensureBuilt() {
+  async ensureBuilt({ inProcess = false } = {}) {
     while ([...this.wanted].some((s) => !this.built.has(s))) {
-      this.building ??= this.build().finally(() => (this.building = undefined));
+      this.building ??= this.build(inProcess).finally(() => (this.building = undefined));
       await this.building;
     }
   }
 
-  private async build() {
+  /** The built worker script, when this code runs from a build that ships it (dist/), else undefined. */
+  private static workerScript(): string | undefined {
+    for (const candidate of ["./bundle-worker.mjs", "../../dist/bundle-worker.mjs"]) {
+      const file = fileURLToPath(new URL(candidate, import.meta.url));
+      if (existsSync(file)) return file;
+    }
+    return undefined;
+  }
+
+  /** Runs the build in a child process; resolves true when it produced the cache, false when no worker is available. */
+  private async buildInWorker(specs: string[]): Promise<boolean> {
+    const script = DepBundler.workerScript();
+    if (!script || process.env.CP_INPROCESS_BUNDLE) return false;
+    return new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [script], { stdio: ["pipe", "ignore", "pipe"] });
+      let stderr = "";
+      child.stderr.on("data", (d) => (stderr += d));
+      child.on("error", reject);
+      child.on("exit", (code) => (code === 0 ? resolve(true) : reject(new Error(stderr || `bundle worker exited with ${code}`))));
+      child.stdin.end(JSON.stringify({ root: this.root, specs }));
+    });
+  }
+
+  private async build(inProcess = false) {
     const specs = [...this.wanted].sort();
     const key = this.cacheKey(specs);
     const dir = path.join(this.cacheDir, key);
+    // Large sets are built by a worker process that writes the cache and exits; the result is then read below.
+    if (!inProcess && !existsSync(path.join(dir, "manifest.json")) && specs.length >= WORKER_THRESHOLD) {
+      await this.buildInWorker(specs);
+    }
     if (existsSync(path.join(dir, "manifest.json"))) {
       // Names are paths ("react/jsx-dev-runtime.js"), so the cache folder is read recursively.
       const names = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => f.endsWith(".js"));
@@ -156,14 +223,29 @@ export class DepBundler {
           resolveId: (id) => (id.startsWith(FACADE) ? id : NODE_BUILTINS.has(id) ? EMPTY : null),
           load: (id) => (id.startsWith(FACADE) ? facades.get(id.slice(FACADE.length)) : id === EMPTY ? "module.exports = {};" : null),
         },
+        {
+          // Packages that import their own stylesheets from JS (editors, sliders): the CSS is injected at load, as
+          // the app's bundler would, instead of failing the build.
+          name: "package-css",
+          load: (id) => {
+            if (!/\.css$/.test(id) || id.includes("\0")) return null;
+            const css = JSON.stringify(readFileSync(id, "utf8"));
+            const code = `const css = ${css}; if (typeof document !== "undefined" && !document.querySelector('style[data-pkg-css=${JSON.stringify(id)}]')) { const s = document.createElement("style"); s.dataset.pkgCss = ${JSON.stringify(id)}; s.textContent = css; document.head.append(s); } export default css;`;
+            return { code, moduleType: "js" as const };
+          },
+        },
       ],
     });
-    const { output } = await bundle.generate({
-      format: "esm",
-      entryFileNames: "[name].js",
-      chunkFileNames: "_chunk-[hash].js",
-    });
-    await bundle.close();
+    let output;
+    try {
+      ({ output } = await bundle.generate({
+        format: "esm",
+        entryFileNames: "[name].js",
+        chunkFileNames: "_chunk-[hash].js",
+      }));
+    } finally {
+      await bundle.close(); // a failed build must not keep its whole module graph in memory
+    }
     this.files = new Map(output.flatMap((o) => (o.type === "chunk" ? [[o.fileName, o.code] as const] : [])));
     specs.forEach((s) => this.built.add(s));
     this.generation++;
@@ -193,7 +275,7 @@ export class DepBundler {
       const hasDefault = exports.some((e) => e.type !== "reexport-all" && e.name === "default");
       return `export * from ${id};${hasDefault ? `export { default } from ${id};` : ""}`;
     }
-    const names = Object.keys(createRequire(file)(file)).filter((k) => IDENT.test(k) && k !== "default" && k !== "__esModule");
+    const names = (await cjsExportNames(file)).filter((k) => IDENT.test(k) && k !== "default" && k !== "__esModule");
     return `import __m from ${id}; export default __m; export const { ${names.join(", ")} } = __m;`;
   }
 }
