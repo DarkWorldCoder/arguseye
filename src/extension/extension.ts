@@ -238,7 +238,7 @@ class PreviewPanel implements vscode.Disposable {
   }
 
   private async verificationRenderer(): Promise<Renderer> {
-    if (!this.shownRoot) throw new Error("Open a component preview first.");
+    if (!this.shownRoot) throw new Error("Open a preview first.");
     const root = this.shownRoot;
     const server = await this.server(root);
     for (const document of vscode.workspace.textDocuments) {
@@ -258,7 +258,7 @@ class PreviewPanel implements vscode.Disposable {
   }
 
   private async captureBaseline(): Promise<RenderResult> {
-    if (!this.state) throw new Error("Open a component preview first.");
+    if (!this.state) throw new Error("Open a preview first.");
     const renderer = await this.verificationRenderer();
     const result = await renderer.render({ file: this.state.file, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport] });
     this.baseline = result.captureId;

@@ -16,7 +16,7 @@
   ],
   "results": [
     {
-      "engine": "Component Preview MCP",
+      "engine": "Arguseye MCP",
       "phase": "cold",
       "startupMs": 1172,
       "workflowMs": 933,
@@ -54,7 +54,7 @@
       "approximateTextTokens": 447
     },
     {
-      "engine": "Component Preview MCP",
+      "engine": "Arguseye MCP",
       "phase": "warm",
       "startupMs": 0,
       "workflowMs": 145,

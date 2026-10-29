@@ -1,153 +1,99 @@
+<p align="center">
+  <img src="assets/hero.svg" alt="Arguseye: a terminal renders a component in 1.5 s with real props, next to the rendered card" width="960">
+</p>
+
+<p align="center">
+  <a href="https://github.com/DarkWorldCoder/arguseye/actions"><img alt="CI" src="https://github.com/DarkWorldCoder/arguseye/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.npmjs.com/package/arguseye"><img alt="npm" src="https://img.shields.io/npm/v/arguseye?color=f97316"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
+  <img alt="React, Next.js, Vue" src="https://img.shields.io/badge/React%20%C2%B7%20Next.js%20%C2%B7%20Vue-supported-22c55e">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-server-93c5fd">
+</p>
+
 # Arguseye
 
-See a component, change it, and inspect the consequences—without starting the app or writing stories.
+**Your coding agent can see what it just built.**
 
-Arguseye renders your actual React or Vue components with your project's packages. Coding agents receive screenshots, accessibility snapshots, source fingerprints, unresolved-input warnings, and before/after comparisons. VS Code shows a live preview of the same source and uses the same verification engine.
+Arguseye renders any React, Next.js or Vue component from source, exactly as your app shows it: your theme, your layouts, your global CSS, and real props taken from the places your code already uses the component. The dev server stays off. A warm render takes about 40 ms; the first one on a 1,197-file Next.js app takes 1.5 s.
 
-## Run locally
-
-Use Node.js 22 or newer (validated on Node 24), install the target project's dependencies, and have Google Chrome available. The renderer also accepts an installed Playwright Chromium browser.
-
-```sh
-npm ci
-npm run build
-node /path/to/arguseye/dist/cli.mjs shot components/Card.tsx \
-  --root /path/to/your-app --export Card --props '{"title":"Desk"}' --out /tmp/card.png
+```bash
+npx arguseye install claude      # or codex, cursor, windsurf, vscode, antigravity, copilot, all
 ```
 
-There is no application dev server to start. Arguseye itself runs a loopback-only module server and Chromium. It executes your component code and does not supply missing backends or authentication.
+One command writes the MCP server and the skill where your agent reads them. Then tell the agent: *look at the card you just changed.*
 
-## Connect a coding agent
+## What changes for you
 
-Build once, then substitute absolute paths in these examples. No API key is required.
+**One call instead of ten.** Today an agent that wants to see a component starts the dev server, waits, navigates, logs in, clicks into the right state and screenshots. With Arguseye it calls `render_component` and gets a cropped PNG, the accessibility tree and any errors with `file:line`. It also works when the app can't boot at all: a missing env var, a dead backend, another page that throws.
 
-**Codex**
+**It looks like your app because it runs your app's code.** Your own React (Next's vendored copy in app-router projects), your packages from your `node_modules`, your Tailwind compiled with your theme, your providers from root and nested layouts, your `next/font` and `NEXT_PUBLIC_*` values. Props come from real call sites, or from the TypeScript type when nothing uses the component yet. Below, a 641-line home section and a program card from a production Next.js app, rendered with no server running.
 
-```sh
-codex mcp add arguseye -- node /path/to/arguseye/dist/cli.mjs mcp --root /path/to/your-app
+**It tells the agent what its edit did.** Render the same target again and the result carries `changes`: the share of pixels that moved, the lines that appeared or vanished in the accessibility tree, errors that are new or gone. States are one call away too: `actions` (click, hover, fill, press) and `storage` for logged-in or feature-flagged views, any viewport, inside the parent box of a real call site.
+
+Compared with Storybook you write no stories; compared with Preview.js the props are real and the layouts are yours; compared with browser-automation MCPs nothing has to be running. The full comparison and the benchmark against a Playwright-MCP-plus-dev-server loop are in [benchmarks/](benchmarks/) and [docs/product.md](docs/product.md).
+
+## What it looks like
+
+<p align="center">
+  <img src="assets/vscode-panel.png" alt="The VS Code panel: a product card rendered with the props from app/page.tsx, an export picker and a props form generated from the TypeScript type" width="900">
+</p>
+
+A real Next.js 14 app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered from source with no server running: the home section and a program card, inside the app's own theme and layouts.
+
+<p align="center">
+  <img src="assets/example-home-section.png" alt="A 641-line home-page section rendered headless with the app's theme" width="440">
+  <img src="assets/example-program-card.png" alt="A program card rendered headless with its real cover image and a function prop" width="440">
+</p>
+
+## Tools (MCP server `arguseye`)
+
+| Tool | What the agent gets back |
+|---|---|
+| `render_component {file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?}` | PNG cropped to the component, accessibility tree, `errors[]`, `warnings[]`, `timings`, `changes` since the previous render of the same target. `usage` takes the props of a real call site; `in_context` renders inside that call site's parent elements; `frame` is a stand-in parent box; `actions` and `storage` set the state first. Function props: `{"$fn": "(x) => …"}`. |
+| `list_usages {file, export?}` | Every call site with its literal props, the props that depend on runtime values, and the JSX ancestors. |
+| `render_usages {file, export?, viewport?}` | The component at every call site: the blast radius of a change in one call. |
+| `describe_props {file, export?}` | The props schema from the TypeScript type, with sample values. |
+| `render_diff {baselineId}` | An explicit before/after against a `captureId`. |
+
+CLI for agents without MCP: `npx arguseye shot src/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png`, `npx arguseye usages …`, `npx arguseye serve …` (live page with hot reload).
+
+## Setup per agent
+
+`npx arguseye install <client>` handles these; details in [docs/install.md](docs/install.md).
+
+| Agent | Where it reads |
+|---|---|
+| Claude Code | `.mcp.json` in the project, skill in `~/.claude/skills`; or the plugin: `claude plugin marketplace add DarkWorldCoder/arguseye` then `claude plugin install arguseye` |
+| Codex | `~/.codex/config.toml`, skill in `~/.agents/skills` |
+| Cursor | `~/.cursor/mcp.json`, skill in `.cursor/skills` |
+| Antigravity | `.agents/mcp_config.json` and `.agents/skills`; or `agy plugin install https://github.com/DarkWorldCoder/arguseye` |
+| GitHub Copilot | `.github/skills` and `.vscode/mcp.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Any other MCP client | `npx arguseye install print` prints the JSON |
+
+The skill (`skills/arguseye/SKILL.md`) follows the Agent Skills format and works on its own too: it tells the agent when to look, how to read a result, and how to use the CLI if MCP is unavailable.
+
+## VS Code
+
+Open a `.tsx`, `.jsx` or `.vue` file and run **Preview Component** (the eye icon in the editor title, or `Ctrl+Alt+P`). The panel shows the component with the props from its first real usage, follows the file you edit, re-renders in under 50 ms as you type with component state kept, and has a props form built from the component's type. Extension id `ayushniroula.arguseye` on the Marketplace and Open VSX (Cursor, Windsurf, VSCodium).
+
+## How it stays exact and fast
+
+- Your files run through [oxc](https://oxc.rs) one module at a time; your packages are pre-bundled once by [Rolldown](https://rolldown.rs) from your own `node_modules` in a worker process and cached by lockfile, so React, MUI and Tailwind are the versions your app uses. Next.js app-router projects run on Next's vendored React, like the app itself.
+- Root and nested layouts and templates wrap every render: global CSS, `<html>`/`<body>` classes, providers with their props (`theme={theme}` is re-imported), `CssBaseline`-style siblings. Tailwind v4 compiles with your theme, Tailwind v3 through your PostCSS config, plus Sass, CSS modules, `public/` assets, image imports and `NEXT_PUBLIC_*` env.
+- `next/link`, `next/image` and `next/navigation` render Next's markup; Chromium draws the pixels.
+- Edits are hot-swapped with React Fast Refresh, from the editor or from disk. A target's whole import graph is preloaded in one batch; barrel imports of icon packages are rewritten per member; lazy images load eagerly so the frame settles in milliseconds.
+
+Measured on the 1,197-file app above: server ready in 2–11 s, first render 1.5 s, a full section 0.9 s, the same target again 0.3 s; the server stays around 500–750 MB. The technique is described in [docs/technique.md](docs/technique.md); the benchmark against a Playwright-MCP-plus-dev-server loop is in [benchmarks/](benchmarks/).
+
+## Development
+
+```bash
+npm install
+for d in test/fixtures/*/; do (cd "$d" && npm install); done
+npm test            # unit + headless browser tests
+npm run test:vscode # integration test in a real VS Code
+npm run package     # platform VSIX
 ```
 
-**Claude Code**
-
-```sh
-claude mcp add arguseye -- node /path/to/arguseye/dist/cli.mjs mcp --root /path/to/your-app
-```
-
-**Cursor** — put this in the target project's `.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "arguseye": {
-      "command": "node",
-      "args": ["/path/to/arguseye/dist/cli.mjs", "mcp", "--root", "/path/to/your-app"]
-    }
-  }
-}
-```
-
-**VS Code agent tools** — put this in the target project's `.vscode/mcp.json`:
-
-```json
-{
-  "servers": {
-    "arguseye": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["/path/to/arguseye/dist/cli.mjs", "mcp", "--root", "/path/to/your-app"]
-    }
-  }
-}
-```
-
-## Agent workflow
-
-| Tool | Purpose |
-| --- | --- |
-| `render_component` | Render one export with explicit, discovered, or labelled sample props. `in_context` renders inside the call site's parent elements (size, layout, background); `frame` is a stand-in parent box; `actions` (click, hover, fill, press, …) and `storage` put it into a state first; a re-render of the same target reports `changes`. |
-| `render_diff` | Replay a capture against current code and return change evidence. |
-| `list_usages` | Find call sites, literal props, and unresolved inputs. |
-| `render_usages` | Render up to 12 isolated variants, with a continuation cursor. |
-| `describe_props` | Read the React TypeScript prop schema and sample values. |
-
-
-1. Call `list_usages` to find literal-prop variants. Usage IDs such as `app/page.tsx:9` can be passed back verbatim; same-line usages include a column.
-2. Call `render_component` with `file`, optional `export`, `usage` or `props`, and a viewport. A successful render returns a `captureId`.
-3. Edit source, then call `render_diff` with that ID. It replays the original resolved props and viewport against current code.
-4. To see a component as it sits on the page, pass `usage` with `in_context: true` (its parents' width, height and background apply), or `frame: {width, height, background}` when nothing uses it yet. To reach a state first, pass `actions`, e.g. `[{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"}]`, and `storage: {local: {...}}` for logged-in or flagged states. Function props go as `{"$fn":"(x) => ..."}`.
-5. Call `render_usages` to inspect other discovered variants. Follow `nextCursor` to continue; each batch contains at most 12 renders.
-
-```json
-{"file":"components/Card.tsx","export":"Card","usage":"app/page.tsx:9","viewport":"mobile","output":"both"}
-```
-
-```json
-{"baselineId":"capture-id-from-render_component","output":"summary"}
-```
-
-`render_component`, `render_usages`, and `render_diff` accept `output: "image" | "summary" | "both"`; the default is `both`. Structured metadata is returned in every mode. Use `summary` when image bytes are unnecessary. `describe_props` reads React TypeScript props and supplies clearly labelled sample values when no props are provided.
-
-Render evidence includes the target and resolved props, viewport, source revision, timing, unresolved inputs, warnings, completeness, and `errors: string[]`. Source revisions fingerprint source/styles read by the server, including editor buffers; they are not Git commit IDs or guarantees about remote assets.
-
-Comparisons return before/after images, a highlighted pixel diff, changed-pixel percentage, dimensions, accessibility snapshot changes, and new/resolved errors. The status is `unchanged`, `changed`, or `incomplete`. Changed pixels are evidence to inspect, not a correctness verdict. The latest 64 successful captures are retained per renderer session; capture again after eviction or a restart.
-
-Usages are isolated component renders with discovered literal props. Runtime expressions and slots/children that cannot be represented remain unresolved. Parent-page styling, backend-dependent data, and whole-application behavior require separate integration checks.
-
-## Baselines across CLI commands
-
-```sh
-node dist/cli.mjs shot components/Card.tsx --root /path/to/app --export Card \
-  --props '{"title":"Desk"}' --capture-dir /tmp/card-before --output summary --json
-# Edit your component.
-node dist/cli.mjs diff --root /path/to/app --baseline /tmp/card-before \
-  --out /tmp/card-comparison --json
-```
-
-A baseline directory contains `capture.json` and `capture.png`. A comparison directory contains `before.png`, `after.png`, `diff.png`, and `diff.json`. `--json` emits machine-readable metadata without embedding PNG bytes. Viewports accept `mobile`, `tablet`, `desktop`, or `WIDTHxHEIGHT` up to 8192 pixels per dimension.
-
-## VS Code panel
-
-Build a local extension package with `npm run package -- --target linux-x64` on Linux x64, then install the resulting VSIX through **Extensions → Install from VSIX**. Build on each target platform to include its native dependencies.
-
-Open a `.tsx`, `.jsx`, or `.vue` file and run **Arguseye: Preview Component** (`Ctrl+Alt+P`, or `Cmd+Alt+P` on macOS). The panel provides export and usage selection, editable typed React props, fixed viewport presets, **Capture Baseline**, and **Compare Changes**.
-
-Unsaved edits update the live preview. Ordinary React refresh and Vue template/style updates preserve component state. Vue script edits reset state and report that reset. Verification renders use fresh component state. Changing selected props, usage, export, or viewport requires a new baseline.
-
-## Compatibility and boundaries
-
-- React JSX/TSX and browser-renderable Next.js components, global CSS, CSS modules, Tailwind v3/v4, Sass and the project's PostCSS configuration are covered by fixtures.
-- Existing static root-layout wrappers and literal provider props are reused. Runtime provider inputs and wrappers that cannot be imported are reported; arbitrary provider reconstruction is not supported.
-- `next/link`, `next/image`, and `next/navigation` use preview shims. This does not reproduce Next.js server components, server actions, middleware, image optimization, or server/font services. Runtime limitations remain visible in evidence.
-- Vue 3 SFCs support ordinary scripts, TypeScript script setup, templates, scoped styles and CSS modules. The compiler comes from the project's `vue/compiler-sfc`, matching its runtime. Vue-only projects do not need React.
-- Nuxt context, Vue SFC custom blocks, external SFC script/template/style blocks, and framework build plugins are outside the supported surface. Vue slots and runtime bindings remain unresolved in usage discovery.
-- Screenshots freeze motion and wait up to 300 ms for image/font settling. Failed or unsettled assets mark evidence incomplete. Network-dependent content, continuously changing content and app side effects are not made deterministic automatically.
-
-## Validation and performance
-
-```sh
-npm test
-npm run typecheck
-npm run test:vscode
-npm run benchmark
-npm run package -- --target linux-x64
-```
-
-Install fixture dependencies with `npm ci --prefix test/fixtures/<app>` before running tests. Browser/server tests need local socket and Chromium permissions. The warm-render gate checks p95 ≤100 ms over 20 renders. Live-edit tests enforce <100 ms and record progress toward the 50 ms product target; these are separate measurements.
-
-The reproducible benchmark uses real MCP clients, a real Vite app, and the same fixture edit. Results and machine details are saved in `benchmarks/latest.json`. It measures scripted calls, response bytes, elapsed time, and an explicitly approximate text-token count. It does not measure LLM reasoning, model image tokens, or establish a general competitive ranking.
-
-Contributors and coding agents follow `AGENTS.md`, including red → green slices and the approved test seams. MIT licensed.
-
-## Performance on a large codebase
-
-Measured on a real Next.js 14 app (1,197 source files, MUI + Emotion, Redux, React Query, next-auth, 109 packages), same laptop, 2026-10-29:
-
-| | First ever start | Later starts |
-|---|---|---|
-| Server ready (packages bundled, usage index built, route page pre-warmed) | ~11 s | 2–7 s |
-| First component render (Footer, 83 modules incl. a 10 MB SVG file) | ~1.5 s | ~1.5 s |
-| A 641-line home section | ~0.9 s | ~0.9 s |
-| Same target again | ~0.3 s | ~0.3 s |
-| Memory: preview server / Chromium | ~500–750 MB / ~600 MB | |
-
-How: every source file is transformed once and cached; the union of the project's packages is bundled by Rolldown in a **worker process** (so its ~1.5 GB working memory is returned to the OS) and cached on disk by lockfile; CommonJS exports are read with `cjs-module-lexer` instead of executing packages; barrel imports of icon/utility packages (`@mui/icons-material`, `@mui/material`, `lodash`, `date-fns`) are rewritten per member like Next's `optimizePackageImports`; the page preloads a target's whole import graph in one parallel batch (`modulepreload`); the route's providers are loaded at start; lazy images are loaded eagerly so the frame settles in milliseconds. The pixels come from Chromium (headless shell when installed) because "exactly as in the app" needs a real engine; engines without layout and paint (Lightpanda) cannot produce them.
+Rules for contributors and agents are in [AGENTS.md](AGENTS.md). What an agent would want next is in [docs/agent-wishlist.md](docs/agent-wishlist.md). MIT licensed.

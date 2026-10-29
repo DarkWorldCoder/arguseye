@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#111c33"/></linearGradient>
+    <radialGradient id="iris" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.55" stop-color="#f97316"/><stop offset="1" stop-color="#9a3412"/></radialGradient>
+    <clipPath id="term"><rect x="40" y="40" width="470" height="220" rx="12"/></clipPath>
+    <clipPath id="cmdclip"><rect x="76" y="80" width="0" height="24"><animate attributeName="width" from="0" to="420" begin="0.4s" dur="1.6s" fill="freeze"/></rect></clipPath>
+    <style>
+      .t { fill: #e2e8f0; font-size: 15px; }
+      .dim { fill: #64748b; }
+      .ok { fill: #4ade80; }
+      .warn { fill: #fbbf24; }
+      .k { fill: #93c5fd; }
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes eyeblink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.08); } }
+      .cursor { animation: blink 1s step-end infinite; }
+      .l1 { animation: appear 0.3s 2.4s both; } .l2 { animation: appear 0.3s 2.9s both; } .l3 { animation: appear 0.3s 3.2s both; } .l4 { animation: appear 0.3s 3.5s both; }
+      .card { animation: rise 0.5s 3.0s both; transform-origin: center; }
+      .eye { animation: eyeblink 5s ease-in-out infinite; transform-origin: 790px 150px; }
+      .loop { animation: appear 0.4s 4.2s both; }
+    </style>
+  </defs>
+  <rect width="960" height="300" rx="20" fill="url(#bg)"/>
+
+  <!-- terminal -->
+  <rect x="40" y="40" width="470" height="220" rx="12" fill="#0f172a" stroke="#1e293b"/>
+  <circle cx="60" cy="58" r="5" fill="#ef4444"/><circle cx="78" cy="58" r="5" fill="#f59e0b"/><circle cx="96" cy="58" r="5" fill="#22c55e"/>
+  <g clip-path="url(#term)">
+    <text x="60" y="96" class="t"><tspan class="dim">$ </tspan></text>
+    <g clip-path="url(#cmdclip)"><text x="76" y="96" class="t">arguseye shot Card.tsx --usage app/page.tsx:12</text></g>
+    <text x="60" y="124" class="t l1"><tspan class="dim">render  </tspan><tspan class="ok">1.5 s</tspan><tspan class="dim">  · in app/layout → (shop)/template</tspan></text>
+    <text x="60" y="148" class="t l2"><tspan class="dim">errors  </tspan><tspan class="ok">none</tspan></text>
+    <text x="60" y="172" class="t l3"><tspan class="dim">props   </tspan><tspan class="k">real usage</tspan><tspan class="dim"> · title="Wireless Headphones" price={99}</tspan></text>
+    <text x="60" y="196" class="t l4"><tspan class="dim">changes </tspan><tspan class="warn">2.3% pixels</tspan><tspan class="dim"> · + button "Buy now"</tspan></text>
+    <text x="60" y="236" class="t loop"><tspan class="dim">no dev server · no stories · same React, CSS and theme as the app</tspan></text>
+    <rect x="60" y="222" width="9" height="16" fill="#e2e8f0" class="cursor loop"/>
+  </g>
+
+  <!-- rendered card -->
+  <g class="card">
+    <rect x="560" y="60" width="200" height="150" rx="14" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <text x="580" y="98" font-family="system-ui, sans-serif" font-size="17" font-weight="700" fill="#0f172a">Wireless Headphones</text>
+    <text x="580" y="124" font-family="system-ui, sans-serif" font-size="15" fill="#166534">$99.00</text>
+    <text x="580" y="150" font-family="system-ui, sans-serif" font-size="13" fill="#334155">• audio   • bluetooth</text>
+    <rect x="580" y="166" width="104" height="26" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+    <text x="592" y="184" font-family="system-ui, sans-serif" font-size="12" fill="#0f172a">Buy now (0)</text>
+  </g>
+
+  <!-- the eye -->
+  <g class="eye">
+    <path d="M756 150 C772 118 848 118 864 150 C848 182 772 182 756 150 Z" fill="#f8fafc"/>
+    <circle cx="810" cy="150" r="17" fill="url(#iris)"/>
+    <circle cx="810" cy="150" r="7" fill="#0f172a"/>
+    <circle cx="816" cy="143" r="3" fill="#ffffff"/>
+  </g>
+  <text x="810" y="215" text-anchor="middle" font-family="system-ui, sans-serif" font-size="22" font-weight="700" fill="#f8fafc">Arguseye</text>
+  <text x="810" y="240" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">eyes for coding agents</text>
+</svg>

@@ -3,8 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type Client = "claude" | "codex" | "cursor" | "windsurf" | "vscode" | "antigravity";
-export const CLIENTS: Client[] = ["claude", "codex", "cursor", "windsurf", "vscode", "antigravity"];
+export type Client = "claude" | "codex" | "cursor" | "windsurf" | "vscode" | "antigravity" | "copilot" | "print";
+export const CLIENTS: Client[] = ["claude", "codex", "cursor", "windsurf", "vscode", "antigravity", "copilot", "print"];
+
+/** The MCP server entry any client can use, as JSON, for agents without a dedicated target (OpenCode, Cline, Roo, Amp…). */
+export function mcpSnippet(project: string): string {
+  return JSON.stringify({ mcpServers: { arguseye: { command: SERVER.command, args: [...SERVER.args, path.resolve(project)] } } }, null, 2);
+}
 
 export type InstallOptions = {
   client: Client | "all";
@@ -25,7 +30,7 @@ const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
  * Returns what was (or would be) written, so the caller can show it.
  */
 export function install({ client, project, home = os.homedir(), dryRun = false }: InstallOptions): InstallStep[] {
-  const clients = client === "all" ? CLIENTS : [client];
+  const clients = client === "all" ? CLIENTS.filter((c) => c !== "print") : [client];
   const root = path.resolve(project);
   const steps: InstallStep[] = [];
   const server = { command: SERVER.command, args: [...SERVER.args, root] };
@@ -76,6 +81,14 @@ export function install({ client, project, home = os.homedir(), dryRun = false }
         break;
       case "vscode":
         writeJsonMerge(path.join(root, ".vscode", "mcp.json"), (j) => { j.servers ??= {}; j.servers["arguseye"] = { type: "stdio", ...server }; }, "VS Code (Copilot agent mode) reads .vscode/mcp.json");
+        break;
+      case "copilot":
+        // GitHub Copilot (coding agent and VS Code) reads repository skills from .github/skills and MCP from .vscode/mcp.json.
+        copySkill(path.join(root, ".github", "skills", "arguseye"), "Copilot reads .github/skills in the repo");
+        writeJsonMerge(path.join(root, ".vscode", "mcp.json"), (j) => { j.servers ??= {}; j.servers["arguseye"] = { type: "stdio", ...server }; }, "VS Code / Copilot read .vscode/mcp.json");
+        break;
+      case "print":
+        steps.push({ file: "(stdout)", action: "write", note: mcpSnippet(root) });
         break;
       case "antigravity":
         writeJsonMerge(path.join(root, ".agents", "mcp_config.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Antigravity reads .agents/mcp_config.json in the workspace");

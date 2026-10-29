@@ -108,5 +108,10 @@
     "codex",
     "cursor",
     "screenshot"
-  ]
+  ],
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
+  }
 }

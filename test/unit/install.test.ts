@@ -19,6 +19,7 @@ describe("install for agent clients", () => {
     expect(readFileSync(path.join(home, ".claude", "skills", "arguseye", "SKILL.md"), "utf8")).toMatch(/^---\nname: arguseye/);
     expect(JSON.parse(readFileSync(path.join(project, ".vscode", "mcp.json"), "utf8")).servers["arguseye"].type).toBe("stdio");
     expect(existsSync(path.join(project, ".agents", "skills", "arguseye", "SKILL.md"))).toBe(true);
+    expect(existsSync(path.join(project, ".github", "skills", "arguseye", "SKILL.md"))).toBe(true);
 
     // Running again keeps other servers and does not duplicate ours.
     const cursor = path.join(home, ".cursor", "mcp.json");
@@ -36,5 +37,10 @@ describe("install for agent clients", () => {
     const steps = install({ client: "claude", project, home, dryRun: true });
     expect(steps.length).toBeGreaterThan(0);
     expect(existsSync(path.join(project, ".mcp.json"))).toBe(false);
+  });
+
+  it("prints a generic MCP snippet for agents without a dedicated target", () => {
+    const steps = install({ client: "print", project: "/tmp/app", home: tmp(), dryRun: true });
+    expect(JSON.parse(steps[0].note!).mcpServers.arguseye.args).toEqual(["-y", "arguseye", "mcp", "--root", "/tmp/app"]);
   });
 });
