@@ -85,4 +85,12 @@ describe("dependency pre-bundling", () => {
     expect(react.status).toBe(200);
     expect(react.body).toMatch(/export\s*\{[^}]*\buseState\b/);
   });
+
+  it("resolves react to Next's vendored canary in app-router projects, as the app itself runs on it", async () => {
+    server = await createPreviewServer({ root });
+    const react = await get("/@deps/react.js");
+    expect(react.status, react.body).toBe(200);
+    expect(react.body).toMatch(/export\s*\{[^}]*\bcache\b/);
+    expect(react.body).toMatch(/__vendored/);
+  });
 });

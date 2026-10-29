@@ -5,7 +5,20 @@ export type PreviewTarget = {
   props?: Record<string, unknown>;
   /** Remount instead of keeping component state (agents want a clean render; the editor panel doesn't). */
   fresh?: boolean;
+  /** Render inside the JSX ancestors of a call site (from `Usage.context`), resolved from `contextFile`. */
+  context?: Wrapper[];
+  contextFile?: string;
+  /** Render inside a box of this size and background, as a stand-in parent. */
+  frame?: Frame;
 };
+
+export type Frame = { width: number; height: number; background?: string; padding?: number };
+
+/** Encodes a context for the `/@context` module URL. */
+export const encodeContext = (file: string, wrappers: Wrapper[]) =>
+  Buffer.from(JSON.stringify({ file, wrappers })).toString("base64url");
+export const decodeContext = (encoded: string): { file: string; wrappers: Wrapper[] } =>
+  JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 
 export function encodeTarget(target: PreviewTarget): string {
   return Buffer.from(JSON.stringify(target)).toString("base64url");
@@ -14,6 +27,8 @@ export function encodeTarget(target: PreviewTarget): string {
 export function decodeTarget(encoded: string): PreviewTarget {
   return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 }
+
+import type { Wrapper } from "../project/appContext.js";
 
 export type PageContext = {
   state: { epoch: number; versions: Record<string, number>; live: boolean };
@@ -96,6 +111,26 @@ const settled = () => {
   return Promise.race([Promise.all([document.fonts.ready, ...loads]), timeout]);
 };
 
+/**
+ * The box a component is rendered into: a fixed frame, or the call site's JSX ancestors as a generated module.
+ * The innermost element carries data-cp-box, which the capture crops to.
+ */
+const parentBox = async (target, since) => {
+  if (target.frame) {
+    const { width, height, background, padding } = target.frame;
+    return ({ children }) => createElement("div", { "data-cp-box": "", style: { width, height, background, padding, boxSizing: "border-box", position: "relative", overflow: "hidden" } }, children);
+  }
+  if (target.context?.length && target.contextFile) {
+    const encoded = btoa(JSON.stringify({ file: target.contextFile, wrappers: target.context })).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+    try {
+      return (await import("/@context?c=" + encoded + "&e=" + cp.epoch)).default;
+    } catch (error) {
+      cp.errors.push(...(await explain(error, since)).map((e) => "Call-site context could not be loaded: " + e));
+    }
+  }
+  return ({ children }) => children;
+};
+
 /** The root layout's providers, loaded once per epoch; a broken layout is reported and the component still renders. */
 let wrapperEpoch = -1, wrapper;
 const appWrapper = async (since) => {
@@ -127,7 +162,8 @@ cp.show = async (target, state) => {
     root ??= createRoot(document.getElementById("root"), { onUncaughtError: fail, onRecoverableError: fail });
     if (target.fresh) mountKey++;
     const Wrapper = await appWrapper(since);
-    flushSync(() => root.render(createElement(Wrapper, null, createElement(Component, { ...reviveProps(target.props), key: mountKey }))));
+    const Box = await parentBox(target, since);
+    flushSync(() => root.render(createElement(Wrapper, null, createElement(Box, null, createElement(Component, { ...reviveProps(target.props), key: mountKey })))));
     await settled();
   } catch (error) {
     cp.errors.push(...(await explain(error, since)));

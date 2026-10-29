@@ -139,12 +139,16 @@ function memberRoot(n: any): string | undefined {
   return n.type === "JSXMemberExpression" ? memberRoot(n.object) : n.type === "JSXIdentifier" ? n.name : undefined;
 }
 
-/** Source of a module whose default export nests `children` inside the layout's wrappers. */
-export function wrapperModule(wrappers: Wrapper[]): string {
+/**
+ * Source of a module whose default export nests `children` inside `wrappers`. With `markInnermost`, the innermost
+ * element gets `data-cp-box`, which the capture uses as the box the component sits in.
+ */
+export function wrapperModule(wrappers: Wrapper[], { markInnermost = false } = {}): string {
   const imports: string[] = [];
   const exprs: string[] = [];
   wrappers.forEach((w, i) => {
-    if (w.kind === "host") return exprs.push(`h(${JSON.stringify(w.tag)}, ${JSON.stringify(w.props)}`);
+    const props = markInnermost && i === wrappers.length - 1 ? { ...w.props, "data-cp-box": "" } : w.props;
+    if (w.kind === "host") return exprs.push(`h(${JSON.stringify(w.tag)}, ${JSON.stringify(props)}`);
     const local = `W${i}`;
     const source = JSON.stringify(w.source);
     imports.push(
@@ -152,7 +156,7 @@ export function wrapperModule(wrappers: Wrapper[]): string {
       : w.importName === "*" ? `import * as ${local} from ${source};`
       : `import { ${w.importName} as ${local} } from ${source};`,
     );
-    exprs.push(`h(${local}${w.member ? "." + w.member : ""}, ${JSON.stringify(w.props)}`);
+    exprs.push(`h(${local}${w.member ? "." + w.member : ""}, ${JSON.stringify(props)}`);
   });
   const tree = exprs.length ? exprs.join(", ") + ", children" + ")".repeat(exprs.length) : "children";
   return `import { createElement as h } from "react";

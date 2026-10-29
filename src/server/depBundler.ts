@@ -15,6 +15,17 @@ const EMPTY = "\0node-builtin-empty.cjs";
 /** Node built-ins have no browser equivalent; packages that reach them get an empty module, as bundlers do. */
 const NODE_BUILTINS = new Set(builtinModules.flatMap((m) => [m, `node:${m}`]));
 const ownRequire = createRequire(import.meta.url);
+/**
+ * Next's app router runs on the React canary vendored inside `next` (with `cache`, `use`), not on the
+ * project's `react`. Previews of such projects resolve React the same way, so the same APIs exist.
+ */
+function vendoredReact(root: string): Record<string, string> | undefined {
+  const compiled = path.join(root, "node_modules", "next", "dist", "compiled");
+  const hasAppDir = ["app", "src/app"].some((d) => existsSync(path.join(root, d)));
+  if (!hasAppDir || !existsSync(path.join(compiled, "react", "index.js")) || !existsSync(path.join(compiled, "react-dom", "index.js"))) return undefined;
+  return { react: path.join(compiled, "react"), "react-dom": path.join(compiled, "react-dom") };
+}
+
 /** Packages the preview runtime itself needs; resolved from this extension, not the user's project. */
 const OWN: Record<string, string> = { "react-refresh/runtime": ownRequire.resolve("react-refresh/runtime") };
 const IDENT = /^[A-Za-z_$][\w$]*$/;
@@ -41,7 +52,11 @@ export class DepBundler {
     moduleType: true,
   });
 
+  /** Package aliases that mirror how the app's own bundler resolves them (vendored React in Next app router). */
+  private aliases: Record<string, string>;
+
   constructor(private root: string) {
+    this.aliases = vendoredReact(root) ?? {};
     this.cacheDir = path.join(root, "node_modules", ".component-preview", "deps");
     // Temp folders left by a process that died mid-write.
     try {
@@ -104,7 +119,7 @@ export class DepBundler {
 
   /** Same packages, same lockfile, same bundler: the same output. */
   private cacheKey(specs: string[]): string {
-    const hash = createHash("sha1").update(`${BUNDLER_VERSION}|${DepBundler.rolldownVersion}|${specs.join(",")}`);
+    const hash = createHash("sha1").update(`${BUNDLER_VERSION}|${DepBundler.rolldownVersion}|${JSON.stringify(this.aliases)}|${specs.join(",")}`);
     for (const name of LOCKFILES) {
       const file = path.join(this.root, name);
       if (!existsSync(file)) continue;
@@ -125,7 +140,7 @@ export class DepBundler {
       onLog: (level, log, defaultHandler) => {
         if (log.code !== "MODULE_LEVEL_DIRECTIVE" && log.code !== "EMPTY_BUNDLE") defaultHandler(level, log);
       },
-      resolve: { alias: OWN },
+      resolve: { alias: { ...this.aliases, ...OWN } },
       transform: { define: { "process.env.NODE_ENV": '"development"' } },
       plugins: [
         {
@@ -146,6 +161,15 @@ export class DepBundler {
     this.generation++;
   }
 
+  /** The file an aliased specifier (e.g. `react/jsx-dev-runtime` under a vendored React) resolves to. */
+  private aliased(spec: string): string | undefined {
+    for (const [name, dir] of Object.entries(this.aliases)) {
+      if (spec === name) return this.resolver.resolveFileSync(path.join(dir, "package.json"), dir).path ?? path.join(dir, "index.js");
+      if (spec.startsWith(name + "/")) return this.resolver.resolveFileSync(path.join(dir, "package.json"), path.join(dir, spec.slice(name.length + 1))).path;
+    }
+    return undefined;
+  }
+
   /**
    * Re-exports a package so CommonJS packages (like React) expose their named exports.
    * ESM vs CommonJS is decided from the file the bundler will actually use (packages like MUI ship ESM at
@@ -153,7 +177,7 @@ export class DepBundler {
    */
   private async facade(spec: string): Promise<string> {
     const id = JSON.stringify(spec);
-    const file = OWN[spec] ?? this.resolver.resolveFileSync(path.join(this.root, "index.js"), spec).path;
+    const file = OWN[spec] ?? this.aliased(spec) ?? this.resolver.resolveFileSync(path.join(this.root, "index.js"), spec).path;
     if (!file) throw new Error(`Cannot resolve package "${spec}" from ${this.root}`);
     await init;
     const [, exports, , hasModuleSyntax] = parse(readFileSync(file, "utf8"));

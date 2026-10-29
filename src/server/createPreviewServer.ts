@@ -13,7 +13,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
 import { publicEnv } from "../project/publicEnv.js";
-import { decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
+import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
+import type { Wrapper } from "../project/appContext.js";
 
 export type PreviewServerOptions = {
   root: string;
@@ -44,7 +45,7 @@ export type PreviewServer = {
    * Makes sure every package `file` needs is bundled, and returns the bundle generation. A page loaded
    * under an older generation must be reloaded before showing `file`, or it would mix two React copies.
    */
-  prepare(file: string): Promise<{ generation: number; cached: boolean }>;
+  prepare(file: string, context?: { file: string; wrappers: Wrapper[] }): Promise<{ generation: number; cached: boolean }>;
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
   updateBuffer(file: string, text: string | undefined): Update;
   close(): Promise<void>;
@@ -96,7 +97,11 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const wrapperFile = (entry: string | undefined) =>
     entry ? entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
 
-  async function prepare(file: string): Promise<{ generation: number; cached: boolean }> {
+  /** Where a generated call-site context "lives", so its imports resolve like the usage file's. */
+  const contextFile = (usageFile: string) => usageFile.replace(/\.[^.]+$/, ".preview-context.tsx");
+
+  async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }): Promise<{ generation: number; cached: boolean }> {
+    if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true }));
     (file.endsWith(".vue") ? ["vue"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"]).forEach((spec) => deps.add(spec));
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
@@ -167,6 +172,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const app = appContext();
         const globalCssUrls = app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`);
         return send(res, 200, "text/html", previewHtml(target, { state, env: publicEnv(options.root), globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
+      }
+      if (url.pathname === "/@context") {
+        const { file, wrappers } = decodeContext(url.searchParams.get("c") ?? "");
+        return send(res, 200, "text/javascript", await graph.loadVirtual(contextFile(file), wrapperModule(wrappers, { markInnermost: true })));
       }
       if (url.pathname === "/@wrapper") {
         const app = appContext();

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { compareCaptures, type DiffResult } from "./compareCaptures.js";
-import { chromium, type Browser, type CDPSession, type Page } from "playwright-core";
+import { chromium, type Browser, type CDPSession, type Locator, type Page } from "playwright-core";
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
-import type { PreviewTarget } from "../server/page.js";
+import type { Frame, PreviewTarget } from "../server/page.js";
 import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
 import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
@@ -12,7 +12,23 @@ export type RenderRequest = PreviewTarget & {
   viewport?: { width: number; height: number };
   /** Render with the props of a real usage, by its id from `listUsages` (e.g. `app/page.tsx:9`). */
   usage?: string;
+  /** With `usage`: render inside the call site's JSX ancestors, so the parent's size, layout and background apply. */
+  inContext?: boolean;
+  /** Render inside a stand-in parent box of this size and background. */
+  frame?: Frame;
+  /** Steps run on the rendered component before capture, to reach a state (open, filled, hovered). */
+  actions?: Action[];
+  /** Storage seeded before the component mounts (logged-in, feature flags); cleared again afterwards. */
+  storage?: { local?: Record<string, string>; session?: Record<string, string> };
 };
+
+/** One step: a verb with its target (`{ role, name }`, `{ text }`, `{ label }`, `{ placeholder }`, `{ testId }` or `{ selector }`). */
+export type Action = {
+  click?: Target; dblclick?: Target; hover?: Target; fill?: Target; type?: Target; check?: Target; uncheck?: Target; select?: Target; focus?: Target;
+  press?: string; wait?: number; scroll?: { y?: number; x?: number };
+  value?: string;
+};
+export type Target = { role?: string; name?: string; text?: string; label?: string; placeholder?: string; testId?: string; selector?: string; exact?: boolean };
 
 export type RenderResult = {
   /** PNG cropped to the rendered component. */
@@ -33,6 +49,10 @@ export type RenderResult = {
   reloaded: boolean;
   /** Where the props came from: given by the caller, a real usage, or samples made from the TypeScript type. */
   propsSource: "given" | "usage" | "sample" | "none";
+  /** The ancestors (tag or component name) the component was rendered inside, outermost first. */
+  contextApplied?: string[];
+  /** How many of the requested actions ran before capture (all of them unless one failed). */
+  actionsApplied?: number;
 };
 
 export type Renderer = {
@@ -89,7 +109,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   /** Navigates a page to `target`; the server bundles the packages it needs before responding. */
   async function load(page: Page, target: PreviewTarget) {
-    const { generation } = await server.prepare(target.file);
+    const { generation } = await server.prepare(target.file, prepareContext(target));
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready, null, { timeout: 15000 });
     await page.evaluate(() => (window as any).__CP__.ready);
@@ -149,12 +169,20 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     },
   };
 
-  async function render({ viewport = { width: 1280, height: 800 }, usage, ...rest }: RenderRequest, resolved?: Usage): Promise<RenderResult> {
+  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, ...rest }: RenderRequest, resolved?: Usage): Promise<RenderResult> {
       const started = performance.now();
       if (![viewport.width, viewport.height].every((v) => Number.isInteger(v) && v > 0 && v <= 8192)) throw new Error(`Invalid viewport "${viewport.width}x${viewport.height}"`);
       rest.file = path.resolve(options.root, rest.file);
       const { props, propsSource, unresolved } = await resolveProps(rest, usage, resolved);
-      const target = { fresh: true, ...rest, props };
+      const target: PreviewTarget = { fresh: true, ...rest, props, frame };
+      if (inContext && usage) {
+        const found = resolved ?? (await usages.list(rest.file, rest.exportName)).find((u) => u.id === usage);
+        if (found?.context?.length) {
+          target.context = found.context;
+          target.contextFile = path.resolve(options.root, found.id.split(":")[0]);
+        }
+      }
+      const contextApplied = target.context?.map((w) => (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
       const key = `${rest.file.endsWith(".vue") ? "vue" : "react"}:${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
       const isNew = !warm;
@@ -163,9 +191,17 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const errors = pageErrors.get(page)!;
       errors.length = 0;
       let reloaded = false;
+      // Storage is per render: cleared, then seeded, so one render's state never leaks into the next.
+      await page.evaluate((s) => {
+        localStorage.clear();
+        sessionStorage.clear();
+        for (const [k, v] of Object.entries(s?.local ?? {})) localStorage.setItem(k, v);
+        for (const [k, v] of Object.entries(s?.session ?? {})) sessionStorage.setItem(k, v);
+      }, storage ?? null);
+      if (isNew && storage) await page.evaluate((t) => (window as any).__CP__.show(t), target); // mounted before the seed: show again
       if (!isNew) {
         const state = server.syncDisk();
-        const { generation } = await server.prepare(target.file);
+        const { generation } = await server.prepare(target.file, prepareContext(target));
         if (generation !== generations.get(page)) {
           reloaded = true;
           await load(page, target);
@@ -192,6 +228,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         }
       }
 
+      const actionsApplied = await runActions(page, actions, errors);
+
       const warnings: string[] = server.warnings(rest.file);
       if (unresolved.length) warnings.push("Runtime usage inputs were not evaluated: " + unresolved.join(", "));
       if (propsSource === "sample") warnings.push("Sample props were generated from types; these are not real application data.");
@@ -208,7 +246,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       const { box, inPage, runtimeWarnings } = await page.evaluate(() => {
-        const r = document.getElementById("root")!.getBoundingClientRect();
+        // The box the component sits in (a frame or the call site's innermost ancestor), else the whole root.
+        const r = (document.querySelector("[data-cp-box]") ?? document.getElementById("root")!).getBoundingClientRect();
         return {
           box: { x: r.x, y: r.y, width: Math.max(1, r.width), height: Math.max(1, r.height) },
           inPage: (window as any).__CP__.errors as string[],
@@ -220,7 +259,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const allErrors = unique([...inPage, ...errors]);
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
       const result: RenderResult = {
-        png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource,
+        png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({ file: rest.file, exportName: rest.exportName ?? "default", props }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,
       };
@@ -228,6 +268,62 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       return result;
   }
 }
+
+/** Runs the requested steps inside #root; stops at the first failure and records it as a readable error. */
+async function runActions(page: Page, actions: Action[], errors: string[]): Promise<number> {
+  const root = page.locator("#root");
+  const TIMEOUT = 2000;
+  let applied = 0;
+  for (const [index, action] of actions.entries()) {
+    const label = `action ${index + 1} (${describeAction(action)})`;
+    try {
+      const verb = (["click", "dblclick", "hover", "fill", "type", "check", "uncheck", "select", "focus"] as const).find((v) => action[v]);
+      if (verb) {
+        const target = locate(root, action[verb]!);
+        if (verb === "fill") await target.fill(action.value ?? "", { timeout: TIMEOUT });
+        else if (verb === "type") await target.pressSequentially(action.value ?? "", { timeout: TIMEOUT });
+        else if (verb === "select") await target.selectOption(action.value ?? "", { timeout: TIMEOUT });
+        else if (verb === "check") await target.check({ timeout: TIMEOUT });
+        else if (verb === "uncheck") await target.uncheck({ timeout: TIMEOUT });
+        else if (verb === "focus") await target.focus({ timeout: TIMEOUT });
+        else if (verb === "hover") await target.hover({ timeout: TIMEOUT });
+        else if (verb === "dblclick") await target.dblclick({ timeout: TIMEOUT });
+        else await target.click({ timeout: TIMEOUT });
+      } else if (action.press) await page.keyboard.press(action.press);
+      else if (action.scroll) await page.evaluate((s) => window.scrollTo({ left: s.x ?? 0, top: s.y ?? 0 }), action.scroll);
+      else if (action.wait) await page.waitForTimeout(Math.min(action.wait, 5000));
+      else throw new Error("unknown action");
+      applied++;
+    } catch (error) {
+      const message = String((error as Error).message ?? error).split("\n")[0];
+      errors.push(/timeout|not found|no element/i.test(message) ? `${label}: target not found within ${TIMEOUT} ms` : `${label}: ${message}`);
+      break;
+    }
+  }
+  return applied;
+}
+
+function locate(root: Locator, t: Target): Locator {
+  if (t.selector) return root.locator(t.selector).first();
+  if (t.testId) return root.getByTestId(t.testId).first();
+  if (t.label) return root.getByLabel(t.label, { exact: t.exact }).first();
+  if (t.placeholder) return root.getByPlaceholder(t.placeholder, { exact: t.exact }).first();
+  if (t.role) return root.getByRole(t.role as any, { name: t.name, exact: t.exact }).first();
+  if (t.text) return root.getByText(t.text, { exact: t.exact }).first();
+  if (t.name) return root.getByText(t.name, { exact: t.exact }).first();
+  throw new Error("target needs role, text, label, placeholder, testId or selector");
+}
+
+function describeAction(a: Action): string {
+  const verb = Object.keys(a).find((k) => !["value", "exact"].includes(k)) ?? "?";
+  const t = (a as any)[verb];
+  const what = typeof t === "object" && t ? JSON.stringify(t.name ?? t.text ?? t.label ?? t.placeholder ?? t.testId ?? t.selector ?? t) : JSON.stringify(t);
+  return `${verb} ${what}${a.value !== undefined ? " = " + JSON.stringify(a.value) : ""}`;
+}
+
+/** What `prepare` must bundle for a target's call-site context, if any. */
+const prepareContext = (target: PreviewTarget) =>
+  target.context?.length && target.contextFile ? { file: target.contextFile, wrappers: target.context } : undefined;
 
 const FREEZE_MOTION = `*, *::before, *::after {
   transition-duration: 0s !important; transition-delay: 0s !important;

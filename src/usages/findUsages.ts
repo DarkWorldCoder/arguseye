@@ -1,3 +1,4 @@
+import type { Wrapper } from "../project/appContext.js";
 import { createUsageIndex } from "./createUsageIndex.js";
 
 export type Usage = {
@@ -7,6 +8,8 @@ export type Usage = {
   props: Record<string, unknown>;
   /** Props that depend on runtime values, as written, e.g. `user={user}` or `{...rest}`. */
   unresolved: string[];
+  /** The JSX ancestors the call site sits in (outermost first): the box the component is rendered into. */
+  context?: Wrapper[];
 };
 
 /** Finds literal-prop variants through imports and local re-exports. Renderers keep an index across calls. */

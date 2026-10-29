@@ -17,6 +17,7 @@ const HELP = `component-preview: inspect React and Vue components and verify UI 
 
   component-preview shot FILE [--export NAME] [--usage ID] [--props JSON] [--viewport WxH] [--out FILE.png] [--root DIR]
       Render once: writes a PNG and prints the accessibility snapshot and errors
+      --in-context renders inside the usage's parent elements; --frame WxH[:background] inside a stand-in box
 
   component-preview shot FILE [--capture-dir DIR] [--json] [--output image|summary|both]
       Save an immutable baseline and optional PNG; JSON reports metadata without image bytes
@@ -40,6 +41,8 @@ const { positionals, values } = parseArgs({
     viewport: { type: "string" },
     out: { type: "string" },
     port: { type: "string" },
+    "in-context": { type: "boolean" },
+    frame: { type: "string" },
     json: { type: "boolean" },
     output: { type: "string", default: "both" },
     "capture-dir": { type: "string" },
@@ -88,6 +91,8 @@ if (values.help || !command) {
       const result = await renderer.render({
         ...target,
         usage: values.usage,
+        inContext: values["in-context"],
+        frame: values.frame ? (([size, background]) => { const [width, height] = size.split("x").map(Number); return { width, height, background }; })(values.frame.split(":")) : undefined,
         props: values.props ? JSON.parse(values.props) : undefined,
         viewport: { width, height },
       });

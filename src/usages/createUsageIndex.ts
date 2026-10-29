@@ -4,9 +4,11 @@ import path from "node:path";
 import { parseSync, Visitor } from "oxc-parser";
 import { createResolver } from "../server/resolver.js";
 import { literal, type Usage } from "./findUsages.js";
+import { jsxContext, type JsxSpan } from "./jsxContext.js";
+import type { Wrapper } from "../project/appContext.js";
 
 type Import = { source: string; name: string; local: string };
-type Call = { local: string; offset: number; props: Record<string, unknown>; unresolved: string[] };
+type Call = { local: string; offset: number; props: Record<string, unknown>; unresolved: string[]; context?: Wrapper[] };
 type Parsed = { code: string; imports: Import[]; exports: Array<{ name: string; local: string; source?: string }>; calls: Call[] };
 const SKIP = new Set(["node_modules", ".git", ".next", "dist", "build", "out", "coverage", ".turbo", ".cache", ".vscode-test", "dist-test"]);
 const SOURCE = /\.(?:[jt]sx?|vue)$/;
@@ -74,12 +76,12 @@ export function createUsageIndex(root: string, options: { readSource?: (file: st
           const prefix = parsed.code.slice(0, call.offset);
           const line = prefix.split("\n").length;
           const column = call.offset - prefix.lastIndexOf("\n");
-          result.push({ id: `${path.relative(root, caller)}:${line}`, file: caller, line, column, props: call.props, unresolved: call.unresolved });
+          result.push({ id: `${path.relative(root, caller)}:${line}`, file: caller, line, column, props: call.props, unresolved: call.unresolved, context: call.context });
         }
       }
       const counts = new Map<string, number>();
       for (const r of result) counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
-      return result.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column).map(({ id, column, props, unresolved }) => ({ id: counts.get(id)! > 1 ? `${id}:${column}` : id, props, unresolved }));
+      return result.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column).map(({ id, column, props, unresolved, context }) => ({ id: counts.get(id)! > 1 ? `${id}:${column}` : id, props, unresolved, context }));
     },
   };
 }
@@ -100,7 +102,9 @@ function parseModule(file: string, code: string, root: string): Parsed {
       for (const spec of node.specifiers) result.exports.push({ name: spec.exported.name ?? spec.exported.value, local: spec.local.name ?? spec.local.value, source: node.source?.value });
     }
   }
+  const elements: JsxSpan[] = [];
   new Visitor({ JSXElement(node: any) {
+    elements.push({ node, start: node.start, end: node.end });
     const opening = node.openingElement;
     if (opening.name.type !== "JSXIdentifier") return;
     const props: Record<string, unknown> = {}, unresolved: string[] = [];
@@ -115,6 +119,7 @@ function parseModule(file: string, code: string, root: string): Parsed {
     else if (children.length) unresolved.push("children=" + code.slice(children[0].start, children.at(-1).end));
     result.calls.push({ local: opening.name.name, offset: opening.start, props, unresolved });
   } }).visit(program);
+  for (const call of result.calls) call.context = jsxContext(call.offset, elements, result.imports, code);
   return result;
 }
 

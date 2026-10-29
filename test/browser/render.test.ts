@@ -4,6 +4,8 @@ import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js
 
 const root = path.resolve("test/fixtures/react-app");
 const card = path.join(root, "components/ProductCard.tsx");
+/** Usages without their call-site context, which other tests cover. */
+const stripContext = (usages: Array<{ id: string; props: unknown; unresolved: unknown }>) => usages.map(({ id, props, unresolved }) => ({ id, props, unresolved }));
 let renderer: Renderer;
 beforeAll(async () => { renderer = await createRenderer({ root }); });
 afterAll(async () => renderer?.close());
@@ -43,7 +45,8 @@ describe("headless render (what an agent gets back)", () => {
   it("finds where a component is used and the real props each usage passes", async () => {
     const usages = await renderer.listUsages(card, "ProductCard");
 
-    expect(usages).toEqual([
+    expect(stripContext(usages)).toEqual([
+      { id: "app/deals/page.tsx:7", props: { title: "Deal of the day", price: 49, onSale: true }, unresolved: [] },
       {
         id: "app/page.tsx:9",
         props: { title: "Wireless Headphones", price: 99, tags: ["audio", "bluetooth"], onSale: true },
@@ -55,8 +58,8 @@ describe("headless render (what an agent gets back)", () => {
   });
 
   it("finds usages that import the component through a barrel (index.ts re-exports, renamed or star)", async () => {
-    expect((await renderer.listUsages(card, "ProductCard")).map((u) => u.id)).toEqual(["app/page.tsx:9", "app/page.tsx:10", "app/shop/page.tsx:7"]);
-    expect(await renderer.listUsages(path.join(root, "components/Alert.tsx"), "Alert")).toEqual([
+    expect((await renderer.listUsages(card, "ProductCard")).map((u) => u.id)).toEqual(["app/deals/page.tsx:7", "app/page.tsx:9", "app/page.tsx:10", "app/shop/page.tsx:7"]);
+    expect(stripContext(await renderer.listUsages(path.join(root, "components/Alert.tsx"), "Alert"))).toEqual([
       { id: "app/shop/page.tsx:6", props: { title: "Sale ends soon", tone: "danger" }, unresolved: [] },
     ]);
     expect((await renderer.listUsages(path.join(root, "components/Greet.tsx"), "Greet")).map((u) => u.id)).toEqual(["app/shop/page.tsx:8"]);
@@ -104,5 +107,11 @@ describe("headless render (what an agent gets back)", () => {
     } finally {
       await fresh.close();
     }
+  });
+
+  it("renders components that use canary React APIs (cache) in an app-router project", async () => {
+    const result = await renderer.render({ file: path.join(root, "components/Cached.tsx"), exportName: "Cached" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("cached 7");
   });
 });

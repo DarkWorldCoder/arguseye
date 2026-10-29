@@ -79,13 +79,17 @@ export async function createMcpServer(options: { root: string }) {
       inputSchema: {
         ...target,
         usage: z.string().optional().describe('Usage id from list_usages, e.g. "app/page.tsx:9"'),
+        in_context: z.boolean().optional().describe("With usage: render inside the call site's JSX ancestors, so the parent's size, layout and background apply (the capture is the parent box)"),
+        frame: z.object({ width: z.number(), height: z.number(), background: z.string().optional(), padding: z.number().optional() }).optional().describe("Render inside a stand-in parent box of this size and background"),
+        actions: z.array(z.record(z.string(), z.unknown())).optional().describe('Steps before capture, e.g. [{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"},{"hover":{"text":"Save"}},{"press":"Enter"},{"wait":300}]. Targets: role+name, text, label, placeholder, testId, selector.'),
+        storage: z.object({ local: z.record(z.string(), z.string()).optional(), session: z.record(z.string(), z.string()).optional() }).optional().describe("localStorage/sessionStorage seeded before mount (auth tokens, flags); cleared after"),
         props: z.record(z.string(), z.unknown()).optional().describe("Props to render with (merged over the usage's props)"),
         ...look,
       },
     },
     async (args) => {
       try {
-        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, props: args.props, viewport: viewport(args.viewport) };
+        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, props: args.props, viewport: viewport(args.viewport) };
         const { result, content } = await renderContent(request, args.output);
         return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
       } catch (error) {
