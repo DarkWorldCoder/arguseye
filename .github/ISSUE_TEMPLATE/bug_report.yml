@@ -1,0 +1,30 @@
+name: Bug report
+description: A render that is wrong, an error, or a crash
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked for, what you got, and what you expected. Screenshots or the PNG from the render help.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Render result
+      description: The `errors[]`, `warnings[]` and `timings` from the tool result or CLI output.
+      render: text
+  - type: textarea
+    id: component
+    attributes:
+      label: Component and usage
+      description: The component file (or a reduced version) and how the app uses it (`list_usages` output helps).
+      render: tsx
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "arguseye 0.0.1 · node 22.x · next 14.2 / react 18.3 · OS"
+    validations:
+      required: true

@@ -1,0 +1,15 @@
+name: Feature request
+description: Something an agent or a developer needs to see
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need to see, and why
+      description: Describe the situation (a state, a framework setup, a kind of output) and what the agent or you would do with it.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
