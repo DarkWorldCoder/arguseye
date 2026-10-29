@@ -1,0 +1,49 @@
+{
+  "snapshot": "- article:\n  - heading \"Pro\" [level=3]\n  - text: Popular\n  - paragraph: $19 /month\n  - list:\n    - listitem: ✓ Unlimited projects\n    - listitem: ✓ Priority support\n    - listitem: ✓ Custom domains\n  - button \"Save 20% on Pro\"",
+  "errors": [],
+  "ms": 104,
+  "reloaded": false,
+  "propsSource": "usage",
+  "layoutsApplied": [
+    "app/layout.tsx",
+    "app/(marketing)/layout.tsx"
+  ],
+  "timings": {
+    "prepare": 3,
+    "show": 54,
+    "settle": 4,
+    "capture": 45
+  },
+  "target": {
+    "file": "film/demo-app/components/PricingCard.tsx",
+    "exportName": "PricingCard",
+    "props": {
+      "plan": "Pro",
+      "price": 19,
+      "features": [
+        "Unlimited projects",
+        "Priority support",
+        "Custom domains"
+      ],
+      "highlighted": true
+    }
+  },
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "sourceRevision": "ca1d967e606cdc4fa84875be15873e3b3295a44c7166ada573d5147130eac476",
+  "unresolved": [],
+  "warnings": [],
+  "complete": true,
+  "captureId": "0c332dcb-b829-4b85-959b-916657f1d016",
+  "changes": {
+    "status": "changed",
+    "changedPercent": 13.277709944376612,
+    "changedPixels": 29361,
+    "snapshotChanged": true,
+    "snapshotDiff": "- - button \"Choose Pro, save 20% yearly\"\n+ - button \"Save 20% on Pro\"",
+    "newErrors": [],
+    "resolvedErrors": []
+  }
+}

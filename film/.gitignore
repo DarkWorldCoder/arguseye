@@ -1,0 +1,6 @@
+renders/
+.hyperframes/
+.thumbnails/
+.waveform-cache/
+demo-app/node_modules
+demo-vue/node_modules

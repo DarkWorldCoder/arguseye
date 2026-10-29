@@ -1,0 +1,37 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; pointer-events: none; }
+    #cap-band { position: absolute; left: 0; right: 0; bottom: 58px; height: 80px; overflow: visible; }
+    .cap { position: absolute; left: 0; right: 0; top: 0; text-align: center; opacity: 0; visibility: hidden; }
+    .cap span {
+      display: inline-block; font-family: "Inter", sans-serif; font-weight: 600; font-size: 42px; line-height: 1.25;
+      letter-spacing: -0.01em; color: #f8fafc; background: rgba(15, 23, 42, 0.82); padding: 10px 26px 12px; border-radius: 14px;
+    }
+  </style>
+  <div id="root" data-composition-id="captions" data-width="1920" data-height="1080">
+    <div id="cap-band" data-layout-allow-caption-zone></div>
+  </div>
+  <script>
+    (function () {
+      // Phrases from the ElevenLabs Scribe word timings (assets/audio/words2.json) + the voice's 0.40 s offset.
+      const CAPS = [["Your coding agent", 0.4, 1.34], ["just changed one button.", 1.4, 3.1], ["It read the code back,", 3.12, 4.19], ["and said: done.", 4.19, 5.82], ["But on a phone,", 5.8, 6.94], ["that button just broke.", 7.0, 8.7], ["Agents write UI blind.", 8.84, 10.78], ["Arguseye gives them eyes.", 10.8, 12.94], ["Here's what happens", 12.96, 13.74], ["when your agent calls it.", 13.76, 15.26], ["Arguseye reads your project.", 15.32, 17.26], ["It finds the component,", 17.28, 18.54], ["every place it's used,", 18.56, 19.82], ["and the props your code passes it.", 19.84, 21.98], ["Then your layouts, theme,", 22.0, 23.74], ["global CSS, fonts, and images.", 23.84, 26.54], ["Your own packages are bundled once,", 26.8, 28.86], ["and Chromium draws the result.", 28.88, 30.62], ["No dev server.", 30.8, 31.9], ["Back come a screenshot,", 32.08, 33.5], ["the accessibility tree,", 33.48, 34.86], ["and what changed.", 34.88, 36.22], ["So the agent sees the break,", 36.2, 37.9], ["fixes it, and checks again.", 37.96, 39.42], ["Any component:", 39.84, 40.86], ["React, Next, or Vue.", 41.04, 42.66], ["And in VS Code,", 42.8, 43.98], ["it updates as you type.", 44.0, 45.34], ["It works with Claude Code,", 45.68, 47.1], ["Codex, Cursor,", 47.12, 48.38], ["and any MCP client.", 48.4, 49.82], ["Arguseye. Open source.", 50.24, 52.14], ["One command to install.", 52.48, 54.06]];
+      const band = document.getElementById("cap-band");
+      const tl = gsap.timeline({ paused: true });
+      CAPS.forEach(([text, start, end], i) => {
+        const el = document.createElement("div");
+        el.className = "cap";
+        el.id = "cap-" + i;
+        const span = document.createElement("span");
+        span.textContent = text;
+        el.appendChild(span);
+        band.appendChild(el);
+        tl.set(el, { visibility: "visible" }, start - 0.06);
+        tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.1, ease: "power2.out", immediateRender: false }, start - 0.06);
+        tl.to(el, { opacity: 0, duration: 0.1, ease: "power2.in" }, end - 0.1);
+        tl.set(el, { opacity: 0, visibility: "hidden" }, end);
+      });
+      tl.set({}, {}, 57.5);
+      window.__timelines["captions"] = tl;
+    })();
+  </script>
+</template>

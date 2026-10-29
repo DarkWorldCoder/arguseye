@@ -1,0 +1,609 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #fafbfc; font-family: "Inter", sans-serif; color: #25282d; }
+    .layer { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+    .cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+    .mono { font-family: "JetBrains Mono", monospace; }
+    .card { position: absolute; background: #ffffff; border: 1px solid #e4e7ec; border-radius: 20px; box-shadow: 0 30px 80px rgba(15, 23, 42, 0.12); }
+    .hide { visibility: hidden; opacity: 0; }
+    .t-tag { color: #4579c1; } .t-key { color: #6c70c9; } .t-str { color: #367760; } .t-pun { color: #8a909b; }
+
+    /* ---------- world A: the editor and the phone ---------- */
+    #f-wa { z-index: 2; }
+    #f-editor { left: 140px; top: 46px; width: 1120px; height: 884px; overflow: hidden; }
+    .ed-head { height: 58px; border-bottom: 1px solid #e4e7ec; background: #f4f6f9; display: flex; align-items: center; padding: 0 22px; gap: 10px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; background: #d6dae1; }
+    .ed-tab { margin-left: 18px; font-size: 26px; color: #25282d; font-weight: 500; }
+    .ed-path { margin-left: auto; font-size: 24px; color: #626975; }
+    #f-code { position: absolute; left: 0; top: 76px; width: 100%; font-size: 30px; line-height: 42px; }
+    .ln { display: flex; height: 42px; white-space: pre; }
+    .ln .no { width: 96px; text-align: right; padding-right: 26px; color: #848b97; flex: none; }
+    .caret { display: inline-block; width: 3px; height: 34px; margin: 0 -1.5px; vertical-align: -6px; background: #25282d; }
+    #f-term { position: absolute; left: 0; right: 0; bottom: 0; height: 122px; border-top: 1px solid #e4e7ec; background: #f9fafb; padding: 12px 34px; font-size: 28px; line-height: 48px; }
+    #f-term .p { color: #6c70c9; }
+    #f-done { display: inline-block; margin-left: 16px; padding: 0 16px; border-radius: 10px; background: #e7f2ed; color: #367760; font-weight: 700; line-height: 42px; }
+    #f-term2 { color: #367760; }
+    #f-phone { position: absolute; left: 1340px; top: 62px; width: 457px; height: 956px; }
+    #f-bezel { position: absolute; inset: 0; border-radius: 64px; background: #11151c; box-shadow: 0 40px 90px rgba(15, 23, 42, 0.28); }
+    #f-screen { position: absolute; left: 14px; top: 14px; width: 429px; height: 928px; border-radius: 50px; overflow: hidden; background: #f4f5f8; }
+    #f-r1wrap { position: absolute; left: 0; top: 30px; width: 390px; transform: scale(1.1); transform-origin: 0 0; }
+    #f-ring { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; pointer-events: none; }
+
+    /* ---------- blind ---------- */
+    #f-blind { z-index: 4; background: #0f172a; }
+    #f-bl-label { position: absolute; left: 200px; top: 340px; font-size: 34px; color: #94a3b8; }
+    #f-bl-code { position: absolute; left: 200px; top: 410px; font-size: 44px; line-height: 70px; color: #f8fafc; white-space: pre; }
+    #f-bl-code .no { color: #475569; display: inline-block; width: 110px; }
+    #f-lid { position: absolute; left: 1240px; top: 160px; width: 380px; height: 760px; border: 4px dashed #475569; border-radius: 44px; }
+
+    /* ---------- the mark ---------- */
+    #f-mark { z-index: 5; }
+    #f-tile { position: absolute; left: 486px; top: 390px; width: 300px; height: 300px; }
+    #f-tile svg { width: 300px; height: 300px; overflow: visible; }
+    .fb { transform-box: fill-box; transform-origin: center; }
+    #f-wm { position: absolute; left: 834px; top: 408px; font-size: 150px; line-height: 176px; font-weight: 700; letter-spacing: -0.035em; color: #f8fafc; }
+
+    /* ---------- world B: how it works ---------- */
+    #f-wb { z-index: 7; background: #fafbfc; }
+    #f-call { left: 80px; top: 60px; width: 900px; height: 252px; padding: 24px 34px; font-size: 28px; line-height: 40px; white-space: pre; }
+    #f-call .k { color: #6c70c9; } #f-call .s { color: #367760; } #f-call .f { color: #25282d; font-weight: 700; }
+    #f-tree { left: 80px; top: 340px; width: 640px; height: 610px; padding: 18px 0; }
+    #f-tree .th { padding: 0 26px 6px; font-size: 26px; color: #626975; }
+    .row { position: relative; height: 38px; padding: 0 26px; font-size: 28px; line-height: 38px; white-space: nowrap; color: #626975; }
+    .row .v { color: #94a3b8; margin-left: 14px; position: relative; }
+    .row-hl { position: absolute; left: 10px; right: 10px; top: 1px; bottom: 1px; border-radius: 9px; background: #eff0fb; border: 2px solid #6c70c9; opacity: 0; }
+    .row span.n { position: relative; }
+    #f-scan { position: absolute; left: 0; right: 0; top: 52px; height: 38px; background: linear-gradient(90deg, rgba(108,112,201,0), rgba(108,112,201,0.18), rgba(108,112,201,0)); }
+    .uchip { position: absolute; left: 736px; height: 50px; padding: 0 18px; border-radius: 12px; background: #25282d; color: #f8fafc; font-size: 26px; line-height: 50px; white-space: nowrap; transform-origin: 0 50%; }
+    .uchip b { color: #c9cbf5; font-weight: 500; }
+    .flyer { position: absolute; height: 46px; padding: 0 16px; border-radius: 12px; background: #6c70c9; color: #fff; font-size: 26px; line-height: 46px; white-space: nowrap; transform-origin: 0 50%; }
+    #f-stage { position: absolute; left: 1136px; top: 236px; width: 507px; height: 700px; }
+    #f-stage-box { position: absolute; inset: 0; border-radius: 26px; background: #f4f5f8; overflow: hidden; }
+    #f-r2wrap { position: absolute; left: 0; top: 0; width: 390px; transform: scale(1.3); transform-origin: 0 0; }
+    .lframe { position: absolute; border: 3px solid #6c70c9; border-radius: 34px; }
+    .lframe .lab { position: absolute; left: 18px; top: -24px; height: 44px; padding: 0 14px; border-radius: 10px; background: #fafbfc; color: #4b4fa8; font-size: 28px; line-height: 44px; white-space: nowrap; }
+    #f-bundle { position: absolute; left: 1080px; top: 110px; width: 620px; height: 64px; border-radius: 14px; background: #25282d; color: #f8fafc; font-size: 28px; line-height: 64px; text-align: center; white-space: nowrap; }
+    #f-scanline { position: absolute; left: 1126px; top: 236px; width: 527px; height: 6px; border-radius: 3px; background: #6c70c9; box-shadow: 0 0 0 6px rgba(108,112,201,0.18); }
+    #f-shot-tab { position: absolute; left: 1136px; top: 184px; height: 46px; padding: 0 16px; border-radius: 10px; background: #6c70c9; color: #fff; font-size: 28px; line-height: 46px; white-space: nowrap; }
+    #f-nextdev { position: absolute; left: 1500px; top: 30px; height: 64px; padding: 0 24px; border-radius: 14px; background: #f4f6f9; border: 1px solid #e4e7ec; font-size: 30px; line-height: 62px; color: #25282d; white-space: nowrap; }
+    #f-strike { position: absolute; left: 16px; right: 16px; top: 30px; height: 4px; background: #25282d; transform-origin: 0 50%; }
+    #f-res { position: absolute; left: 960px; top: 96px; width: 880px; height: 800px; background: #0f172a; border-radius: 26px; box-shadow: 0 40px 90px rgba(15, 23, 42, 0.3); padding: 30px 44px; color: #e2e8f0; font-size: 28px; line-height: 42px; overflow: hidden; }
+    #f-res .h { color: #94a3b8; display: flex; justify-content: space-between; }
+    #f-res .key { margin-top: 20px; color: #fbbf24; }
+    #f-res .v { white-space: pre; }
+    #f-res .minus { color: #fca5a5; } #f-res .plus { color: #86efac; }
+    #f-png { margin-top: 6px; width: 560px; height: 150px; border-radius: 12px; overflow: hidden; background: #f4f5f8; position: relative; }
+    #f-png img { position: absolute; left: -24px; top: -486px; width: 468px; }
+
+    /* ---------- world M: any component ---------- */
+    #f-wmo { z-index: 8; background: #f4f5f8; }
+    #f-mframe { position: absolute; left: 460px; top: 150px; width: 1000px; height: 760px; border: 3px solid #6c70c9; border-radius: 30px; background: #f4f5f8; overflow: hidden; }
+    .mshot { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+    .mshot > div { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+    #f-fw { position: absolute; left: 460px; top: 80px; height: 54px; padding: 0 20px 0 16px; border-radius: 12px; background: #25282d; color: #fff; display: flex; align-items: center; gap: 12px; font-size: 28px; font-weight: 600; }
+    #f-fw-win { position: relative; height: 54px; width: 160px; overflow: hidden; }
+    #f-fw-in { position: absolute; left: 0; top: 0; width: 160px; }
+    .fw { height: 54px; display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+    .fw img { width: 30px; height: 30px; }
+
+    /* ---------- world E: the editor panel ---------- */
+    #f-we { z-index: 9; background: #f4f5f8; }
+    #f-vsw { position: absolute; left: 120px; top: 80px; width: 1680px; height: 860px; border-radius: 18px; overflow: hidden; background: #1e1e1e; box-shadow: 0 40px 100px rgba(15, 23, 42, 0.35); }
+    #f-vs-bar { height: 56px; background: #2b2b2b; display: flex; align-items: center; gap: 14px; padding: 0 22px; color: #cccccc; font-size: 26px; }
+    #f-vs-bar img { width: 30px; height: 30px; }
+    #f-vs-code { position: absolute; left: 0; top: 56px; width: 900px; bottom: 0; padding-top: 190px; font-size: 32px; line-height: 54px; color: #d4d4d4; }
+    #f-vs-code .ln { height: 54px; }
+    #f-vs-code .ln .no { color: #6e7681; }
+    #f-vs-code .t-tag { color: #569cd6; } #f-vs-code .t-key { color: #9cdcfe; } #f-vs-code .t-str { color: #ce9178; }
+    #f-vs-code .caret { background: #d4d4d4; }
+    #f-vs-pane { position: absolute; left: 900px; top: 56px; right: 0; bottom: 0; background: #f4f5f8; border-left: 1px solid #333; }
+    #f-vs-ptab { height: 54px; background: #252526; color: #cccccc; font-size: 26px; line-height: 54px; padding: 0 22px; }
+    #f-r3wrap { position: absolute; left: 107px; top: 40px; width: 390px; transform: scale(1.45); transform-origin: 0 0; }
+
+    /* ---------- world D: any agent, the end card ---------- */
+    #f-wd { z-index: 10; background: #fafbfc; }
+    #f-chips { position: absolute; left: 0; right: 0; top: 300px; display: flex; justify-content: center; gap: 16px; }
+    .chip { height: 64px; padding: 0 24px; border-radius: 14px; border: 1px solid #e4e7ec; background: #fff; font-size: 30px; line-height: 62px; color: #626975; font-weight: 500; white-space: nowrap; }
+    #f-cmd { position: absolute; left: 960px; top: 470px; height: 124px; border-radius: 26px; background: #25282d; color: #f8fafc; font-size: 50px; line-height: 124px; padding: 0 56px; white-space: nowrap; display: flex; }
+    #f-cmd .pfx { color: #8a909b; margin-right: 22px; }
+    #f-roll { position: relative; height: 124px; overflow: hidden; display: inline-block; }
+    #f-roll-in { display: block; position: relative; }
+    #f-roll-in div { height: 124px; color: #c9cbf5; }
+    #f-end-tile { position: absolute; left: 584px; top: 250px; width: 220px; height: 220px; }
+    #f-end-tile svg { width: 220px; height: 220px; overflow: visible; }
+    #f-end-wm { position: absolute; left: 842px; top: 280px; font-size: 128px; line-height: 160px; font-weight: 700; letter-spacing: -0.035em; color: #25282d; }
+    #f-end-sub { position: absolute; left: 0; right: 0; top: 522px; text-align: center; font-size: 40px; color: #626975; font-weight: 500; }
+    #f-end-sub span { display: inline-block; }
+    #f-end-url { position: absolute; left: 0; right: 0; top: 880px; text-align: center; font-size: 32px; color: #626975; }
+    .hilite { background: linear-gradient(transparent 58%, #eff0fb 58%); }
+  </style>
+
+  <div id="root" data-composition-id="film" data-width="1920" data-height="1080">
+    <!-- World A -->
+    <div id="f-wa" class="layer">
+      <div id="f-wacam" class="cam">
+        <div id="f-editor" class="card">
+          <div class="ed-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="ed-tab mono">PricingCard.tsx</span><span class="ed-path mono">acme-demo/components</span></div>
+          <div id="f-code" class="mono"></div>
+          <div id="f-term" class="mono">
+            <div><span class="p">agent ›</span> <span id="f-term1"></span><span id="f-done" class="hide">✓ Done</span></div>
+            <div id="f-term2"></div>
+          </div>
+        </div>
+        <div id="f-phone">
+          <div id="f-bezel"></div>
+          <div id="f-screen"><div id="f-r1wrap"><div id="f-r1host"></div></div></div>
+        </div>
+        <svg id="f-ring" viewBox="0 0 1920 1080"><rect id="f-ring-r" x="0" y="0" width="10" height="10" rx="22" fill="none" stroke="#f97316" stroke-width="5" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" /></svg>
+      </div>
+    </div>
+
+    <!-- Blind: what the agent sees -->
+    <div id="f-blind" class="layer hide">
+      <div id="f-bl-label" class="mono">what your agent sees</div>
+      <div id="f-bl-code" class="mono"><div><span class="no">41</span>&gt;</div><div><span class="no">42</span>  Choose {plan}, save 20% yearly</div><div><span class="no">43</span>&lt;/button&gt;</div></div>
+      <div id="f-lid"></div>
+    </div>
+
+    <!-- The mark (assets/brand/icon.svg, inlined so the eye can open) -->
+    <div id="f-mark" class="layer hide">
+      <div id="f-markcam" class="cam">
+        <div id="f-tile">
+          <svg viewBox="0 0 128 128">
+            <defs>
+              <linearGradient id="f-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f172a" /><stop offset="1" stop-color="#1e293b" /></linearGradient>
+              <radialGradient id="f-irisg" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fbbf24" /><stop offset="0.55" stop-color="#f97316" /><stop offset="1" stop-color="#9a3412" /></radialGradient>
+            </defs>
+            <rect width="128" height="128" rx="28" fill="url(#f-bg)" stroke="#334155" stroke-width="0.8" />
+            <path id="f-br-l" d="M38 34 L22 64 L38 94" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" />
+            <path id="f-br-r" d="M90 34 L106 64 L90 94" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" />
+            <path id="f-eye" class="fb" d="M40 64 C50 46 78 46 88 64 C78 82 50 82 40 64 Z" fill="#f8fafc" />
+            <circle id="f-iris" class="fb" cx="64" cy="64" r="12" fill="url(#f-irisg)" />
+            <circle id="f-pupil" class="fb" cx="64" cy="64" r="5" fill="#0f172a" />
+            <circle id="f-glint" class="fb" cx="68" cy="59" r="2.2" fill="#ffffff" />
+          </svg>
+        </div>
+        <div id="f-wm">Arguseye</div>
+      </div>
+    </div>
+
+    <!-- World B: how it works -->
+    <div id="f-wb" class="layer hide">
+      <div id="f-wbcam" class="cam">
+        <div id="f-call" class="card mono"></div>
+        <div id="f-tree" class="card mono">
+          <div class="th">acme-demo/</div>
+          <div id="f-rows"></div>
+          <div id="f-scan"></div>
+        </div>
+        <div id="f-uchip-0" class="uchip mono hide">page.tsx:6 <b>plan="Starter" price={0}</b></div>
+        <div id="f-uchip-1" class="uchip mono hide">page.tsx:7 <b>plan="Pro" price={19} highlighted</b></div>
+        <div id="f-lay-root" class="lframe hide"><div class="lab mono">app/layout.tsx</div></div>
+        <div id="f-lay-mkt" class="lframe hide"><div class="lab mono">app/(marketing)/layout.tsx</div></div>
+        <div id="f-bundle" class="mono hide">your packages · bundled once · cached</div>
+        <div id="f-stage" class="hide"><div id="f-stage-box"><div id="f-r2wrap"><div id="f-r2host"></div></div></div></div>
+        <div id="f-scanline" class="hide"></div>
+        <div id="f-shot-tab" class="mono hide">Chromium · png 390 × 538</div>
+        <div id="f-flyers"></div>
+        <div id="f-nextdev" class="mono hide">$ next dev<div id="f-strike"></div></div>
+        <div id="f-res" class="mono hide">
+          <div class="h"><span>render_component → result</span><span>191 ms</span></div>
+          <div id="f-row-png" class="hide"><div class="key">png</div><div id="f-png"><img src="assets/loop/broken.png" alt="" /></div></div>
+          <div id="f-row-tree" class="hide"><div class="key">snapshot</div><div class="v" id="f-tree-v"></div></div>
+          <div id="f-row-chg" class="hide"><div class="key">changes</div><div class="v" id="f-chg"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- World M: any component (live captures of the demo components and a Vue component) -->
+    <div id="f-wmo" class="layer hide">
+      <div id="f-mframe"></div>
+      <div id="f-fw" class="hide"><span class="mono" style="font-weight:500;color:#c9cbf5">renders</span><div id="f-fw-win"><div id="f-fw-in">
+        <div class="fw"><img src="assets/brand/react.ico" alt="" />React</div>
+        <div class="fw"><img src="assets/brand/next.ico" alt="" />Next.js</div>
+        <div class="fw"><img src="assets/brand/vue.svg" alt="" />Vue</div>
+      </div></div></div>
+    </div>
+
+    <!-- World E: the editor panel -->
+    <div id="f-we" class="layer hide">
+      <div id="f-vsw">
+        <div id="f-vs-bar"><img src="assets/brand/vscode.png" alt="" /><span>PricingCard.tsx — acme-demo</span></div>
+        <div id="f-vs-code" class="mono"></div>
+        <div id="f-vs-pane"><div id="f-vs-ptab">Arguseye · Preview Component</div><div id="f-r3wrap"><div id="f-r3host"></div></div></div>
+      </div>
+    </div>
+
+    <!-- World D: any agent, the end card -->
+    <div id="f-wd" class="layer hide">
+      <div id="f-chips">
+        <div class="chip hide" id="f-ch-0">Claude Code</div><div class="chip hide" id="f-ch-1">Codex</div><div class="chip hide" id="f-ch-2">Cursor</div>
+        <div class="chip hide" id="f-ch-3">Gemini CLI</div><div class="chip hide" id="f-ch-4">Windsurf</div><div class="chip hide" id="f-ch-5">Copilot</div>
+        <div class="chip hide" id="f-ch-6">Antigravity</div><div class="chip hide" id="f-ch-7">any MCP client</div>
+      </div>
+      <div id="f-cmd" class="mono"><span class="pfx">$</span><span data-var-text="install-command">npx @ayushniroula/arguseye install</span>&nbsp;<span id="f-roll"><span id="f-roll-in">
+        <div>claude</div><div>codex</div><div>cursor</div><div>gemini</div><div>windsurf</div><div>copilot</div><div>antigravity</div><div>all</div><div>claude</div>
+      </span></span></div>
+      <div id="f-end-tile" class="hide">
+        <svg viewBox="0 0 128 128">
+          <defs>
+            <linearGradient id="f-bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f172a" /><stop offset="1" stop-color="#1e293b" /></linearGradient>
+            <radialGradient id="f-irisg2" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fbbf24" /><stop offset="0.55" stop-color="#f97316" /><stop offset="1" stop-color="#9a3412" /></radialGradient>
+          </defs>
+          <rect width="128" height="128" rx="28" fill="url(#f-bg2)" />
+          <path d="M38 34 L22 64 L38 94" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M90 34 L106 64 L90 94" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path id="f-eye2" class="fb" d="M40 64 C50 46 78 46 88 64 C78 82 50 82 40 64 Z" fill="#f8fafc" />
+          <circle id="f-iris2" class="fb" cx="64" cy="64" r="12" fill="url(#f-irisg2)" />
+          <circle id="f-pupil2" class="fb" cx="64" cy="64" r="5" fill="#0f172a" />
+          <circle id="f-glint2" class="fb" cx="68" cy="59" r="2.2" fill="#ffffff" />
+        </svg>
+      </div>
+      <div id="f-end-wm" class="hide">Arguseye</div>
+      <div id="f-end-sub"><span id="f-es-0" class="hide">Eyes for coding agents.</span>&nbsp;&nbsp;<span id="f-es-1" class="hilite hide">Open source</span>&nbsp;<span id="f-es-2" class="hide">· MIT</span></div>
+      <div id="f-end-url" class="mono hide" data-var-text="repo-url">github.com/DarkWorldCoder/arguseye</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const D = 57.5, VO = 0.4;
+      const $ = (id) => document.getElementById(id);
+      const E = (n) => gsap.parseEase(n);
+      const tl = gsap.timeline({ paused: true });
+
+      // ---------- the voice is the clock: cue("word", nth) = when the narration says it ----------
+      const WORDS = window.__WORDS.map(([w, s, e]) => [w.toLowerCase().replace(/[^a-z0-9']/g, ""), s + VO, e + VO]);
+      const cue = (w, n = 1, end = false) => { let k = 0; for (const x of WORDS) if (x[0] === w && ++k === n) return end ? x[2] : x[1]; throw new Error("no cue " + w + " " + n); };
+
+      // ---------- real source: acme-demo/components/PricingCard.tsx lines 28-43 ----------
+      const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const tok = (s) => {
+        // strings first, then tags and keys outside the strings
+        return esc(s).split(/("[^"]*"?)/).map((part, i) => i % 2
+          ? `<span class="t-str">${part}</span>`
+          : part.replace(/(&lt;\/?)(button|ul|li|span|p)\b/g, '$1<span class="t-tag">$2</span>')
+                .replace(/\b(className|style|key|features|feature|accent|color|borderColor|map|plan)\b/g, '<span class="t-key">$1</span>')).join("");
+      };
+      const SRC = [
+        [28, "</p>"], [29, '<ul className="mt-5 space-y-2 text-sm text-zinc-600">'], [30, "  {features.map((feature) => ("],
+        [31, '    <li key={feature} className="flex gap-2">'], [32, "      <span style={{ color: accent }}>✓</span>"], [33, "      {feature}"],
+        [34, "    </li>"], [35, "  ))}"], [36, "</ul>"], [37, "<button"], [38, '  className="h-11 w-[180px] leading-[40px]'],
+        [39, '    mt-7 rounded-xl border-2 px-4 text-sm font-bold"'], [40, "  style={{ borderColor: accent, color: accent }}"], [41, ">"], [42, null], [43, "</button>"],
+      ];
+      $("f-code").innerHTML = SRC.map(([n, s]) => n === 42
+        ? `<div class="ln" id="f-label-line"><span class="no">${n}</span><span class="tx">  <span id="f-label"></span></span></div>`
+        : `<div class="ln" id="f-ln-${n}"><span class="no">${n}</span><span class="tx">${tok(s)}</span></div>`).join("");
+
+      // ---------- the edit and the fix, as pure functions of time ----------
+      const C0 = "Choose {plan}", SUF = ", save 20% yearly", C1 = C0 + SUF, C2 = "Save 20% on {plan}";
+      const P0 = "Choose Pro", P1 = P0 + SUF, P2 = "Save 20% on Pro";
+      function edits(base, t0, dt) { const ev = []; for (let i = 1; i <= SUF.length; i++) ev.push([t0 + dt * (i - 1), base + SUF.slice(0, i), base.length + i]); return ev; }
+      function fix(full, t0, dt) { // delete the suffix, delete "Choose ", type "Save 20% on "
+        const ev = []; let t = t0; const core = full.slice(0, full.length - SUF.length);
+        for (let i = 1; i <= SUF.length; i++) { ev.push([t, full.slice(0, full.length - i), full.length - i]); t += dt; }
+        t += 0.06; const rest = core.slice(7);
+        for (let i = 1; i <= 7; i++) { ev.push([t, core.slice(i), 7 - i]); t += dt; }
+        const add = "Save 20% on "; for (let i = 1; i <= add.length; i++) { ev.push([t, add.slice(0, i) + rest, i]); t += dt; }
+        return ev;
+      }
+      const tFix = cue("fixes");
+      const codeEv = [[0, C0, -1], [0.45, C0, C0.length], ...edits(C0, 0.62, 0.07), [2.6, C1, -1], [cue("break") - 0.1, C1, C1.length], ...fix(C1, tFix, 0.024), [tFix + 1.1, C2, -1]];
+      const phoneEv = [[0, P0], ...edits(P0, 6.62, 0.028).map((e) => e.slice(0, 2)), ...fix(P1, tFix, 0.024).map((e) => e.slice(0, 2))];
+      const at = (ev, t) => { let r = ev[0]; for (const e of ev) { if (e[0] <= t) r = e; else break; } return r; };
+      const typed = (t, t0, t1, full) => full.slice(0, Math.max(0, Math.min(full.length, Math.floor(((t - t0) / (t1 - t0)) * full.length))));
+
+      // ---------- cameras: [time, duration, ease, focusX, focusY, scale]; zoom in log space ----------
+      function track(keys) {
+        return (t) => {
+          let x = keys[0][3], y = keys[0][4], s = keys[0][5];
+          for (let i = 1; i < keys.length; i++) {
+            const [kt, kd, ke, kx, ky, ks] = keys[i];
+            if (t < kt) break;
+            const p = kd <= 0 ? 1 : Math.min(1, (t - kt) / kd), e = E(ke)(p);
+            x += (kx - x) * e; y += (ky - y) * e; s = Math.exp(Math.log(s) + (Math.log(ks) - Math.log(s)) * e);
+            if (p < 1) break;
+          }
+          return [x, y, s];
+        };
+      }
+      const put = (el, [x, y, s]) => { el.style.transform = `translate(${960 - s * x}px, ${540 - s * y}px) scale(${s})`; };
+
+      async function build() {
+        const R = window.__REPLICAS;
+        const r1 = mountReplica($("f-r1host"), R.pricing, 390);
+        const r2 = mountReplica($("f-r2host"), R.pricing, 390);
+        const r3 = mountReplica($("f-r3host"), R.pricing, 390);
+        // the montage: different components, each mounted live
+        const MONT = ["signin", "stats", "toast", "profile", "command", "pricing-starter", "vue-meter"];
+        const SCALE = { signin: 1.6, stats: 2.0, toast: 2.1, profile: 1.85, command: 1.8, "pricing-starter": 1.35, "vue-meter": 2.2 };
+        const mounts = MONT.map((name, i) => {
+          const w = document.createElement("div"); w.className = "mshot hide"; w.id = "f-ms-" + i;
+          const h = document.createElement("div"); w.appendChild(h); $("f-mframe").appendChild(w);
+          const width = R[name].source.width; mountReplica(h, R[name], width);
+          return { w, h, name, width };
+        });
+        await document.fonts.ready;
+        await Promise.all([...document.fonts].filter((f) => f.status !== "loaded").map((f) => f.load().catch(() => null)));
+        const imgs = [r1, r2, r3, ...mounts.map((m) => ({ shadow: m.h.shadowRoot }))].flatMap((r) => [...r.shadow.querySelectorAll("img")]);
+        await Promise.all(imgs.map((im) => (im.complete ? Promise.resolve() : im.decode().catch(() => null))));
+
+        // centre each montage component on the frame at its scale (measured from the real component box)
+        for (const m of mounts) {
+          const root = m.h.shadowRoot.getElementById("root");
+          let el = root; while (el.children.length === 1 && el.firstElementChild.getBoundingClientRect().width > 0 && el.firstElementChild.getBoundingClientRect().width >= m.width * 0.98) el = el.firstElementChild;
+          el = el.firstElementChild || el;
+          const hb = m.h.getBoundingClientRect(), k = hb.width / m.width, eb = el.getBoundingClientRect();
+          const cx = (eb.left - hb.left + eb.width / 2) / k, cy = (eb.top - hb.top + eb.height / 2) / k, s = SCALE[m.name];
+          m.h.style.transform = `translate(${-cx * s}px, ${-cy * s}px) scale(${s})`;
+        }
+
+        // label text nodes and the buttons in each pricing mount
+        const labelNodes = (sh, s0) => { const out = []; const w = document.createTreeWalker(sh, NodeFilter.SHOW_TEXT); for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes(s0)) out.push(n); return out; };
+        const L1 = labelNodes(r1.shadow, "Choose Pro"), L2 = labelNodes(r2.shadow, "Choose Pro"), L3 = labelNodes(r3.shadow, "Choose Pro");
+        const setL = (nodes, s) => nodes.forEach((n) => { if (n.nodeValue !== s) n.nodeValue = s; });
+        setL(L2, P1); setL(L3, P2);
+        const btn1 = r1.shadow.querySelector("button"), btn3 = r3.shadow.querySelector("button");
+
+        // world A geometry of the phone's button (in the replica's own px)
+        const host = $("f-r1host").getBoundingClientRect(), k = host.width / 390, br = btn1.getBoundingClientRect();
+        const bx = (br.left - host.left) / k, by = (br.top - host.top) / k, bw = br.width / k, bh = br.height / k;
+        const sc = 1.1, BX = 1354 + sc * bx, BY = 76 + 30 + sc * by, BW = sc * bw, BH = sc * bh;
+        const ring = $("f-ring-r");
+        ring.setAttribute("x", BX - 16); ring.setAttribute("y", BY - 14); ring.setAttribute("width", BW + 32); ring.setAttribute("height", BH + 28 + 34);
+
+        // ---------- world B: the project tree (real files of film/demo-app) ----------
+        const ROWS = [
+          ["app/layout.tsx", "layout"], ["app/globals.css", "css"], ["app/(marketing)/layout.tsx", "layout2"], ["app/(marketing)/pricing/page.tsx", "page"],
+          ["app/(app)/dashboard/page.tsx", ""], ["components/PricingCard.tsx", "comp"], ["components/SignInForm.tsx", ""], ["components/StatsCard.tsx", ""],
+          ["providers/ThemeProvider.tsx", "theme"], ["public/fonts/Inter-400.woff2", "font"], ["public/illustrations/orbit.svg", "img"],
+          ["node_modules/react", "pkg0", "19.3.1"], ["node_modules/react-dom", "pkg1", "19.3.1"], ["node_modules/tailwindcss", "pkg2", "4.3.3"],
+        ];
+        $("f-rows").innerHTML = ROWS.map(([p, , v], i) => `<div class="row" id="f-row-${i}"><div class="row-hl" id="f-rowhl-${i}"></div><span class="n">${esc(p)}</span>${v ? `<span class="v">${v}</span>` : ""}</div>`).join("");
+        const rowIndex = Object.fromEntries(ROWS.map(([, id], i) => [id, i]).filter(([id]) => id));
+        const rowY = (i) => 340 + 18 + 38 + i * 38;
+        $("f-uchip-0").style.top = rowY(rowIndex.page) - 54 + "px"; $("f-uchip-1").style.top = rowY(rowIndex.page) + 2 + "px";
+        Object.assign($("f-lay-root").style, { left: "1092px", top: "156px", width: "595px", height: "820px" });
+        Object.assign($("f-lay-mkt").style, { left: "1114px", top: "216px", width: "551px", height: "740px" });
+        
+
+        // the raw component: the same live DOM with the app's pieces held back until each is found
+        const accentEls = [...r2.shadow.querySelectorAll("[style]")].filter((el) => /108, 112, 201/.test(el.getAttribute("style")));
+        accentEls.forEach((el) => { el.dataset.themed = el.getAttribute("style"); el.dataset.plain = el.getAttribute("style").replace(/rgb\(108, 112, 201\)/g, "rgb(17, 24, 39)"); });
+        const r2img = r2.shadow.querySelector("img");
+
+        // ---------- camera tracks ----------
+        const tDive = cue("eyes"), tSo = cue("so");
+        const camA = track([
+          [0, 0, "none", 600, 640, 1.7],
+          [3.1, 0.9, "power2.inOut", 700, 488, 1.0],
+          [5.6, 0.62, "power3.inOut", 1568, 540, 1.0],
+          [cue("button", 2) - 0.1, 0.5, "expo.out", BX + BW / 2, BY + BH / 2 + 26, 2.3],
+          [tSo - 0.3, 0, "none", 963, 540, 1.0],
+        ]);
+        const camM = track([[0, 0, "none", 960, 540, 1], [tDive, 0.5, "power3.in", 636, 540, 90]]);
+        const tRes = cue("back", 2);
+        const camB = track([
+          [0, 0, "none", 960, 540, 0.86], [tDive + 0.45, 0.6, "expo.out", 960, 540, 1.0],
+          [cue("changed", 2) - 0.1, 0.45, "expo.out", 1400, 760, 1.24],
+        ]);
+
+        // ---------- per-frame state ----------
+        const term1 = "edited PricingCard.tsx: button label", term2 = '✓ render_component  changed  + button "Save 20% on Pro"  104 ms';
+        const CALL = [['<span class="f">render_component</span>({', "render_component({"],
+          ['  <span class="k">file</span>: <span class="s">"components/PricingCard.tsx"</span>,', '  file: "components/PricingCard.tsx",'],
+          ['  <span class="k">usage</span>: <span class="s">"app/(marketing)/pricing/page.tsx:7"</span>,', '  usage: "app/(marketing)/pricing/page.tsx:7",'],
+          ['  <span class="k">viewport</span>: <span class="s">"mobile"</span>', '  viewport: "mobile"'], ["})", "})"]];
+        const callLen = CALL.map((c) => c[1]).join("\n").length;
+        const TREE = ['- heading "Pro" [level=3]', "- paragraph: $19 /month", '- button "Choose Pro, save 20% yearly"'];
+        const CHG = ['status: "changed"   changedPixels: 29322', '- button "Choose Pro"', '+ button "Choose Pro, save 20% yearly"'];
+        const VS = [[37, "<button"], [38, '  className="h-11 w-[180px] leading-[40px]'], [39, null], [40, "  style={{ borderColor: accent, color: accent }}"], [41, ">"], [42, "  Save 20% on {plan}"], [43, "</button>"]];
+        const V0 = '    mt-7 rounded-xl border-2 px-4 text-sm font-bold"';
+        $("f-vs-code").innerHTML = VS.map(([n, s]) => `<div class="ln"><span class="no">${n}</span><span class="tx" ${n === 39 ? 'id="f-vs-edit"' : ""}>${s ? tok(s) : ""}</span></div>`).join("");
+        const tType = cue("updates"), ix = V0.indexOf("xl");
+        const vsEv = [[0, V0, -1], [tType - 0.3, V0, ix + 2], [tType - 0.1, V0.slice(0, ix + 1) + V0.slice(ix + 2), ix + 1], [tType - 0.04, V0.slice(0, ix) + V0.slice(ix + 2), ix],
+          ...["f", "fu", "ful", "full"].map((x, i) => [tType + 0.06 + i * 0.07, V0.slice(0, ix) + x + V0.slice(ix + 2), ix + x.length]), [tType + 1.3, V0.slice(0, ix) + "full" + V0.slice(ix + 2), -1]];
+
+        const els = { wacam: $("f-wacam"), markcam: $("f-markcam"), wbcam: $("f-wbcam"), label: $("f-label"), t1: $("f-term1"), t2: $("f-term2"), call: $("f-call"), tree: $("f-tree-v"), chg: $("f-chg"), vs: $("f-vs-edit") };
+        const last = {};
+        const set = (key, el, html) => { if (last[key] !== html) { el.innerHTML = html; last[key] = html; } };
+        const tCompIn = cue("passes") + 0.12, tTheme = cue("theme"), tCss = cue("css"), tFont = cue("fonts"), tImg = cue("images");
+        const FONT_FALLBACK = ".r-body, .r-body * { font-family: ui-sans-serif, system-ui, sans-serif !important; }";
+
+        function render(t) {
+          put(els.wacam, camA(t)); put(els.markcam, camM(t)); put(els.wbcam, camB(t));
+          // world A: code label + caret, the live phone, the terminal
+          const [, cs, cp] = at(codeEv, t);
+          const typing = (t > 0.6 && t < 2.0) || (t > tFix - 0.05 && t < tFix + 0.9);
+          const showCaret = cp >= 0 && (typing || Math.floor(t * 2.6) % 2 === 0);
+          set("label", els.label, showCaret ? tok(cs.slice(0, cp)) + '<span class="caret"></span>' + tok(cs.slice(cp)) : tok(cs));
+          setL(L1, at(phoneEv, t)[1]);
+          set("t1", els.t1, esc(typed(t, 3.12, 4.25, term1)));
+          set("t2", els.t2, esc(typed(t, cue("checks"), cue("checks") + 0.35, term2)));
+          // world B: the call, the assembling component, the result
+          const n = Math.max(0, Math.min(callLen, Math.floor(((t - (tDive + 0.75)) / 1.6) * callLen)));
+          let left = n; const shown = [];
+          for (const [html, plain] of CALL) { if (left >= plain.length) { shown.push(html); left -= plain.length + 1; } else { shown.push(esc(plain.slice(0, Math.max(0, left)))); break; } }
+          set("call", els.call, shown.join("\n"));
+          const st = [t >= tCss, t >= tFont, t >= tTheme, t >= tImg].join();
+          if (last.st !== st) {
+            last.st = st;
+            r2.style.textContent = t >= tCss ? r2.css : "";
+            r2.extra.textContent = t >= tFont ? "" : (t >= tCss ? FONT_FALLBACK : "");
+            accentEls.forEach((el) => el.setAttribute("style", t >= tTheme ? el.dataset.themed : el.dataset.plain));
+            if (r2img) r2img.style.visibility = t >= tImg ? "visible" : "hidden";
+          }
+          set("tree", els.tree, TREE.map((l, i) => esc(typed(t, cue("accessibility") + i * 0.26, cue("accessibility") + i * 0.26 + 0.24, l))).join("\n"));
+          const cg = CHG.map((l, i) => typed(t, cue("what", 2) + i * 0.13, cue("what", 2) + i * 0.13 + 0.16, l));
+          set("chg", els.chg, `${esc(cg[0])}\n<span class="minus">${esc(cg[1])}</span>\n<span class="plus">${esc(cg[2])}</span>`);
+          // world E: typing in the editor changes the live preview
+          const [, vs, vp] = at(vsEv, t);
+          set("vs", els.vs, vp >= 0 && (t < tType + 0.6 || Math.floor(t * 2.6) % 2 === 0) ? tok(vs.slice(0, vp)) + '<span class="caret"></span>' + tok(vs.slice(vp)) : tok(vs));
+          const pill = vs.includes("rounded-full");
+          if (last.pill !== pill) { last.pill = pill; btn3.classList.toggle("rounded-full", pill); btn3.classList.toggle("rounded-xl", !pill); }
+        }
+        const clock = { t: 0 };
+        tl.to(clock, { t: D, duration: D, ease: "none", onUpdate: () => render(clock.t) }, 0);
+        render(0);
+
+        // ---------- visibility of the worlds ----------
+        const tBlind = cue("agents") - 0.29, tEye = cue("arguseye", 1), tAny = cue("any", 1), tVs = cue("and", 7) - 0.1, tWorks = cue("works") - 0.4, tEnd = cue("arguseye", 3);
+        const on = (id, t) => tl.set($(id), { autoAlpha: 1 }, t), off = (id, t) => tl.set($(id), { autoAlpha: 0 }, t);
+        off("f-wa", tBlind + 0.4); on("f-wa", tSo - 0.3); off("f-wa", tAny + 0.2);
+        on("f-blind", tBlind); off("f-blind", tDive + 0.6);
+        on("f-mark", tEye - 0.04); off("f-mark", tDive + 0.6);
+        on("f-wb", tDive + 0.42); off("f-wb", tSo + 0.3);
+        on("f-wmo", tAny - 0.24); off("f-wmo", tVs + 0.5);
+        on("f-we", tVs); off("f-we", tWorks + 0.5);
+        on("f-wd", tWorks);
+
+        // ---------- 1 · the edit ----------
+        tl.fromTo("#f-done", { autoAlpha: 0, scale: 0.6 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: "back.out(1.6)", immediateRender: false }, cue("done"));
+        // ---------- 2 · the phone ----------
+        tl.fromTo("#f-phone", { x: 760 }, { x: 0, duration: 0.6, ease: "expo.out", immediateRender: true }, 5.66);
+        tl.fromTo("#f-ring-r", { attr: { "stroke-dashoffset": 1 } }, { attr: { "stroke-dashoffset": 0 }, duration: 0.42, ease: "power2.inOut", immediateRender: true }, cue("broke"));
+        tl.to("#f-ring-r", { opacity: 0, duration: 0.2 }, tBlind);
+        // ---------- 3 · blind ----------
+        tl.fromTo("#f-blind", { clipPath: "inset(0 0 0 100%)" }, { clipPath: "inset(0 0 0 0%)", duration: 0.36, ease: "power2.inOut", immediateRender: false }, tBlind);
+        tl.fromTo(["#f-bl-label", "#f-bl-code", "#f-lid"], { x: 160 }, { x: 0, duration: 0.6, ease: "expo.out", immediateRender: false }, tBlind + 0.07);
+        const tB = cue("blind");
+        tl.to("#f-lid", { scaleY: 0.006, duration: 0.3, ease: "power3.in" }, tB);
+        tl.set("#f-lid", { borderStyle: "solid", borderColor: "#f8fafc" }, tB + 0.3);
+        tl.to("#f-lid", { x: -794, scaleX: 0.296, duration: 0.42, ease: "power2.inOut" }, tB + 0.36);
+        tl.to(["#f-bl-label", "#f-bl-code"], { autoAlpha: 0, filter: "blur(8px)", duration: 0.25, ease: "power2.in" }, tB + 0.34);
+        tl.set("#f-lid", { autoAlpha: 0 }, tEye);
+        // ---------- 4 · the eye opens; dive through the iris ----------
+        tl.fromTo("#f-tile", { scale: 0.86, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.45, ease: "expo.out", immediateRender: false }, tEye - 0.04);
+        tl.fromTo(["#f-br-l", "#f-br-r"], { attr: { "stroke-dashoffset": 1 } }, { attr: { "stroke-dashoffset": 0 }, duration: 0.45, ease: "power3.out", immediateRender: true }, tEye + 0.02);
+        tl.fromTo("#f-eye", { scaleY: 0.03, transformOrigin: "50% 50%" }, { scaleY: 1, duration: 0.32, ease: "expo.out", immediateRender: true }, tEye);
+        tl.fromTo(["#f-iris", "#f-pupil"], { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.5, ease: "back.out(1.6)", immediateRender: true }, tEye + 0.08);
+        tl.fromTo("#f-glint", { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.3, ease: "back.out(2)", immediateRender: true }, tEye + 0.28);
+        tl.fromTo("#f-wm", { clipPath: "inset(0 100% 0 0)", x: -30 }, { clipPath: "inset(0 0% 0 0)", x: 0, duration: 0.5, ease: "power3.out", immediateRender: true }, tEye + 0.3);
+        tl.to(["#f-pupil", "#f-glint"], { scale: 0, duration: 0.22, ease: "power2.in" }, tDive - 0.08);
+        tl.fromTo("#f-wb", { clipPath: "circle(0% at 50% 50%)" }, { clipPath: "circle(75% at 50% 50%)", duration: 0.42, ease: "power2.inOut", immediateRender: false }, tDive + 0.42);
+
+        // ---------- 5 · how it works ----------
+        tl.fromTo("#f-call", { x: -120, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.55, ease: "expo.out", immediateRender: true }, tDive + 0.6);
+        tl.fromTo("#f-tree", { x: -200, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.6, ease: "expo.out", immediateRender: true }, cue("arguseye", 2) - 0.1);
+        const tReads = cue("reads"), tScanEnd = cue("project", 1, true) + 0.2;
+        tl.fromTo("#f-scan", { y: 0 }, { y: 38 * 13, duration: tScanEnd - tReads, ease: "none", immediateRender: true }, tReads);
+        tl.to("#f-scan", { autoAlpha: 0, duration: 0.2 }, tScanEnd);
+        ROWS.forEach((r, i) => tl.fromTo("#f-row-" + i, { color: "#a3a9b4" }, { color: "#25282d", duration: 0.2, immediateRender: true }, tReads + (i * (tScanEnd - tReads)) / 13));
+        const hl = (id, t) => tl.fromTo("#f-rowhl-" + rowIndex[id], { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, t);
+        const unhl = (id, t) => tl.to("#f-rowhl-" + rowIndex[id], { opacity: 0, duration: 0.3 }, t);
+        hl("comp", cue("component", 1)); unhl("comp", cue("layouts") - 0.2);
+        hl("page", cue("used")); unhl("page", cue("then"));
+        tl.fromTo("#f-uchip-0", { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: 0.35, ease: "expo.out", immediateRender: false }, cue("used"));
+        tl.fromTo("#f-uchip-1", { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: 0.35, ease: "expo.out", immediateRender: false }, cue("used") + 0.16);
+        // the props travel into the stage and the raw component appears
+        tl.to("#f-uchip-1", { x: 1180 - 736, y: 560 - (rowY(rowIndex.page) + 2), scale: 0.75, duration: 0.5, ease: "power3.inOut" }, tCompIn - 0.52);
+        tl.to("#f-uchip-1", { autoAlpha: 0, duration: 0.15 }, tCompIn - 0.02);
+        tl.to("#f-uchip-0", { autoAlpha: 0, x: -20, duration: 0.25 }, tCompIn - 0.52);
+        tl.set("#f-stage", { autoAlpha: 1 }, tCompIn);
+        tl.fromTo("#f-r2wrap", { scale: 1.36, filter: "blur(6px)" }, { scale: 1.3, filter: "blur(0px)", duration: 0.3, ease: "expo.out", immediateRender: false }, tCompIn);
+        // each found piece flies from its row into the stage, and the component changes as it lands
+        const fly = (id, label, t) => {
+          const el = document.createElement("div"); el.className = "flyer mono hide"; el.textContent = label; $("f-flyers").appendChild(el);
+          const y0 = rowY(rowIndex[id]) - 4; el.style.left = "96px"; el.style.top = y0 + "px";
+          tl.fromTo(el, { autoAlpha: 0, x: 0, y: 0, scale: 1 }, { autoAlpha: 1, duration: 0.12, immediateRender: false }, t);
+          tl.to(el, { x: 1250 - 96, y: 560 - y0, scale: 0.8, duration: 0.42, ease: "power3.inOut" }, t + 0.06);
+          tl.to(el, { autoAlpha: 0, scale: 0.5, duration: 0.12, ease: "power2.in" }, t + 0.42);
+          hl(id, t); unhl(id, t + 0.9);
+        };
+        fly("layout", "app/layout.tsx", cue("layouts") - 0.1); fly("layout2", "(marketing)/layout.tsx", cue("layouts") + 0.16);
+        tl.fromTo("#f-lay-root", { autoAlpha: 0, scale: 1.04 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: "expo.out", immediateRender: false }, cue("layouts") + 0.34);
+        tl.fromTo("#f-lay-mkt", { autoAlpha: 0, scale: 1.04 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: "expo.out", immediateRender: false }, cue("layouts") + 0.56);
+        fly("theme", "ThemeProvider · accent", tTheme - 0.42); fly("css", "globals.css · tailwind", tCss - 0.42);
+        fly("font", "Inter-400.woff2", tFont - 0.42); fly("img", "orbit.svg", tImg - 0.42);
+        [tTheme, tCss, tFont, tImg].forEach((t) => tl.fromTo("#f-stage", { scale: 1.03 }, { scale: 1, duration: 0.3, ease: "expo.out", immediateRender: false }, t));
+        // packages bundled once
+        const tPk = cue("packages");
+        ["pkg0", "pkg1", "pkg2"].forEach((id, i) => {
+          const el = document.createElement("div"); el.className = "flyer mono hide"; el.textContent = ROWS[rowIndex[id]][0].replace("node_modules/", "") + " " + ROWS[rowIndex[id]][2];
+          $("f-flyers").appendChild(el); const y0 = rowY(rowIndex[id]) - 4; el.style.left = "96px"; el.style.top = y0 + "px";
+          tl.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.12, immediateRender: false }, tPk + i * 0.14);
+          tl.to(el, { x: 1100 + i * 200 - 96, y: 118 - y0, scale: 0.72, duration: 0.5, ease: "power3.inOut" }, tPk + i * 0.14 + 0.05);
+          tl.to(el, { autoAlpha: 0, duration: 0.15 }, cue("bundled") + 0.25);
+          hl(id, tPk + i * 0.14); unhl(id, cue("once") + 0.3);
+        });
+        tl.fromTo("#f-bundle", { autoAlpha: 0, scaleX: 0.6 }, { autoAlpha: 1, scaleX: 1, duration: 0.4, ease: "expo.out", immediateRender: false }, cue("bundled") + 0.2);
+        // Chromium draws the result
+        const tCh = cue("chromium");
+        tl.to(["#f-lay-root", "#f-lay-mkt"], { autoAlpha: 0, duration: 0.3 }, tPk - 0.25);
+        tl.fromTo("#f-scanline", { autoAlpha: 1, y: 0 }, { autoAlpha: 1, y: 700, duration: 0.85, ease: "power1.inOut", immediateRender: false }, tCh);
+        tl.to("#f-scanline", { autoAlpha: 0, duration: 0.15 }, tCh + 0.85);
+        tl.fromTo("#f-stage-box", { boxShadow: "0 0 0 0px rgba(108,112,201,0)" }, { boxShadow: "0 0 0 4px rgba(108,112,201,1)", duration: 0.25, immediateRender: false }, tCh + 0.8);
+        tl.fromTo("#f-shot-tab", { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "expo.out", immediateRender: false }, tCh + 0.85);
+        // no dev server
+        tl.fromTo("#f-nextdev", { autoAlpha: 0, y: -16 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "expo.out", immediateRender: false }, cue("no") - 0.3);
+        tl.fromTo("#f-strike", { scaleX: 0 }, { scaleX: 1, duration: 0.22, ease: "power3.out", immediateRender: true }, cue("dev"));
+        tl.to("#f-nextdev", { autoAlpha: 0, filter: "blur(8px)", duration: 0.25, ease: "power2.in" }, cue("server") + 0.5);
+
+        // ---------- 6 · the result ----------
+        tl.to(["#f-call", "#f-tree", "#f-bundle"], { x: -900, autoAlpha: 0, filter: "blur(10px)", duration: 0.4, ease: "power3.in" }, tRes - 0.3);
+        tl.to(["#f-stage", "#f-shot-tab"], { x: -820, duration: 0.6, ease: "power3.inOut" }, tRes - 0.2);
+        tl.fromTo("#f-res", { autoAlpha: 1, x: 900 }, { autoAlpha: 1, x: 0, duration: 0.65, ease: "expo.out", immediateRender: false }, tRes - 0.1);
+        tl.fromTo("#f-row-png", { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "expo.out", immediateRender: false }, cue("screenshot"));
+        tl.set("#f-row-tree", { autoAlpha: 1 }, cue("accessibility") - 0.06);
+        tl.set("#f-row-chg", { autoAlpha: 1 }, cue("what", 2) - 0.06);
+        // back to the editor and the phone
+        tl.to("#f-wb", { x: -1920, duration: 0.34, ease: "power3.in" }, tSo - 0.3);
+        tl.fromTo("#f-wa", { x: 1920 }, { x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, tSo - 0.2);
+
+        // ---------- 7 · sees the break, fixes it, checks again ----------
+        tl.set("#f-ring-r", { opacity: 1, attr: { "stroke-dashoffset": 1 } }, tSo - 0.2);
+        tl.to("#f-ring-r", { attr: { "stroke-dashoffset": 0 }, duration: 0.38, ease: "power2.inOut" }, cue("break") - 0.04);
+        tl.fromTo("#f-ln-38", { backgroundColor: "rgba(239,240,251,0)" }, { backgroundColor: "rgba(239,240,251,1)", duration: 0.3, immediateRender: false }, cue("break"));
+        tl.to("#f-ring-r", { stroke: "#367760", duration: 0.25 }, tFix + 0.9);
+        tl.to("#f-ring-r", { opacity: 0, duration: 0.3 }, tAny - 0.3);
+
+        // ---------- 8 · any component ----------
+        tl.to("#f-wa", { x: -1920, duration: 0.3, ease: "power3.in" }, tAny - 0.3);
+        tl.fromTo("#f-wmo", { x: 1920 }, { x: 0, duration: 0.36, ease: "power3.out", immediateRender: false }, tAny - 0.24);
+        const cuts = mounts.map((m, i) => (i === mounts.length - 1 ? cue("vue") - 0.03 : tAny + 0.0225 + i * 0.3125));
+        cuts.forEach((c, i) => {
+          tl.set("#f-ms-" + i, { autoAlpha: 1 }, c);
+          if (i) tl.set("#f-ms-" + (i - 1), { autoAlpha: 0 }, c);
+          tl.fromTo("#f-mframe", { y: -10 }, { y: 0, duration: 0.25, ease: "power2.out", immediateRender: false }, c);
+        });
+        tl.fromTo("#f-mframe", { scale: 1.06 }, { scale: 1, duration: 0.5, ease: "expo.out", immediateRender: false }, tAny - 0.1);
+        tl.fromTo("#f-fw", { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "expo.out", immediateRender: false }, cue("react") - 0.3);
+        tl.to("#f-fw-in", { y: -54, duration: 0.18, ease: "power3.out" }, cue("next"));
+        tl.to("#f-fw-in", { y: -108, duration: 0.18, ease: "power3.out" }, cue("vue"));
+
+        // ---------- 9 · in VS Code it updates as you type ----------
+        tl.to("#f-wmo", { x: -1920, duration: 0.3, ease: "power3.in" }, tVs);
+        tl.fromTo("#f-we", { x: 1920 }, { x: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, tVs);
+        tl.fromTo("#f-vsw", { scale: 1 }, { scale: 1.1, duration: 2.4, ease: "power2.inOut", transformOrigin: "75% 45%", immediateRender: false }, tVs + 0.5);
+
+        // ---------- 10 · any agent ----------
+        tl.to("#f-we", { x: -1920, duration: 0.34, ease: "power3.in" }, tWorks);
+        tl.fromTo("#f-wd", { x: 1920 }, { x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, tWorks);
+        const cmd = $("f-cmd"); tl.set(cmd, { xPercent: -50 }, 0);
+        for (let i = 0; i < 8; i++) tl.fromTo("#f-ch-" + i, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.35, ease: "expo.out", immediateRender: false }, tWorks + 0.25 + i * 0.05);
+        const lit = (i, t) => tl.to("#f-ch-" + i, { color: "#25282d", backgroundColor: "#eff0fb", borderColor: "#c9cbf5", duration: 0.15 }, t);
+        lit(0, cue("claude"));
+        const tAnyMcp = cue("any", 2);
+        [[1, cue("codex"), 0.16], [2, cue("cursor"), 0.16], [3, tAnyMcp - 0.12, 0.07], [4, tAnyMcp - 0.04, 0.07], [5, tAnyMcp + 0.04, 0.07], [6, tAnyMcp + 0.12, 0.07], [7, cue("mcp") + 0.02, 0.14]]
+          .forEach(([i, t, d]) => { tl.to("#f-roll-in", { y: -124 * i, duration: d, ease: "power3.out" }, t); lit(i, t); });
+
+        // ---------- 11 · the end ----------
+        tl.to("#f-chips", { autoAlpha: 0, y: -24, filter: "blur(8px)", duration: 0.3, ease: "power2.in" }, tEnd - 0.44);
+        tl.to(cmd, { y: 260, scale: 0.78, duration: 0.7, ease: "power3.inOut" }, tEnd - 0.34);
+        tl.to("#f-roll-in", { y: -124 * 8, duration: 0.2, ease: "power3.out" }, cue("one", 2));
+        tl.fromTo("#f-end-tile", { autoAlpha: 0, scale: 0.7, y: 40 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.4)", immediateRender: false }, tEnd - 0.04);
+        tl.fromTo("#f-eye2", { scaleY: 0.03, transformOrigin: "50% 50%" }, { scaleY: 1, duration: 0.3, ease: "expo.out", immediateRender: false }, tEnd + 0.28);
+        tl.fromTo(["#f-iris2", "#f-pupil2", "#f-glint2"], { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.45, ease: "back.out(1.6)", immediateRender: false }, tEnd + 0.34);
+        tl.fromTo("#f-end-wm", { autoAlpha: 1, clipPath: "inset(0 100% 0 0)" }, { autoAlpha: 1, clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "power3.out", immediateRender: false }, tEnd + 0.16);
+        tl.fromTo("#f-es-0", { autoAlpha: 0, filter: "blur(6px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.2, immediateRender: false }, tEnd + 0.6);
+        tl.fromTo("#f-es-1", { autoAlpha: 0, filter: "blur(6px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.2, immediateRender: false }, cue("open"));
+        tl.fromTo("#f-es-2", { autoAlpha: 0, filter: "blur(6px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.2, immediateRender: false }, cue("source") + 0.2);
+        tl.fromTo("#f-end-url", { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.4, ease: "expo.out", immediateRender: false }, cue("install") + 0.2);
+
+        window.__timelines["film"] = tl;
+      }
+      build();
+    })();
+  </script>
+</template>

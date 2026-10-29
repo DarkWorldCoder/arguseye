@@ -1,0 +1,40 @@
+{
+  "snapshot": "- article:\n  - heading \"Pro\" [level=3]\n  - text: Popular\n  - paragraph: $19 /month\n  - list:\n    - listitem: ✓ Unlimited projects\n    - listitem: ✓ Priority support\n    - listitem: ✓ Custom domains\n  - button \"Choose Pro\"",
+  "errors": [],
+  "ms": 971,
+  "reloaded": false,
+  "propsSource": "usage",
+  "layoutsApplied": [
+    "app/layout.tsx",
+    "app/(marketing)/layout.tsx"
+  ],
+  "timings": {
+    "prepare": 763,
+    "show": 6,
+    "settle": 16,
+    "capture": 188
+  },
+  "target": {
+    "file": "film/demo-app/components/PricingCard.tsx",
+    "exportName": "PricingCard",
+    "props": {
+      "plan": "Pro",
+      "price": 19,
+      "features": [
+        "Unlimited projects",
+        "Priority support",
+        "Custom domains"
+      ],
+      "highlighted": true
+    }
+  },
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "sourceRevision": "1b4bc6a6a56044a6f1620b566eb5ce374d17bd4f055527d61b03008403b47f40",
+  "unresolved": [],
+  "warnings": [],
+  "complete": true,
+  "captureId": "dee23e9d-3ee9-42ca-b620-4d531ffc6a55"
+}

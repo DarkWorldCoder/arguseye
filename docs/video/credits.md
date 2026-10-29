@@ -1,11 +1,14 @@
-# Arguseye launch video — production notes
+# Arguseye launch film: production notes
 
-42-second original HyperFrames composition using actual Arguseye component and VS Code screenshots. Camera moves, cursor annotations, title animation, and transitions are original production work. This is a screenshot-based walkthrough, not a continuous live screen recording.
+A 58-second HyperFrames film (source in `film/`). Every component on screen is a demo written for the film
+(`film/demo-app`, `film/demo-vue`) and rendered by Arguseye; the film mounts those renders live (real DOM, CSS, fonts
+and images), so edits, wraps and the pill shape are real layout. Tool output on screen is copied from real runs
+(`film/assets/loop`). The editor panel in the "VS Code" shot is drawn in code around a live mount of the component.
 
-Narration re-edits complete passages from the project's existing ElevenLabs voice asset. No new voice synthesis or cloning was performed. The music bed is the pre-existing project asset, mixed below narration. Typing, click, whoosh and pop effects come from the bundled HyperFrames audio library; the source project retains its asset manifest and source credits under `.media/SFX-CREDITS.md`.
+Narration: ElevenLabs, voice "Zuko", eleven_v4, written for this film; word timings from ElevenLabs Scribe.
+Music bed and effects: the pre-existing project assets (effects from Pixabay, https://pixabay.com/service/license-summary/).
+Type: Inter (SIL OFL) and JetBrains Mono. Motion references: Prompt Motion entries credited in `film/SPEC.md`;
+rhythm method from huashu-motion (MIT).
 
-Effect source: Pixabay. License: https://pixabay.com/service/license-summary/ .
-
-Three public Prompt Motion clips were downloaded for internal motion research. Creator footage is not included in this film. The public catalog research index records sources and distinguishes inference from reviewed material.
-
-The website meadow is original artwork generated with the built-in imagegen tool; its prompt and asset provenance are in `../assets/meadow-prompt.txt`.
+Captions: `arguseye-launch.vtt` (WebVTT, from the same word timings). A version with burned-in captions for
+social feeds is produced by `film/` (`renders/arguseye-launch-captioned.mp4`).

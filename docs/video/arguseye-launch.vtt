@@ -1,45 +1,133 @@
 WEBVTT
 
-button-wrap
-00:00:00.300 --> 00:00:01.700
-The button that wraps.
+1
+00:00:00.400 --> 00:00:01.340
+Your coding agent
 
-diff-limits
-00:00:02.200 --> 00:00:03.920
-None of that shows up in a diff.
+2
+00:00:01.400 --> 00:00:03.100
+just changed one button.
 
-intro
-00:00:05.200 --> 00:00:08.240
-Meet Arguseye. Eyes for coding agents.
+3
+00:00:03.120 --> 00:00:04.190
+It read the code back,
 
-real-props
-00:00:11.200 --> 00:00:13.200
-Real props from your own call sites.
+4
+00:00:04.190 --> 00:00:05.820
+and said: done.
 
-real-styles
-00:00:13.400 --> 00:00:16.760
-Your theme, your layouts, your global CSS.
+5
+00:00:05.800 --> 00:00:06.940
+But on a phone,
 
-evidence
-00:00:17.300 --> 00:00:24.660
-The agent gets back a cropped screenshot, the accessibility tree, what changed since its last render, and errors with file paths.
+6
+00:00:07.000 --> 00:00:08.700
+that button just broke.
 
-vscode
-00:00:25.200 --> 00:00:29.800
-And in VS Code, the preview lives beside your code and updates as you type.
+7
+00:00:08.840 --> 00:00:10.780
+Agents write UI blind.
 
-no-server
-00:00:30.200 --> 00:00:31.160
+8
+00:00:10.800 --> 00:00:12.940
+Arguseye gives them eyes.
+
+9
+00:00:12.960 --> 00:00:13.740
+Here's what happens
+
+10
+00:00:13.760 --> 00:00:15.260
+when your agent calls it.
+
+11
+00:00:15.320 --> 00:00:17.260
+Arguseye reads your project.
+
+12
+00:00:17.280 --> 00:00:18.540
+It finds the component,
+
+13
+00:00:18.560 --> 00:00:19.820
+every place it's used,
+
+14
+00:00:19.840 --> 00:00:21.980
+and the props your code passes it.
+
+15
+00:00:22.000 --> 00:00:23.740
+Then your layouts, theme,
+
+16
+00:00:23.840 --> 00:00:26.540
+global CSS, fonts, and images.
+
+17
+00:00:26.800 --> 00:00:28.860
+Your own packages are bundled once,
+
+18
+00:00:28.880 --> 00:00:30.620
+and Chromium draws the result.
+
+19
+00:00:30.800 --> 00:00:31.900
 No dev server.
 
-no-stories
-00:00:31.300 --> 00:00:32.180
-No stories.
+20
+00:00:32.080 --> 00:00:33.500
+Back come a screenshot,
 
-clients
-00:00:32.200 --> 00:00:38.000
-It works with Claude Code, Codex, Cursor, Gemini, Copilot, any MCP client.
+21
+00:00:33.480 --> 00:00:34.860
+the accessibility tree,
 
-outro
-00:00:38.300 --> 00:00:41.530
-Arguseye. Open source. One command to install.
+22
+00:00:34.880 --> 00:00:36.220
+and what changed.
+
+23
+00:00:36.200 --> 00:00:37.900
+So the agent sees the break,
+
+24
+00:00:37.960 --> 00:00:39.420
+fixes it, and checks again.
+
+25
+00:00:39.840 --> 00:00:40.860
+Any component:
+
+26
+00:00:41.040 --> 00:00:42.660
+React, Next, or Vue.
+
+27
+00:00:42.800 --> 00:00:43.980
+And in VS Code,
+
+28
+00:00:44.000 --> 00:00:45.340
+it updates as you type.
+
+29
+00:00:45.680 --> 00:00:47.100
+It works with Claude Code,
+
+30
+00:00:47.120 --> 00:00:48.380
+Codex, Cursor,
+
+31
+00:00:48.400 --> 00:00:49.820
+and any MCP client.
+
+32
+00:00:50.240 --> 00:00:52.140
+Arguseye. Open source.
+
+33
+00:00:52.480 --> 00:00:54.060
+One command to install.

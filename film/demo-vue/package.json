@@ -1,0 +1,3 @@
+{ "name": "acme-demo-vue", "private": true, "type": "module",
+  "description": "A Vue demo for the Arguseye launch film. node_modules links to test/fixtures/vue-app/node_modules.",
+  "dependencies": { "vue": "^3.5.0" } }

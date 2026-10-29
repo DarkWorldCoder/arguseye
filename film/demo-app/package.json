@@ -1,0 +1,3 @@
+{ "name": "acme-demo", "private": true,
+  "description": "A small demo app for the Arguseye launch film. node_modules is a link to test/fixtures/next-app/node_modules.",
+  "dependencies": { "react": "^19.2.0", "react-dom": "^19.2.0", "tailwindcss": "^4.3.0", "@tailwindcss/postcss": "^4.3.0" } }

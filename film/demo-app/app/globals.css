@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@font-face { font-family: "Inter"; src: url("/fonts/Inter-400.woff2") format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Inter"; src: url("/fonts/Inter-700.woff2") format("woff2"); font-weight: 700; font-display: block; }
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #1d2027;
+}
+
+body { background: #f4f5f8; color: var(--color-ink); }
