@@ -19,9 +19,9 @@ const look = {
 };
 
 /** Exposes the headless renderer as MCP tools so a coding agent can see what it built in one call. */
-export async function createMcpServer(options: { root: string }) {
+export async function createMcpServer(options: { root: string; warmup?: boolean }) {
   const root = path.resolve(options.root);
-  const renderer = await createRenderer({ root });
+  const renderer = await createRenderer({ root, warmup: options.warmup ?? true });
   const server = new McpServer({ name: "component-preview", version: "0.0.1" });
   const abs = (file: string) => path.resolve(root, file);
   const rel = (file: string) => path.relative(root, file);

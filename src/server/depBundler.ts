@@ -68,6 +68,14 @@ export class DepBundler {
     this.wanted.add(specifier);
   }
 
+  /** The packages requested so far; `restore` drops later additions (after a failed speculative build). */
+  wantedSpecs(): string[] {
+    return [...this.wanted];
+  }
+  restore(specs: string[]) {
+    this.wanted = new Set(specs);
+  }
+
   /** `name` is the path after `/@deps/`, e.g. `react.js` or `_chunk-abc.js`. */
   async get(name: string): Promise<string | undefined> {
     const spec = name.replace(/\.js$/, "");

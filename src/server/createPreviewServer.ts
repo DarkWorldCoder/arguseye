@@ -13,11 +13,14 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
 import { publicEnv } from "../project/publicEnv.js";
+import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 import type { Wrapper } from "../project/appContext.js";
 
 export type PreviewServerOptions = {
   root: string;
+  /** Bundle every package the project's sources import at start, so later renders never rebuild or reload. */
+  warmup?: boolean;
   /** Fixed port (default: any free one), e.g. to keep a browser's permission for the origin. */
   port?: number;
 };
@@ -46,6 +49,8 @@ export type PreviewServer = {
    * under an older generation must be reloaded before showing `file`, or it would mix two React copies.
    */
   prepare(file: string, context?: { file: string; wrappers: Wrapper[] }): Promise<{ generation: number; cached: boolean }>;
+  /** Resolves when the start-up warm-up (if any) is done; `prepare` waits for it too. */
+  ready(): Promise<void>;
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
   updateBuffer(file: string, text: string | undefined): Update;
   close(): Promise<void>;
@@ -100,7 +105,27 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   /** Where a generated call-site context "lives", so its imports resolve like the usage file's. */
   const contextFile = (usageFile: string) => usageFile.replace(/\.[^.]+$/, ".preview-context.tsx");
 
+  /**
+   * Crawls every project source once and bundles the union of their packages. If that union cannot be bundled
+   * (a server-only package in the tree), the attempt is dropped and components bundle their own sets as before.
+   */
+  let warming: Promise<void> = Promise.resolve();
+  async function warmup(): Promise<void> {
+    const before = deps.wantedSpecs();
+    try {
+      for (const file of await sourceFiles(options.root)) await graph.crawl(file);
+      const app = appContext();
+      await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
+      await deps.ensureBuilt();
+    } catch (error) {
+      deps.restore(before);
+      startupWarnings.push(`Project-wide package warm-up skipped: ${String((error as Error).message ?? error).split("\n")[0]}`);
+    }
+  }
+  const startupWarnings: string[] = [];
+
   async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }): Promise<{ generation: number; cached: boolean }> {
+    await warming;
     if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true }));
     (file.endsWith(".vue") ? ["vue"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"]).forEach((spec) => deps.add(spec));
     await graph.crawl(file);
@@ -226,13 +251,15 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(options.port ?? 0, "127.0.0.1", () => { server.off("error", reject); resolve(); }); });
   const { port } = server.address() as AddressInfo;
 
+  if (options.warmup) warming = warmup();
+
   return {
     url: `http://127.0.0.1:${port}`,
     context: () => { const app = appContext(); return { globalCssUrls: app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
     warnings: (file) => {
       const app = appContext();
       const relevant = file ? new Set([...graph.filesFor(file), ...graph.filesFor(wrapperFile(app.entry)), ...(app.entry ? [app.entry] : [])]) : undefined;
-      return [...app.warnings, ...[...moduleWarnings].filter(([source]) => !relevant || relevant.has(source)).flatMap(([, warnings]) => warnings)];
+      return [...startupWarnings, ...app.warnings, ...[...moduleWarnings].filter(([source]) => !relevant || relevant.has(source)).flatMap(([, warnings]) => warnings)];
     },
     version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
@@ -243,6 +270,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     syncDisk,
     errorsSince,
     prepare,
+    ready: () => warming,
     close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
   };
 }

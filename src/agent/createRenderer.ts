@@ -53,6 +53,19 @@ export type RenderResult = {
   contextApplied?: string[];
   /** How many of the requested actions ran before capture (all of them unless one failed). */
   actionsApplied?: number;
+  /** What changed since the previous render of the same target in this session (absent on the first render). */
+  changes?: Changes;
+};
+
+export type Changes = {
+  status: "unchanged" | "changed" | "incomplete";
+  changedPercent: number;
+  changedPixels: number;
+  snapshotChanged: boolean;
+  /** Accessibility-tree lines removed (-) and added (+) since the previous render. */
+  snapshotDiff: string;
+  newErrors: string[];
+  resolvedErrors: string[];
 };
 
 export type Renderer = {
@@ -65,13 +78,15 @@ export type Renderer = {
   listUsages(file: string, exportName?: string): Promise<Usage[]>;
   /** What the component accepts, from its TypeScript type, plus sample props that satisfy the required ones. */
   describeProps(file: string, exportName?: string): Promise<{ props: PropSchema[]; sample: Record<string, unknown> }>;
+  /** Resolves once the project-wide warm-up (if enabled) has finished. */
+  ready(): Promise<void>;
   server: PreviewServer;
   close(): Promise<void>;
 };
 
 /** Renders components headlessly so an agent can see them without running the app or a browser. */
-export async function createRenderer(options: { root: string; server?: PreviewServer }): Promise<Renderer> {
-  const server = options.server ?? await createPreviewServer({ root: options.root });
+export async function createRenderer(options: { root: string; server?: PreviewServer; warmup?: boolean }): Promise<Renderer> {
+  const server = options.server ?? await createPreviewServer({ root: options.root, warmup: options.warmup });
   const usages = createUsageIndex(options.root, { readSource: server.readSource, version: server.version });
   let browser: Browser;
   try { browser = await launchChrome(); } catch (error) { if (!options.server) await server.close(); throw error; }
@@ -92,6 +107,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   const pageErrors = new WeakMap<Page, string[]>();
   const loadedModules = new WeakMap<Page, Set<string>>();
   const cdp = new WeakMap<Page, CDPSession>();
+  /** Last result per target signature, so a re-render can say what changed without a baseline id. */
+  const lastResults = new Map<string, RenderResult>();
+
   /** Bundle generation each warm page was loaded under. */
   const generations = new WeakMap<Page, number>();
 
@@ -141,6 +159,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     server,
     listUsages: (file, exportName) => usages.list(file, exportName),
     describeProps,
+    ready: () => server.ready(),
     render: (request) => serial(() => render(request)),
     renderUsages: (request) => serial(async () => {
       const { offset = 0, limit = 12, ...target } = request;
@@ -265,8 +284,25 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,
       };
       if (!allErrors.length) result.captureId = remember(result);
+      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage]);
+      const previous = lastResults.get(signature);
+      if (previous) {
+        const diff = await compareCaptures(page, { ...structuredClone(previous), png: Buffer.from(previous.png) }, result);
+        result.changes = {
+          status: diff.status, changedPercent: diff.changedPercent, changedPixels: diff.changedPixels, snapshotChanged: diff.snapshotChanged,
+          snapshotDiff: lineDiff(previous.snapshot, result.snapshot), newErrors: diff.newErrors, resolvedErrors: diff.resolvedErrors,
+        };
+      }
+      lastResults.set(signature, { ...structuredClone(result), png: Buffer.from(result.png) });
       return result;
   }
+}
+
+/** Lines removed (-) and added (+) between two snapshots; enough for an agent to see what its edit did to the tree. */
+function lineDiff(before: string, after: string): string {
+  const a = before.split("\n"), b = after.split("\n");
+  const inB = new Set(b), inA = new Set(a);
+  return [...a.filter((l) => !inB.has(l)).map((l) => "- " + l.trim()), ...b.filter((l) => !inA.has(l)).map((l) => "+ " + l.trim())].join("\n");
 }
 
 /** Runs the requested steps inside #root; stops at the first failure and records it as a readable error. */

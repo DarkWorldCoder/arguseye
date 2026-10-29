@@ -64,7 +64,7 @@ claude mcp add component-preview -- node /path/to/component-preview/dist/cli.mjs
 
 | Tool | Purpose |
 | --- | --- |
-| `render_component` | Render one export with explicit, discovered, or labelled sample props. |
+| `render_component` | Render one export with explicit, discovered, or labelled sample props. `in_context` renders inside the call site's parent elements (size, layout, background); `frame` is a stand-in parent box; `actions` (click, hover, fill, press, …) and `storage` put it into a state first; a re-render of the same target reports `changes`. |
 | `render_diff` | Replay a capture against current code and return change evidence. |
 | `list_usages` | Find call sites, literal props, and unresolved inputs. |
 | `render_usages` | Render up to 12 isolated variants, with a continuation cursor. |
@@ -74,7 +74,8 @@ claude mcp add component-preview -- node /path/to/component-preview/dist/cli.mjs
 1. Call `list_usages` to find literal-prop variants. Usage IDs such as `app/page.tsx:9` can be passed back verbatim; same-line usages include a column.
 2. Call `render_component` with `file`, optional `export`, `usage` or `props`, and a viewport. A successful render returns a `captureId`.
 3. Edit source, then call `render_diff` with that ID. It replays the original resolved props and viewport against current code.
-4. Call `render_usages` to inspect other discovered variants. Follow `nextCursor` to continue; each batch contains at most 12 renders.
+4. To see a component as it sits on the page, pass `usage` with `in_context: true` (its parents' width, height and background apply), or `frame: {width, height, background}` when nothing uses it yet. To reach a state first, pass `actions`, e.g. `[{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"}]`, and `storage: {local: {...}}` for logged-in or flagged states. Function props go as `{"$fn":"(x) => ..."}`.
+5. Call `render_usages` to inspect other discovered variants. Follow `nextCursor` to continue; each batch contains at most 12 renders.
 
 ```json
 {"file":"components/Card.tsx","export":"Card","usage":"app/page.tsx:9","viewport":"mobile","output":"both"}
