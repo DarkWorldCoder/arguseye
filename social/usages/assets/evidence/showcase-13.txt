@@ -1,0 +1,17 @@
+showcase-13.png · 638 ms
+errors: none
+- article:
+  - text: Boarding pass AX 204
+  - paragraph: KTM
+  - paragraph: Kathmandu
+  - img
+  - paragraph: SFO
+  - paragraph: San Francisco
+  - paragraph: Passenger
+  - paragraph: Maya Chen
+  - paragraph: Gate
+  - paragraph: B12
+  - paragraph: Seat
+  - paragraph: 14A
+  - paragraph: Boarding
+  - paragraph: 09:35

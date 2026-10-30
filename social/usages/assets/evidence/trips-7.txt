@@ -1,0 +1,17 @@
+trips-7.png · 486 ms
+errors: none
+- article:
+  - text: Boarding pass AX 880
+  - paragraph: SFO
+  - paragraph: San Francisco
+  - img
+  - paragraph: NRT
+  - paragraph: Tokyo Narita
+  - paragraph: Passenger
+  - paragraph: Maximiliana Featherstonehaugh
+  - paragraph: Gate
+  - paragraph: G98
+  - paragraph: Seat
+  - paragraph: 41K
+  - paragraph: Boarding
+  - paragraph: 10:50

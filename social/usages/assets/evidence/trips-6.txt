@@ -1,0 +1,17 @@
+trips-6.png · 546 ms
+errors: none
+- article:
+  - text: Boarding pass AX 112
+  - paragraph: KTM
+  - paragraph: Kathmandu
+  - img
+  - paragraph: DEL
+  - paragraph: New Delhi
+  - paragraph: Passenger
+  - paragraph: Arjun Shrestha
+  - paragraph: Gate
+  - paragraph: A3
+  - paragraph: Seat
+  - paragraph: 2C
+  - paragraph: Boarding
+  - paragraph: 07:05
