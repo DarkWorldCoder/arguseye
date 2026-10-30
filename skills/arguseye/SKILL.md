@@ -16,9 +16,9 @@ Render component source in Chromium with the project's packages, styles, assets 
 ## Tools (MCP server `arguseye`)
 | Tool | Use |
 |---|---|
-| `render_component {file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?, output?}` | Render with a discovered usage or explicit props. `viewport`: `mobile`, `tablet`, `desktop` or `WxH`. Without supplied inputs, required props may be generated from TypeScript samples. |
+| `render_component {file, export?, usage?, props?, viewport?, theme?, in_context?, frame?, actions?, storage?, output?}` | Render with a discovered usage or explicit props. `viewport`: `mobile`, `tablet`, `desktop` or `WxH`. `theme`: `light` or `dark` forces the colour scheme (the `dark` class on `<html>`, `color-scheme`, `prefers-color-scheme`); check both when the app has a dark mode. Without supplied inputs, required props may be generated from TypeScript samples. |
 | `list_usages {file, export?}` | Every call site with literal props, unresolved runtime props, and the JSX ancestors (`context`). |
-| `render_usages {file, export?, viewport?, cursor?, limit?, output?}` | A page of isolated literal-prop variants, not full-page integration tests. `limit` is 1–12; pass the returned `nextCursor` as `cursor` until it is null. |
+| `render_usages {file, export?, viewport?, theme?, cursor?, limit?, output?}` | A page of isolated literal-prop variants, not full-page integration tests. `limit` is 1–12; pass the returned `nextCursor` as `cursor` until it is null. |
 | `describe_props {file, export?}` | Props from the TypeScript type, with sample values. |
 | `render_diff {baselineId, output?}` | Compare current code with a successful render's `captureId`, reusing resolved props and viewport. Returns before/after/highlighted images and change evidence. |
 
@@ -38,7 +38,7 @@ For render tools, `output` is `"image"`, `"summary"` or `"both"` (default). Use 
 
 Successful renders return an immutable `captureId`. The renderer retains the latest 64 captures per session; restarting the server or eviction makes an old ID unavailable. Capture again when the error names an unknown or expired baseline.
 
-An explicit `render_diff` reuses the file, export, resolved props and viewport. It does **not** replay `actions`, `storage`, `frame` or call-site parent context. For stateful/contextual comparisons, render again with the same explicit inputs and inspect `changes`; do not assume a saved baseline restores the live editor's interaction state. Next.js server execution, Nuxt context and arbitrary runtime providers require the application environment.
+An explicit `render_diff` replays the baseline's file, export, resolved props, viewport, theme, `frame`, `in_context` parent box, `actions` and `storage` (since 0.0.8), so a stateful or contextual baseline compares like for like. It does not restore the live editor's interaction state. Next.js server execution, Nuxt context and arbitrary runtime providers require the application environment.
 
 ## Without MCP (CLI)
 ```bash

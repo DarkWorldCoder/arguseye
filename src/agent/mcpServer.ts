@@ -16,6 +16,7 @@ const output = z.enum(["image", "summary", "both"]).optional().describe("Return 
 const look = {
   output,
   viewport: z.string().optional().describe('"mobile", "tablet", "desktop" (default) or "WIDTHxHEIGHT"'),
+  theme: z.enum(["light", "dark"]).optional().describe('Force a colour scheme: "dark" adds the dark class to <html>, sets color-scheme and emulates prefers-color-scheme; "light" removes the class. Default: the app as written'),
 };
 
 /** Exposes the headless renderer as MCP tools so a coding agent can see what it built in one call. */
@@ -36,6 +37,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       rel(request.file),
       request.usage ? `usage ${request.usage}` : `props: ${result.propsSource}`,
       `${size.width}x${size.height}`,
+      request.theme && `${request.theme} theme`,
       `${result.ms} ms`,
     ].filter(Boolean);
     const errors = result.errors.length
@@ -89,7 +91,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, props: args.props, viewport: viewport(args.viewport) };
+        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
         const { result, content } = await renderContent(request, args.output);
         return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
       } catch (error) {
@@ -155,7 +157,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       try {
         const file = abs(args.file);
         if (args.cursor && !/^\d+$/.test(args.cursor)) throw new Error(`Invalid usage cursor "${args.cursor}"`);
-        const page = await renderer.renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), offset: Number(args.cursor ?? 0), limit: args.limit });
+        const page = await renderer.renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), theme: args.theme, offset: Number(args.cursor ?? 0), limit: args.limit });
         const content = page.results.flatMap((result) => [
           ...(args.output === "summary" ? [] : [{ type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" }]),
           ...(args.output === "image" ? [] : [{ type: "text" as const, text: describe({ ...result.target, usage: result.usage, viewport: result.viewport }, result) }]),

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `theme: "light" | "dark"` on `render_component`, `render_usages`, `arguseye shot --theme` and a Theme picker in the VS Code panel. `dark` adds the `dark` class to `<html>`, sets `color-scheme` and (headless) emulates `prefers-color-scheme`; `light` removes the class; without it the app renders as written. Baselines record the theme, so `render_diff` compares like for like.
+
 ## 0.0.8
 
 - An agent's edit on disk is no longer hidden by a usage lookup. `render_usages`, `list_usages` and the export lookup read the edited file before the render checked for changes, so the render showed the old component and Tailwind never generated the edit's new classes (`render_diff` then reported "unchanged"). Found by a Claude Code session that refused to call its task done.

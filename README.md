@@ -169,7 +169,7 @@ A source diff cannot show clipped text, missing padding, or a theme that failed 
 | Inspect an edit | Pixel differences, dimension changes, accessibility changes, and new/resolved errors |
 | Check other usages | Paginated isolated renders, up to 12 per batch, with individual capture IDs |
 | Reproduce a state | Component actions, storage inputs, usage ancestors, or a stand-in parent frame |
-| Work in the editor | Unsaved-buffer previews, viewport presets, props controls, and baseline comparison |
+| Work in the editor | Unsaved-buffer previews, viewport presets, a light/dark toggle, props controls, and baseline comparison |
 
 <p align="center"><img src="https://darkworldcoder.github.io/arguseye/assets/agent-workflow.svg" alt="Three steps: discover source and usage inputs, render the actual component, then inspect visual and semantic change evidence" width="1000"></p>
 
@@ -192,9 +192,9 @@ A real Next.js 14 app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered fr
 
 | Tool | What the agent gets back |
 |---|---|
-| `render_component {file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?}` | PNG cropped to the component, accessibility tree, `errors[]`, `warnings[]`, `timings`, `changes` since the previous render of the same target. `usage` takes the props of a real call site; `in_context` renders inside that call site's parent elements; `frame` is a stand-in parent box; `actions` and `storage` set the state first. Function props: `{"$fn": "(x) => …"}`. |
+| `render_component {file, export?, usage?, props?, viewport?, theme?, in_context?, frame?, actions?, storage?}` | PNG cropped to the component, accessibility tree, `errors[]`, `warnings[]`, `timings`, `changes` since the previous render of the same target. `usage` takes the props of a real call site; `in_context` renders inside that call site's parent elements; `frame` is a stand-in parent box; `actions` and `storage` set the state first; `theme` forces `light` or `dark` (the `dark` class on `<html>`, `color-scheme` and `prefers-color-scheme`). Function props: `{"$fn": "(x) => …"}`. |
 | `list_usages {file, export?}` | Every call site with its literal props, the props that depend on runtime values, and the JSX ancestors. |
-| `render_usages {file, export?, viewport?, cursor?, limit?, output?}` | Paginated isolated call-site renders, up to 12 per batch, with per-usage evidence and capture IDs. |
+| `render_usages {file, export?, viewport?, theme?, cursor?, limit?, output?}` | Paginated isolated call-site renders, up to 12 per batch, with per-usage evidence and capture IDs. |
 | `describe_props {file, export?}` | The props schema from the TypeScript type, with sample values. |
 | `render_diff {baselineId, output?}` | Before, after, highlighted pixel differences, accessibility changes, errors, and completeness against a `captureId`. |
 

@@ -16,7 +16,7 @@ const HELP = `arguseye: inspect React and Vue components and verify UI edits, no
   arguseye mcp [--root DIR]
       MCP server on stdio for coding agents (render_component, list_usages, render_usages)
 
-  arguseye shot FILE [--export NAME] [--usage ID] [--props JSON] [--viewport WxH] [--out FILE.png] [--root DIR]
+  arguseye shot FILE [--export NAME] [--usage ID] [--props JSON] [--viewport WxH] [--theme light|dark] [--out FILE.png] [--root DIR]
       Render once: writes a PNG and prints the accessibility snapshot and errors
       --in-context renders inside the usage's parent elements; --frame WxH[:background] inside a stand-in box
 
@@ -43,6 +43,7 @@ const { positionals, values } = parseArgs({
     usage: { type: "string" },
     props: { type: "string" },
     viewport: { type: "string" },
+    theme: { type: "string" },
     out: { type: "string" },
     port: { type: "string" },
     "in-context": { type: "boolean" },
@@ -107,7 +108,9 @@ if (values.help || !command) {
       console.log(JSON.stringify(await renderer.listUsages(target.file, target.exportName), null, 2));
     } else {
       const { width, height } = parseViewport(values.viewport);
+      if (values.theme !== undefined && values.theme !== "light" && values.theme !== "dark") throw new Error(`Unknown theme "${values.theme}"; use light or dark`);
       const result = await renderer.render({
+        theme: values.theme as "light" | "dark" | undefined,
         ...target,
         usage: values.usage,
         inContext: values["in-context"],

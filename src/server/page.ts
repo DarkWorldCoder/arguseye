@@ -12,6 +12,11 @@ export type PreviewTarget = {
   frame?: Frame;
   /** The page file whose layouts/templates wrap this render (absolute); the root layout alone when absent. */
   route?: string;
+  /**
+   * Force a colour scheme: `dark` adds the `dark` class to <html> and sets `color-scheme` (the headless renderer
+   * also emulates `prefers-color-scheme`); `light` removes the class. Absent, the app renders as written.
+   */
+  theme?: "light" | "dark";
 };
 
 export type Frame = { width: number; height: number; background?: string; padding?: number };
@@ -44,13 +49,21 @@ export type PageContext = {
 
 const attr = (value: string) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
+/** The app's own <html> class with `dark` added or removed for a forced theme; untouched when no theme is forced. */
+export function themedClass(htmlClass: string | undefined, theme: PreviewTarget["theme"]): string | undefined {
+  if (!theme) return htmlClass;
+  const classes = (htmlClass ?? "").split(/\s+/).filter((c) => c && c !== "dark");
+  if (theme === "dark") classes.push("dark");
+  return classes.join(" ") || undefined;
+}
+
 export function previewHtml(target: PreviewTarget, { state, env, htmlClass, bodyClass, globalCssUrls }: PageContext): string {
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
   const envJson = JSON.stringify({ NODE_ENV: "development", ...env }).replace(/</g, "\\u003c");
   const globals = globalCssUrls.map((u) => `<script type="module" src="${attr(u)}"></script>`).join("\n");
   return `<!doctype html>
-<html${htmlClass ? ` class="${attr(htmlClass)}"` : ""}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html${themedClass(htmlClass, target.theme) ? ` class="${attr(themedClass(htmlClass, target.theme)!)}"` : ""}${target.theme ? ` style="color-scheme:${target.theme}"` : ""}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
 window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [] };
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
@@ -174,6 +187,8 @@ cp.show = async (target, state) => {
   cp.errors = [];
   cp.status = "loading";
   const since = Date.now();
+  // A forced theme: the dark class and color-scheme on <html>; without one, the app's own class stays as it is.
+  if (target.theme) { document.documentElement.classList.toggle("dark", target.theme === "dark"); document.documentElement.style.colorScheme = target.theme; }
   try {
     await preload(target);
     const mod = await import(target.file === "/@empty" ? "/@fs/@empty" : moduleUrl(target.file));

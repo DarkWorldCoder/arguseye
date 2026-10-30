@@ -34,6 +34,8 @@ export type PanelState = {
   usages: Usage[];
   usage?: string;
   viewport: keyof typeof VIEWPORTS;
+  /** `auto` shows the app as written; `light`/`dark` force the colour scheme (dark class + color-scheme). */
+  theme: "auto" | "light" | "dark";
 };
 
 export type PreviewApi = {
@@ -45,6 +47,7 @@ export type PreviewApi = {
   setExport(exportName: string): Promise<void>;
   setUsage(id: string): Promise<void>;
   setViewport(preset: keyof typeof VIEWPORTS): Promise<void>;
+  setTheme(theme: PanelState["theme"]): Promise<void>;
   captureBaseline(): Promise<RenderResult>;
   compareChanges(): Promise<DiffResult>;
 };
@@ -90,6 +93,7 @@ class PreviewPanel implements vscode.Disposable {
     setExport: (exportName) => this.setExport(exportName),
     setUsage: (id) => this.setUsage(id),
     setViewport: (preset) => this.setViewport(preset),
+    setTheme: (theme) => this.setTheme(theme),
     captureBaseline: () => this.captureBaseline(),
     compareChanges: () => this.compareChanges(),
     waitForStatus: (matches, timeoutMs) =>
@@ -164,6 +168,7 @@ class PreviewPanel implements vscode.Disposable {
     if (!index) { index = createUsageIndex(root, { readSource: server.readSource, version: server.version }); this.indexes.set(root, index); }
     const target = await this.targetFor(root, file, source, exportName);
     target.route = await routeFor(root, file, target.exportName, undefined, (f: string, x?: string) => findUsages(root, f, x));
+    target.theme = this.forcedTheme();
     const usages = await index.list(file, target.exportName);
     const schema = await propsSchema(file, target.exportName).catch(() => []);
     if (sequence !== this.showSequence || !this.panel) return;
@@ -176,6 +181,7 @@ class PreviewPanel implements vscode.Disposable {
       propsSource: target.propsSource,
       schema, usages, usage: target.propsSource === "usage" ? usages.find((u) => JSON.stringify(u.props) === JSON.stringify(target.props))?.id : undefined,
       viewport: this.state?.viewport ?? "desktop",
+      theme: this.state?.theme ?? "auto",
     };
     this.current = { file, status: "loading", errors: [], text: "" };
     const { generation } = await server.prepare(file);
@@ -196,7 +202,7 @@ class PreviewPanel implements vscode.Disposable {
     if (!this.state || !this.panel) return;
     this.baseline = undefined;
     this.state = { ...this.state, props, propsSource: "given", usage: undefined };
-    const target: PreviewTarget = { file: this.state.file, exportName: this.state.exportName, props, fresh: false };
+    const target: PreviewTarget = { file: this.state.file, exportName: this.state.exportName, props, fresh: false, theme: this.forcedTheme() };
     void this.panel.webview.postMessage({ type: "show", target });
     void this.panel.webview.postMessage({ type: "state", state: this.state });
   }
@@ -228,7 +234,23 @@ class PreviewPanel implements vscode.Disposable {
     if (!usage || !this.state || !this.panel) throw new Error(`Unknown usage "${id}"`);
     this.baseline = undefined;
     this.state = { ...this.state, usage: id, props: usage.props, propsSource: "usage" };
-    await this.panel.webview.postMessage({ type: "show", target: { file: this.state.file, exportName: this.state.exportName, props: usage.props, fresh: true } });
+    await this.panel.webview.postMessage({ type: "show", target: { file: this.state.file, exportName: this.state.exportName, props: usage.props, fresh: true, theme: this.forcedTheme() } });
+    await this.panel.webview.postMessage({ type: "state", state: this.state });
+  }
+
+  /** The theme the preview forces, or none when the toolbar says `auto`. */
+  private forcedTheme(): PreviewTarget["theme"] {
+    return this.state?.theme === "light" || this.state?.theme === "dark" ? this.state.theme : undefined;
+  }
+
+  private async setTheme(theme: PanelState["theme"]) {
+    if (!["auto", "light", "dark"].includes(theme)) throw new Error(`Unknown theme "${theme}"`);
+    if (!this.state || !this.panel) return;
+    this.baseline = undefined;
+    this.state = { ...this.state, theme };
+    // `auto` after a forced theme reloads the page, since the app's own <html> class is only known at load.
+    const target: PreviewTarget = { file: this.state.file, exportName: this.state.exportName, props: this.state.props, fresh: false, theme: this.forcedTheme() };
+    await this.panel.webview.postMessage({ type: "show", target });
     await this.panel.webview.postMessage({ type: "state", state: this.state });
   }
 
@@ -263,7 +285,7 @@ class PreviewPanel implements vscode.Disposable {
   private async captureBaseline(): Promise<RenderResult> {
     if (!this.state) throw new Error("Open a preview first.");
     const renderer = await this.verificationRenderer();
-    const result = await renderer.render({ file: this.state.file, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport] });
+    const result = await renderer.render({ file: this.state.file, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport], theme: this.forcedTheme() });
     this.baseline = result.captureId;
     await this.panel?.webview.postMessage({ type: "verification", message: result.captureId ? "Baseline captured" + (result.warnings.length ? ": " + result.warnings.join("; ") : ".") : result.errors.join("\n"), baseline: !!this.baseline });
     return result;
@@ -288,6 +310,7 @@ class PreviewPanel implements vscode.Disposable {
       const act = (work: Promise<unknown>) => void work.catch((error) => panel.webview.postMessage({ type: "verification", message: String(error.message ?? error), baseline: !!this.baseline }));
       if (message.type === "usage") return act(this.setUsage(message.id));
       if (message.type === "viewport") return act(this.setViewport(message.preset));
+      if (message.type === "theme") return act(this.setTheme(message.theme));
       if (message.type === "capture") return act(this.captureBaseline());
       if (message.type === "compare") return act(this.compareChanges());
       if (message.type === "props") return void this.setProps(message.props);
@@ -367,6 +390,7 @@ function webviewHtml(origin: string, pageUrl: string): string {
   <select id="export" title="Export" aria-label="Component export"></select>
   <select id="usage" title="Usage" aria-label="Component usage"></select>
   <select id="viewport" aria-label="Viewport"><option value="mobile">Mobile · 390</option><option value="tablet">Tablet · 820</option><option value="desktop" selected>Desktop · 1280</option></select>
+  <select id="theme" aria-label="Theme" title="Force light or dark (the dark class and color-scheme on html)"><option value="auto" selected>Theme · app</option><option value="light">Light</option><option value="dark">Dark</option></select>
   <span class="source" id="source"></span>
   <span class="spacer"></span>
   <span id="status" title="Render status">loading</span>
@@ -427,6 +451,7 @@ addEventListener("message", (event) => {
 document.getElementById("toggle").onclick = () => form.classList.toggle("open");
 document.getElementById("usage").onchange = (event) => { if (event.target.value) vscode.postMessage({ type: "usage", id: event.target.value }); };
 document.getElementById("viewport").onchange = (event) => vscode.postMessage({ type: "viewport", preset: event.target.value });
+document.getElementById("theme").onchange = (event) => vscode.postMessage({ type: "theme", theme: event.target.value });
 document.getElementById("capture").onclick = () => vscode.postMessage({ type: "capture" });
 document.getElementById("compare").onclick = () => vscode.postMessage({ type: "compare" });
 exportSelect.onchange = () => vscode.postMessage({ type: "export", exportName: exportSelect.value });
@@ -436,6 +461,7 @@ function renderBar() {
   const custom = document.createElement("option"); custom.value = ""; custom.textContent = "Custom props"; usageSelect.append(custom);
   for (const usage of state.usages) { const option = document.createElement("option"); option.value = usage.id; option.textContent = usage.id + (usage.unresolved.length ? " (runtime inputs)" : ""); option.selected = usage.id === state.usage; usageSelect.append(option); }
   document.getElementById("viewport").value = state.viewport;
+  document.getElementById("theme").value = state.theme ?? "auto";
   const sizes = { mobile: [390, 844], tablet: [820, 1180], desktop: [1280, 800] };
   frame.width = sizes[state.viewport][0]; frame.height = sizes[state.viewport][1];
   frame.style.width = frame.width + "px"; frame.style.height = frame.height + "px";

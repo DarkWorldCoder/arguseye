@@ -42,6 +42,10 @@ export async function run(): Promise<void> {
   await api.waitForStatus((s) => /USB-C Cable/.test(s.text), 5000);
   await api.setViewport("mobile");
   assert.equal(api.state()!.viewport, "mobile");
+  await api.setTheme("dark");
+  assert.equal(api.state()!.theme, "dark");
+  await api.setTheme("auto");
+  assert.equal(api.state()!.theme, "auto");
   await api.setUsage("app/page.tsx:9");
   await api.setProps({ ...state.props, title: "Desk Lamp", price: 12.5 });
   const edited = await api.waitForStatus((s) => /Desk Lamp/.test(s.text) && /\$12\.50/.test(s.text), 5000);

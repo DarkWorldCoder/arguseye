@@ -146,6 +146,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget): Promise<Page> {
     const page = await browser.newPage({ viewport });
+    await page.emulateMedia({ colorScheme: target.theme ?? null });
     const errors: string[] = [];
     const loaded = new Set<string>(); loadedModules.set(page, loaded);
     page.on("request", (request) => { const url = new URL(request.url()); if (url.pathname.startsWith("/@fs/")) loaded.add(decodeURIComponent(url.pathname.slice(4))); });
@@ -264,6 +265,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       }, storage ?? null);
       if (isNew && storage) await page.evaluate((t) => (window as any).__CP__.show(t), target); // mounted before the seed: show again
       if (!isNew) {
+        await page.emulateMedia({ colorScheme: rest.theme ?? null }); // a warm page may have been used for the other theme
         const state = server.syncDisk();
         const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
         if (generation !== generations.get(page)) {
@@ -339,12 +341,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({
           file: rest.file, exportName: rest.exportName ?? "default", props,
-          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}),
+          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}),
         }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,
       };
       if (!allErrors.length) result.captureId = remember(result);
-      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage]);
+      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme]);
       const previous = lastResults.get(signature);
       if (previous) {
         const diff = await compareCaptures(page, { ...structuredClone(previous), png: Buffer.from(previous.png) }, result);

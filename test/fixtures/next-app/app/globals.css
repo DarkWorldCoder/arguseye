@@ -11,3 +11,9 @@
 body {
   font-family: Georgia, serif;
 }
+
+/* Theme probes: one rule keyed on the dark class, one on the media query. */
+.dark [data-theme-probe] { color: rgb(1, 2, 3); }
+@media (prefers-color-scheme: dark) {
+  [data-theme-probe] { background-color: rgb(4, 5, 6); }
+}
