@@ -48,7 +48,7 @@ export function WeatherCard({
   ],
 }: WeatherCardProps) {
   return (
-    <article className="relative w-[340px] overflow-hidden rounded-[28px] bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 p-6 text-white shadow-2xl shadow-blue-900/30">
+    <article className="relative w-full max-w-[340px] overflow-hidden rounded-[28px] bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 p-6 text-white shadow-2xl shadow-blue-900/30">
       <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-amber-300/70 blur-2xl" />
       <div className="relative flex items-start justify-between">
         <div>

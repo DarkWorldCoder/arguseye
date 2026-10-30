@@ -17,11 +17,11 @@ export function NowPlaying({ title, artist, album, elapsed, duration, progress }
         </div>
       </div>
       <div className="mt-5 flex items-end justify-between">
-        <div>
-          <h3 className="text-xl font-bold">{title}</h3>
-          <p className="text-sm text-zinc-400">{artist}</p>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-xl font-bold">{title}</h3>
+          <p className="truncate text-sm text-zinc-400">{artist}</p>
         </div>
-        <div className="flex h-6 items-end gap-[3px]" aria-hidden>
+        <div className="ml-3 flex h-6 shrink-0 items-end gap-[3px]" aria-hidden>
           {[10, 18, 13, 22, 15].map((h, i) => (
             <span key={i} className="w-[4px] rounded-full bg-emerald-400" style={{ height: h }} />
           ))}

@@ -13,6 +13,17 @@ export function RevenueChart({
   points = [12, 18, 15, 24, 22, 31, 29, 38, 35, 46, 44, 55],
   months = ["Jan", "Mar", "May", "Jul", "Sep", "Nov"],
 }: RevenueChartProps) {
+  if (points.length < 2) {
+    return (
+      <article className="w-[360px] rounded-[24px] bg-white p-6 shadow-xl shadow-indigo-950/10 ring-1 ring-zinc-200">
+        <p className="text-sm font-medium text-zinc-500">{label}</p>
+        <p className="mt-1 text-4xl font-bold tracking-tight text-zinc-900">{value}</p>
+        <div className="mt-6 grid h-[120px] place-items-center rounded-2xl border border-dashed border-zinc-300 text-sm text-zinc-400">
+          No data for this period yet
+        </div>
+      </article>
+    );
+  }
   const w = 300;
   const h = 120;
   const max = Math.max(...points);

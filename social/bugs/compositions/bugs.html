@@ -1,0 +1,162 @@
+<template>
+  <style>
+#root { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(circle at 12% 8%, rgba(249,115,22,.10), transparent 42%), radial-gradient(circle at 92% 88%, rgba(108,112,201,.16), transparent 46%), linear-gradient(165deg, #ffffff 0%, #f5f7fc 48%, #eceffb 100%); font-family: "Inter", sans-serif; color: #0f172a; }
+.mono { font-family: "JetBrains Mono", monospace; }
+.title { position: absolute; left: 0; right: 0; text-align: center; font-weight: 700; letter-spacing: -0.02em; z-index: 5; }
+.t-big { font-size: 66px; line-height: 1.1; }
+.m { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.08em; margin-bottom: -0.08em; }
+.w { display: inline-block; white-space: pre; }
+.iris { color: #ea580c; } .ok { color: #15803d; }
+#t0 { top: 110px; } #t0b { top: 110px; }
+#grid { position: absolute; left: 70px; top: 330px; width: 940px; height: 920px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+.cell { position: relative; border-radius: 26px; background: #ffffff; box-shadow: 0 18px 44px rgba(15,23,42,.10); overflow: hidden; }
+.cell .mini { position: absolute; transform-origin: 0 0; }
+.cell .cring { position: absolute; border: 5px solid #ea580c; border-radius: 16px; }
+.errmini { position: absolute; inset: 60px 24px; border-radius: 18px; background: #0b1222; padding: 24px; font-size: 28px; line-height: 1.5; color: #f87171; }
+.bug { position: absolute; inset: 0; opacity: 0; }
+.tag { position: absolute; left: 0; right: 0; top: 70px; text-align: center; }
+.tag .pill { display: inline-block; padding: 8px 22px; border-radius: 999px; background: #fff1e8; color: #c2410c; font-weight: 800; font-size: 30px; letter-spacing: .08em; }
+.btitle { top: 135px; }
+.cmd { position: absolute; left: 60px; right: 60px; top: 245px; text-align: center; font-size: 28px; color: #475569; white-space: nowrap; overflow: hidden; }
+.cmd .fn { color: #4f46a5; }
+.stagebox { position: absolute; transform-origin: 0 0; }
+.host { position: absolute; left: 0; top: 0; }
+.ring { position: absolute; border: 3px solid #ea580c; border-radius: 12px; }
+.vp { position: absolute; left: 0; top: 0; width: 320px; height: 304px; border-right: 2px dashed #ea580c; }
+.vplabel { position: absolute; right: 4px; top: -26px; font-size: 14px; color: #c2410c; }
+.err { position: absolute; left: 0; top: 0; width: 360px; height: 230px; border-radius: 14px; background: #0b1222; padding: 18px 20px; font-size: 14px; line-height: 1.55; color: #e2e8f0; box-shadow: 0 16px 36px rgba(15,23,42,.25); }
+.err .lbl { color: #f59e0b; } .err .red { color: #f87171; } .err .dim { color: #64748b; }
+.err .chip { display: inline-block; margin-top: 8px; padding: 2px 10px; border-radius: 999px; background: rgba(248,113,113,.15); color: #fca5a5; }
+.chips { position: absolute; left: 60px; right: 60px; bottom: 70px; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.chip2 { padding: 10px 18px; border-radius: 14px; font-size: 28px; }
+.chip2.minus { background: #fee2e2; color: #b91c1c; } .chip2.plus { background: #dcfce7; color: #15803d; }
+.check { position: absolute; width: 96px; height: 96px; border-radius: 50%; background: #16a34a; color: #fff; font-size: 60px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 14px 30px rgba(22,163,74,.35); }
+#end { position: absolute; inset: 0; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+#end .mark { width: 150px; height: 150px; }
+#end .name { margin-top: 30px; font-size: 104px; font-weight: 800; letter-spacing: -0.04em; }
+#end .ch { display: inline-block; }
+#end .line { margin-top: 18px; font-size: 44px; font-weight: 700; letter-spacing: -0.01em; max-width: 860px; line-height: 1.2; text-wrap: balance; }
+#end .meta { margin-top: 34px; font-size: 30px; color: #64748b; }
+#end .url { margin-top: 18px; font-size: 32px; color: #4f46a5; }
+  </style>
+  <div id="root" data-composition-id="bugs" data-width="1080" data-height="1350">
+  <div id="grid">
+  <div class="cell" id="c0"><div class="mini" style="left:30px;top:0px;transform:scale(0.62)"><div class="host" data-layout-ignore data-replica="bug-np" data-w="390"></div></div><div class="cring" style="left:142px;top:204px;width:152px;height:52px"></div></div>
+  <div class="cell" id="c1"><div class="errmini mono">errors<br/>TypeError: undefined is not iterable<br/><span style="color:#94a3b8">RevenueChart.tsx:35:19</span></div><div class="cring" style="left:24px;top:64px;width:409px;height:190px"></div></div>
+  <div class="cell" id="c2"><div class="mini" style="left:22px;top:70px;transform:scale(1.05)"><div class="host" data-layout-ignore data-replica="bug-chat" data-w="390"></div></div><div class="cring" style="left:174px;top:198px;width:218px;height:77px"></div></div>
+  <div class="cell" id="c3"><div class="mini" style="left:33px;top:50px;transform:scale(1.2)"><div class="host" data-layout-ignore data-replica="bug-weather" data-w="320"></div></div><div class="cring" style="left:327px;top:44px;width:108px;height:379px"></div></div>
+  </div>
+  <div class="title t-big" id="t0" data-layout-allow-overflow><span class="m"><span class="w">Your </span></span><span class="m"><span class="w">agent </span></span><span class="m"><span class="w">said </span></span><span class="m"><span class="w ok">“Done ✓”</span></span></div>
+  <div class="title t-big" id="t0b" data-layout-allow-overflow><span class="m"><span class="w">It </span></span><span class="m"><span class="w">missed </span></span><span class="m"><span class="w iris" id="four">4 </span></span><span class="m"><span class="w">bugs.</span></span></div>
+  <div class="bug" id="b1">
+  <div class="tag" data-layout-allow-overflow><span class="m"><span class="w"><span class="pill">BUG 01</span></span></span></div>
+  <div class="title t-big btitle" data-layout-allow-overflow><span class="m"><span class="w">One </span></span><span class="m"><span class="w">long </span></span><span class="m"><span class="w">word.</span></span></div>
+  <div class="cmd mono"><span class="fn">render_component</span> NowPlaying.tsx <span>title: "Donaudampfschifffahrts…"</span></div>
+  <div class="stagebox" style="left:319.0px;top:400px;transform:scale(1.3)" data-layout-allow-overflow>
+  <div class="host broken" data-layout-ignore data-replica="bug-np" data-w="390"></div>
+  <div class="host fixed" data-layout-ignore data-replica="fix-np" data-w="390"></div>
+  <div class="ring" style="left:190px;top:338px;width:226px;height:64px"></div>
+  </div>
+  <div class="chips mono"><span class="chip2 minus">- &lt;h3 className="text-xl"></span><span class="chip2 plus">+ &lt;h3 className="truncate text-xl"></span><span class="chip2 plus">+ min-w-0 flex-1</span></div>
+  <div class="check" style="left:701px;top:360px">✓</div>
+  </div>
+  <div class="bug" id="b2">
+  <div class="tag" data-layout-allow-overflow><span class="m"><span class="w"><span class="pill">BUG 02</span></span></span></div>
+  <div class="title t-big btitle" data-layout-allow-overflow><span class="m"><span class="w">Empty </span></span><span class="m"><span class="w">data </span></span><span class="m"><span class="w">crashes </span></span><span class="m"><span class="w">it.</span></span></div>
+  <div class="cmd mono"><span class="fn">render_component</span> RevenueChart.tsx <span>points: []</span></div>
+  <div class="stagebox" style="left:180.0px;top:470px;transform:scale(2.0)" data-layout-allow-overflow>
+  <div class="err mono broken"><div class="dim">render_component → result</div><div class="lbl" style="margin-top:6px">errors</div><div class="red">TypeError: undefined is not iterable</div><div class="dim">at RevenueChart (RevenueChart.tsx:35:19)</div><div class="chip">complete: false</div></div>
+  <div class="host fixed" data-layout-ignore data-replica="fix-chart" data-w="390"></div>
+  <div class="ring" style="left:8px;top:40px;width:344px;height:150px"></div>
+  </div>
+  <div class="chips mono"><span class="chip2 plus">+ if (points.length &lt; 2)</span><span class="chip2 plus">+   return &lt;EmptyState /></span></div>
+  <div class="check" style="left:840px;top:430px">✓</div>
+  </div>
+  <div class="bug" id="b3">
+  <div class="tag" data-layout-allow-overflow><span class="m"><span class="w"><span class="pill">BUG 03</span></span></span></div>
+  <div class="title t-big btitle" data-layout-allow-overflow><span class="m"><span class="w">A </span></span><span class="m"><span class="w">pasted </span></span><span class="m"><span class="w">link.</span></span></div>
+  <div class="cmd mono"><span class="fn">render_component</span> ChatThread.tsx <span>text: "https://preview.acme.dev/build/7f3c…"</span></div>
+  <div class="stagebox" style="left:166.0px;top:470px;transform:scale(2.2)" data-layout-allow-overflow>
+  <div class="host broken" data-layout-ignore data-replica="bug-chat" data-w="390"></div>
+  <div class="host fixed" data-layout-ignore data-replica="fix-chat" data-w="390"></div>
+  <div class="ring" style="left:150px;top:128px;width:196px;height:62px"></div>
+  </div>
+  <div class="chips mono"><span class="chip2 plus">+ [overflow-wrap:anywhere]</span></div>
+  <div class="check" style="left:854px;top:430px">✓</div>
+  </div>
+  <div class="bug" id="b4">
+  <div class="tag" data-layout-allow-overflow><span class="m"><span class="w"><span class="pill">BUG 04</span></span></span></div>
+  <div class="title t-big btitle" data-layout-allow-overflow><span class="m"><span class="w">Cut </span></span><span class="m"><span class="w">off </span></span><span class="m"><span class="w">on </span></span><span class="m"><span class="w">a </span></span><span class="m"><span class="w">small </span></span><span class="m"><span class="w">phone.</span></span></div>
+  <div class="cmd mono"><span class="fn">render_component</span> WeatherCard.tsx <span>viewport: 320</span></div>
+  <div class="stagebox" style="left:204.0px;top:450px;transform:scale(2.1)" data-layout-allow-overflow>
+  <div class="host broken" data-layout-ignore data-replica="bug-weather" data-w="320"></div>
+  <div class="host fixed" data-layout-ignore data-replica="fix-weather" data-w="320"></div>
+  <div class="vp"><div class="vplabel mono">320 px</div></div>
+  <div class="ring" style="left:250px;top:-6px;width:80px;height:316px"></div>
+  </div>
+  <div class="chips mono"><span class="chip2 minus">- w-[340px]</span><span class="chip2 plus">+ w-full max-w-[340px]</span></div>
+  <div class="check" style="left:858px;top:410px">✓</div>
+  </div>
+  <div id="end"><img class="mark" src="assets/brand/icon.svg" alt="Arguseye" /><div class="name" id="wordmark" data-layout-allow-overflow><span class="ch">A</span><span class="ch">r</span><span class="ch">g</span><span class="ch">u</span><span class="ch">s</span><span class="ch">e</span><span class="ch">y</span><span class="ch">e</span></div><div class="line" id="endline" data-layout-allow-overflow><span class="m"><span class="w">Catch </span></span><span class="m"><span class="w">them </span></span><span class="m"><span class="w">before </span></span><span class="m"><span class="w">your </span></span><span class="m"><span class="w">users </span></span><span class="m"><span class="w">do.</span></span></div><div class="meta">Renders React, Next.js and Vue components · no dev server</div><div class="url mono" data-var-text="repo-url">github.com/DarkWorldCoder/arguseye</div></div>
+  </div>
+  <script>
+(function () {
+  const tl = gsap.timeline({ paused: true });
+  const B = (k) => 0.625 * k;
+  const R = window.__REPLICAS;
+  document.querySelectorAll("[data-replica]").forEach((h) => { const r = mountReplica(h, R[h.dataset.replica], Number(h.dataset.w)); r.extra.textContent = ".r-html,.r-body{background:transparent !important}"; });
+  const W = (sel) => Array.from(document.querySelectorAll(sel + " .w"));
+  function rise(sel, t, gap = 0.06) { W(sel).forEach((w, i) => { gsap.set(w, { yPercent: 115 }); tl.to(w, { yPercent: 0, duration: 0.55, ease: "expo.out" }, t + i * gap); }); }
+  function sink(sel, t, gap = 0.025) { W(sel).forEach((w, i) => { tl.to(w, { yPercent: -115, duration: 0.28, ease: "power3.in" }, t - 0.28 + i * gap); tl.set(w, { opacity: 0 }, t + i * gap + 0.01); }); }
+  function exitLeft(sel, t) { tl.to(sel, { x: -130, duration: 0.3, ease: "power4.in" }, t - 0.3); tl.to(sel, { opacity: 0, duration: 0.22, ease: "none" }, t - 0.24); }
+  function enterLeft(sel, t) { tl.set(sel, { x: 130, opacity: 0.35 }, t); tl.to(sel, { x: 0, duration: 0.34, ease: "power4.out" }, t); tl.to(sel, { opacity: 1, duration: 0.2, ease: "none" }, t); }
+  const draw = (sel, t) => { gsap.set(sel, { clipPath: "inset(0 100% 100% 0 round 12px)" }); tl.to(sel, { clipPath: "inset(0 0% 0% 0 round 12px)", duration: 0.38, ease: "power2.out" }, t); };
+
+  // HOOK: frame 0 = the four broken renders + "Your agent said “Done ✓”"
+  gsap.set("#t0b .w", { yPercent: 115 });
+  document.querySelectorAll("#grid .cring").forEach((r, i) => draw(r, B(1.5) + i * 0.12));
+  sink("#t0", B(3.2));
+  rise("#t0b", B(3.2) + 0.02);
+  tl.fromTo("#four", { scale: 1.8 }, { scale: 1, duration: 0.5, ease: "expo.out", immediateRender: false }, B(3.2) + 0.08);
+  sink("#t0b", B(6));
+  exitLeft("#grid", B(6));
+
+  // four bugs, 7 beats each: tag + title rise, the call types, ring draws, rack-focus swap to the real fix
+  const ids = ["b1", "b2", "b3", "b4"];
+  ids.forEach((id, k) => {
+    const S = B(6 + 7 * k), q = "#" + id;
+    enterLeft(q, S);
+    rise(q + " .tag", S + 0.02); rise(q + " .btitle", S + 0.1);
+    gsap.set(q + " .cmd", { clipPath: "inset(0 100% 0 0)" });
+    tl.to(q + " .cmd", { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "none" }, S + B(1));
+    gsap.set(q + " .fixed", { opacity: 0 });
+    draw(q + " .ring", S + B(2));
+    // rack-focus: blur spike on the stage hides a one-frame swap (cut-the-curve §5)
+    tl.to(q + " .stagebox", { filter: "blur(10px)", scale: "+=0", duration: 0.18, ease: "power2.in" }, S + B(3.5) - 0.18);
+    tl.set(q + " .broken", { opacity: 0 }, S + B(3.5));
+    tl.set(q + " .fixed", { opacity: 1 }, S + B(3.5));
+    tl.set(q + " .ring", { opacity: 0 }, S + B(3.5));
+    if (id === "b4") tl.set(q + " .vp", { borderRightColor: "#16a34a" }, S + B(3.5));
+    tl.to(q + " .stagebox", { filter: "blur(0px)", duration: 0.22, ease: "power2.out" }, S + B(3.5));
+    gsap.set(q + " .chip2", { opacity: 0, y: 18 });
+    tl.to(q + " .chip2", { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: "expo.out" }, S + B(3.5) + 0.1);
+    gsap.set(q + " .check", { scale: 0, opacity: 0 });
+    tl.to(q + " .check", { scale: 1, opacity: 1, duration: 0.45, ease: "back.out(1.7)" }, S + B(4.5));
+    if (k < 3) exitLeft(q, B(6 + 7 * (k + 1)));
+  });
+
+  // END: inverse zoom-through arrival, wordmark letter by letter
+  tl.to("#b4", { scale: 0.8, duration: 0.2, ease: "power3.in" }, B(34) - 0.2);
+  tl.to("#b4", { opacity: 0, duration: 0.2, ease: "none" }, B(34) - 0.2);
+  tl.set("#end", { scale: 1.25, opacity: 0.15 }, B(34));
+  tl.to("#end", { scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, B(34));
+  document.querySelectorAll("#wordmark .ch").forEach((c, i) => { gsap.set(c, { opacity: 0, y: 34, filter: "blur(6px)" }); tl.to(c, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.4, ease: "expo.out" }, B(34) + 0.15 + i * 0.035); });
+  rise("#endline", B(35) + 0.1, 0.06);
+  gsap.set("#end .meta", { opacity: 0 }); tl.to("#end .meta", { opacity: 1, duration: 0.3, ease: "none" }, B(36));
+  gsap.set("#end .url", { clipPath: "inset(0 100% 0 0)" }); tl.to("#end .url", { clipPath: "inset(0 0% 0 0)", duration: 0.6, ease: "none" }, B(36) + 0.3);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["bugs"] = tl;
+})();
+  </script>
+</template>

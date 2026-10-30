@@ -37,8 +37,8 @@ export function ChatThread({
             <p
               className={
                 m.from === "me"
-                  ? "max-w-[78%] rounded-2xl rounded-br-md bg-violet-600 px-3.5 py-2 text-sm text-white shadow-sm"
-                  : "max-w-[78%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2 text-sm text-zinc-800 shadow-sm ring-1 ring-zinc-200"
+                  ? "max-w-[78%] [overflow-wrap:anywhere] rounded-2xl rounded-br-md bg-violet-600 px-3.5 py-2 text-sm text-white shadow-sm"
+                  : "max-w-[78%] [overflow-wrap:anywhere] rounded-2xl rounded-bl-md bg-white px-3.5 py-2 text-sm text-zinc-800 shadow-sm ring-1 ring-zinc-200"
               }
             >
               {m.text}

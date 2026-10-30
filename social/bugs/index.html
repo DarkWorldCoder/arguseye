@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"repo-url","type":"string","label":"Repository","default":"github.com/DarkWorldCoder/arguseye"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1350" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="compositions/lib/replica.js"></script>
+    <script src="assets/live/replicas.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: #f5f7fc; }
+      #root { position: relative; width: 100%; height: 100%; background: #f5f7fc; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="25.625" data-width="1080" data-height="1350"
+         data-motion-blur="on" data-motion-blur-events="on">
+      <div id="bugs" class="clip" style="z-index:1" data-composition-id="bugs" data-composition-src="compositions/bugs.html"
+           data-start="0" data-duration="25.625" data-track-index="1" data-track-kind="graphics" data-width="1080" data-height="1350"></div>
+      <audio id="music" class="clip" src="assets/audio/music.wav" data-start="0" data-duration="25.625" data-media-start="12.51"
+             data-track-index="2" data-volume="1"
+             data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0.3},{"t":24.1,"v":0.3},{"t":25.625,"v":0}]}]}'></audio>
+      <audio id="sfx-hook-ring0" class="clip" src="assets/audio/sfx_001.mp3" data-start="0.970" data-duration="0.36" data-track-index="3" data-volume="0.4"></audio>
+      <audio id="sfx-hook-ring1" class="clip" src="assets/audio/sfx_001.mp3" data-start="1.090" data-duration="0.36" data-track-index="4" data-volume="0.4"></audio>
+      <audio id="sfx-hook-ring2" class="clip" src="assets/audio/sfx_001.mp3" data-start="1.210" data-duration="0.36" data-track-index="9" data-volume="0.4"></audio>
+      <audio id="sfx-hook-ring3" class="clip" src="assets/audio/sfx_001.mp3" data-start="1.329" data-duration="0.36" data-track-index="10" data-volume="0.4"></audio>
+      <audio id="sfx-four" class="clip" src="assets/audio/sfx_004.mp3" data-start="1.994" data-duration="0.72" data-track-index="5" data-volume="0.5"></audio>
+      <audio id="sfx-seam1" class="clip" src="assets/audio/sfx_002.mp3" data-start="3.622" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-type1" class="clip" src="assets/audio/sfx_003.mp3" data-start="4.253" data-duration="0.6" data-track-index="7" data-volume="0.28"></audio>
+      <audio id="sfx-ring1" class="clip" src="assets/audio/sfx_001.mp3" data-start="5.032" data-duration="0.36" data-track-index="3" data-volume="0.45"></audio>
+      <audio id="sfx-focus1" class="clip" src="assets/audio/sfx_002.mp3" data-start="5.810" data-duration="0.57" data-track-index="8" data-volume="0.22"></audio>
+      <audio id="sfx-check1" class="clip" src="assets/audio/sfx_004.mp3" data-start="6.527" data-duration="0.72" data-track-index="5" data-volume="0.45"></audio>
+      <audio id="sfx-seam2" class="clip" src="assets/audio/sfx_002.mp3" data-start="7.997" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-type2" class="clip" src="assets/audio/sfx_003.mp3" data-start="8.628" data-duration="0.6" data-track-index="7" data-volume="0.28"></audio>
+      <audio id="sfx-ring2" class="clip" src="assets/audio/sfx_001.mp3" data-start="9.407" data-duration="0.36" data-track-index="3" data-volume="0.45"></audio>
+      <audio id="sfx-focus2" class="clip" src="assets/audio/sfx_002.mp3" data-start="10.184" data-duration="0.57" data-track-index="8" data-volume="0.22"></audio>
+      <audio id="sfx-check2" class="clip" src="assets/audio/sfx_004.mp3" data-start="10.902" data-duration="0.72" data-track-index="5" data-volume="0.45"></audio>
+      <audio id="sfx-seam3" class="clip" src="assets/audio/sfx_002.mp3" data-start="12.372" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-type3" class="clip" src="assets/audio/sfx_003.mp3" data-start="13.003" data-duration="0.6" data-track-index="7" data-volume="0.28"></audio>
+      <audio id="sfx-ring3" class="clip" src="assets/audio/sfx_001.mp3" data-start="13.782" data-duration="0.36" data-track-index="3" data-volume="0.45"></audio>
+      <audio id="sfx-focus3" class="clip" src="assets/audio/sfx_002.mp3" data-start="14.559" data-duration="0.57" data-track-index="8" data-volume="0.22"></audio>
+      <audio id="sfx-check3" class="clip" src="assets/audio/sfx_004.mp3" data-start="15.277" data-duration="0.72" data-track-index="5" data-volume="0.45"></audio>
+      <audio id="sfx-seam4" class="clip" src="assets/audio/sfx_002.mp3" data-start="16.747" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-type4" class="clip" src="assets/audio/sfx_003.mp3" data-start="17.378" data-duration="0.6" data-track-index="7" data-volume="0.28"></audio>
+      <audio id="sfx-ring4" class="clip" src="assets/audio/sfx_001.mp3" data-start="18.157" data-duration="0.36" data-track-index="3" data-volume="0.45"></audio>
+      <audio id="sfx-focus4" class="clip" src="assets/audio/sfx_002.mp3" data-start="18.934" data-duration="0.57" data-track-index="8" data-volume="0.22"></audio>
+      <audio id="sfx-check4" class="clip" src="assets/audio/sfx_004.mp3" data-start="19.652" data-duration="0.72" data-track-index="5" data-volume="0.45"></audio>
+      <audio id="sfx-end" class="clip" src="assets/audio/sfx_002.mp3" data-start="21.122" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-wordmark" class="clip" src="assets/audio/sfx_004.mp3" data-start="21.464" data-duration="0.72" data-track-index="5" data-volume="0.4"></audio>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+    </script>
+  </body>
+</html>
