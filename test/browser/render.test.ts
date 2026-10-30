@@ -26,6 +26,13 @@ describe("headless render (what an agent gets back)", () => {
     expect(result.snapshot).toContain('button "Add to cart (0)"');
   });
 
+  it("picks the component export itself when none is named and the file has no default export", async () => {
+    const result = await renderer.render({ file: path.join(root, "components/Alert.tsx"), props: { title: "Saved" } });
+
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Saved");
+  });
+
   it("re-renders a warm component in well under 100 ms with the new props", async () => {
     await renderer.render({ file: card, exportName: "ProductCard", props: { title: "Warm-up", price: 1 } });
 

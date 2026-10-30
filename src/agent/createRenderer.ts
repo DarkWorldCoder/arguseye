@@ -9,6 +9,7 @@ import type { Frame, PreviewTarget } from "../server/page.js";
 import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
 import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
+import { pickExport } from "../project/pickExport.js";
 
 export type RenderRequest = PreviewTarget & {
   viewport?: { width: number; height: number };
@@ -163,7 +164,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   }
 
   async function describeProps(file: string, exportName?: string) {
-    const props = await propsSchema(file, exportName);
+    const props = await propsSchema(file, exportName ?? (await exportOf(file)));
     return { props, sample: sampleProps(props) };
   }
 
@@ -181,15 +182,21 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
 /** Settled frame: transitions end at once, finite animations jump to their final state, spinners stop, no caret. */
 
+  /** The export a caller means when they name none: the default, else the file's component (first PascalCase export). */
+  async function exportOf(file: string): Promise<string | undefined> {
+    return pickExport(file, await server.readSource(path.resolve(options.root, file)).catch(() => ""));
+  }
+
   return {
     server,
-    listUsages: (file, exportName) => usages.list(file, exportName),
+    listUsages: async (file, exportName) => usages.list(file, exportName ?? (await exportOf(file))),
     describeProps,
     ready: () => prewarmed,
     render: (request) => serial(() => render(request)),
     renderUsages: (request) => serial(async () => {
       const { offset = 0, limit = 12, ...target } = request;
       if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 12) throw new Error("Usage page requires offset >= 0 and limit between 1 and 12");
+      target.exportName ??= await exportOf(target.file);
       const all = await usages.list(path.resolve(options.root, target.file), target.exportName);
       const results: Array<RenderResult & { usage: string }> = [];
       for (const usage of all.slice(offset, offset + limit)) results.push({ ...await render({ ...target, usage: usage.id }, usage), usage: usage.id });
@@ -220,6 +227,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       // Disk edits are registered before anything (usage index, route lookup) reads the files and refreshes their mtimes.
       server.syncDisk();
       rest.file = path.resolve(options.root, rest.file);
+      rest.exportName ??= await exportOf(rest.file);
       const { props, propsSource, unresolved } = await resolveProps(rest, usage, resolved);
       const target: PreviewTarget = { fresh: true, ...rest, props, frame };
       if (inContext && usage) {
