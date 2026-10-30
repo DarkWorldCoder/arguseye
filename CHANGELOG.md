@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.8
+
+- An agent's edit on disk is no longer hidden by a usage lookup. `render_usages`, `list_usages` and the export lookup read the edited file before the render checked for changes, so the render showed the old component and Tailwind never generated the edit's new classes (`render_diff` then reported "unchanged"). Found by a Claude Code session that refused to call its task done.
+
 ## 0.0.6
 
 - Live preview no longer blinks text while you type: `@font-face` rules keep their own stylesheet, so an edit that regenerates the CSS (for example a new Tailwind class) does not recreate and reload the fonts.

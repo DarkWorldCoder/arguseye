@@ -85,9 +85,20 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const servedMtimes = new Map<string, number>();
   const hashes = new Map<string, string>();
   const moduleWarnings = new Map<string, string[]>();
+  /**
+   * Records the mtime a disk read saw. A read that finds an edit not registered yet (the usage index or export lookup
+   * reading the file before a render syncs) registers it first; otherwise the page keeps the old module and Tailwind
+   * never sees the edit's new classes.
+   */
+  const noteDiskRead = (file: string) => {
+    const now = statSync(file).mtimeMs;
+    const seen = servedMtimes.get(file);
+    if (seen !== undefined && seen !== now) syncDisk();
+    servedMtimes.set(file, now);
+  };
   const readContextSource = (file: string) => {
     const source = overlay.get(file) ?? readFileSync(file, "utf8");
-    if (!overlay.has(file)) servedMtimes.set(file, statSync(file).mtimeMs);
+    if (!overlay.has(file)) noteDiskRead(file);
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
     return source;
   };
@@ -99,7 +110,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   ];
   const readSource = async (file: string) => {
     const buffered = overlay.get(file);
-    if (buffered === undefined) servedMtimes.set(file, statSync(file).mtimeMs);
+    if (buffered === undefined) noteDiskRead(file);
     const source = buffered ?? await readFromDisk(file);
     const warnings: string[] = [];
     if (/next\/(headers|font|server)|["']use server["']/.test(source)) warnings.push(`${file}: Next.js server/font behavior requires the application runtime.`);

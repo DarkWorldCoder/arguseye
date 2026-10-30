@@ -38,3 +38,34 @@ describe("agent edits files on disk between renders", () => {
     expect((await renderer.render(target)).snapshot).toContain("€3.00");
   });
 });
+
+describe("a usage lookup between an edit and the next render", () => {
+  let nextRoot: string;
+  let next: Renderer;
+  beforeAll(async () => {
+    const src = path.resolve("test/fixtures/next-app");
+    nextRoot = mkdtempSync(path.join(os.tmpdir(), "cp-agent-next-"));
+    cpSync(src, nextRoot, { recursive: true, filter: (p) => !p.includes("node_modules") });
+    symlinkSync(path.join(src, "node_modules"), path.join(nextRoot, "node_modules"));
+    next = await createRenderer({ root: nextRoot });
+  });
+  afterAll(async () => {
+    await next?.close();
+    rmSync(nextRoot, { recursive: true, force: true });
+  });
+  const pngHeight = (png: Buffer) => png.readUInt32BE(20);
+
+  it("still renders the edit with its new Tailwind classes (an agent's render_usages after an Edit)", async () => {
+    const hero = path.join(nextRoot, "components/Hero.tsx");
+    const before = await next.render({ file: hero, exportName: "Hero", usage: "app/page.tsx:4" });
+    expect(before.snapshot).not.toContain("Verified");
+
+    writeFileSync(hero, readFileSync(hero, "utf8").replace("{title}</h1>", '{title}</h1>\n      <p className="h-[211px]">Verified</p>'));
+    // The usage index reads the edited file before any render does; that read must not hide the edit.
+    expect((await next.listUsages(hero, "Hero")).map((u) => u.id)).toEqual(["app/page.tsx:4"]);
+    const [after] = (await next.renderUsages({ file: hero, exportName: "Hero" })).results;
+    expect(after.snapshot).toContain("Verified");
+    // The class exists nowhere else in the project, so the 211 px only appear if Tailwind saw the edit.
+    expect(pngHeight(after.png) - pngHeight(before.png)).toBeGreaterThanOrEqual(211);
+  });
+});
