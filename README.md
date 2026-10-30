@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/DarkWorldCoder/arguseye/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/DarkWorldCoder/arguseye?style=flat&color=f97316"></a>
   <a href="https://www.npmjs.com/package/@ayushniroula/arguseye"><img alt="npm" src="https://img.shields.io/npm/v/@ayushniroula/arguseye?color=6476e9"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/ayushniroula.arguseye?label=VS%20Code&color=007acc"></a>
   <a href="https://darkworldcoder.github.io/arguseye/guide.html#license"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
@@ -15,7 +16,7 @@
 
 **See your component. Change it. Inspect the consequences.**
 
-[Watch the 42-second walkthrough](https://darkworldcoder.github.io/arguseye/#film) · [Agent setup and downloadable skill](https://darkworldcoder.github.io/arguseye/agents.html) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
+[Watch the 58-second film](https://darkworldcoder.github.io/arguseye/#film) · [Agent setup and downloadable skill](https://darkworldcoder.github.io/arguseye/agents.html) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
 
 Arguseye gives coding agents eyes on real React, browser-renderable Next.js, and Vue 3 components, without starting your app or writing stories. It uses your source, installed packages, discovered usage props, and supported layout context. Each render returns a cropped PNG, accessibility text, and structured evidence—including unresolved inputs, warnings, and errors.
 
@@ -24,6 +25,8 @@ npx @ayushniroula/arguseye install claude
 ```
 
 Requires Node.js 22+, installed project dependencies, and Chromium or Google Chrome. Run this in your project, then restart your agent. Replace `claude` with `codex`, `cursor`, `gemini`, `windsurf`, `vscode`, `antigravity`, or `copilot`.
+
+If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorldCoder/arguseye/stargazers) helps other developers find it.
 
 <p align="center">
   <a href="https://darkworldcoder.github.io/arguseye/#demo"><img src="https://darkworldcoder.github.io/arguseye/assets/hero.svg" alt="Illustrated workflow: real component source, a cropped preview, and structured evidence returned to the coding agent. Open the interactive website demo." width="1000"></a>
