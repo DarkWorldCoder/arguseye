@@ -1,0 +1,6 @@
+renders/
+.hyperframes/
+.thumbnails/
+.waveform-cache/
+assets/footage/*.mp4
+assets/ai/*.png
