@@ -1,0 +1,2 @@
+changed: 3.83% changed pixels; evidence in diff
+timeout 150 node ../../dist/cli.mjs diff --baseline $S/baseline --out $S/diff  1.75s user 0.36s system 117% cpu 1.790 total

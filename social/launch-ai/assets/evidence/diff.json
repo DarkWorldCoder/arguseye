@@ -1,0 +1,16 @@
+{
+ "status": "changed",
+ "changedPixels": 16955,
+ "changedPercent": 3.828350794797688,
+ "dimensions": {
+  "before": {
+   "width": 1280,
+   "height": 338
+  },
+  "after": {
+   "width": 1280,
+   "height": 346
+  }
+ },
+ "snapshotChanged": false
+}
