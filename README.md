@@ -16,7 +16,7 @@
 
 **See your component. Change it. Inspect the consequences.**
 
-[Watch the 58-second film](https://darkworldcoder.github.io/arguseye/#film) · [Agent setup and downloadable skill](https://darkworldcoder.github.io/arguseye/agents.html) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
+[Watch the 58-second film](https://darkworldcoder.github.io/arguseye/#film) · [Claude Code setup guide](https://darkworldcoder.github.io/arguseye/claude-code-ui.html) · [Agent setup and downloadable skill](https://darkworldcoder.github.io/arguseye/agents.html) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
 
 Arguseye gives coding agents eyes on real React, browser-renderable Next.js, and Vue 3 components, without starting your app or writing stories. It uses your source, installed packages, discovered usage props, and supported layout context. Each render returns a cropped PNG, accessibility text, and structured evidence—including unresolved inputs, warnings, and errors.
 
@@ -147,6 +147,14 @@ npx @ayushniroula/arguseye diff --baseline .arguseye/baseline \
 The comparison directory contains before, after, and highlighted diff images plus JSON evidence. CLI captures persist in the directory you choose.
 
 </details>
+
+**A real result.** On the demo app in this repository, the edit made a boarding pass's gate, seat and boarding values bigger (`text-lg` to `text-3xl`). The diff reported `changed: 3.83% changed pixels` and marked two areas: the bigger values, which were asked for, and the tear line and barcode, which moved down 8 px because the card grew from 338 to 346 px.
+
+<p align="center">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/guide/boardingpass-before.png" alt="Before: gate B12, seat 14A, boarding 09:35 in small dark text" width="270">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/guide/boardingpass-after.png" alt="After: the same values larger and in indigo" width="270">
+  <img src="https://darkworldcoder.github.io/arguseye/assets/guide/boardingpass-diff.png" alt="Pixel diff: the values, the tear line and the barcode marked in pink" width="270">
+</p>
 
 Results are **`unchanged`**, **`changed`**, or **`incomplete`**. A visual difference is evidence for review; it does not establish correctness. Runtime props, missing providers, unsupported framework behavior, and assets that did not settle remain visible in warnings and unresolved inputs.
 
