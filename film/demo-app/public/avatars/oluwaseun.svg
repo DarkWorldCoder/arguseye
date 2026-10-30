@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs><linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#16a34a"/></linearGradient></defs>
+  <circle cx="40" cy="40" r="40" fill="url(#a)"/>
+  <text x="40" y="49" text-anchor="middle" font-family="Inter, sans-serif" font-size="26" font-weight="700" fill="#fff">OA</text>
+</svg>
