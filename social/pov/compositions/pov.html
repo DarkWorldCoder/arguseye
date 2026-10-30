@@ -1,0 +1,99 @@
+<template>
+  <style>
+#root { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(circle at 12% 8%, rgba(249,115,22,.10), transparent 42%), radial-gradient(circle at 92% 88%, rgba(108,112,201,.16), transparent 46%), linear-gradient(165deg, #ffffff 0%, #f5f7fc 48%, #eceffb 100%); font-family: "Inter", sans-serif; color: #0f172a; }
+.mono { font-family: "JetBrains Mono", monospace; }
+.title { position: absolute; left: 0; right: 0; text-align: center; font-weight: 700; letter-spacing: -0.02em; z-index: 5; }
+.t-big { font-size: 66px; line-height: 1.1; }
+.m { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.08em; margin-bottom: -0.08em; }
+.w { display: inline-block; white-space: pre; }
+.iris { color: #ea580c; }
+#t1 { top: 150px; } #t2 { top: 150px; } #t3 { top: 110px; } #t3b { top: 190px; font-size: 40px; font-weight: 500; color: #64748b; }
+#chip { position: absolute; left: 0; right: 0; top: 300px; text-align: center; font-size: 44px; }
+#chip .old, #chip .new { display: inline-block; position: relative; padding: 12px 22px; border-radius: 16px; }
+#chip .old { background: #fee2e2; color: #b91c1c; }
+#chip .new { background: #dcfce7; color: #15803d; margin-left: 18px; }
+#chip .strike { position: absolute; left: 14px; right: 14px; top: 50%; height: 5px; background: #b91c1c; border-radius: 3px; transform-origin: 0 50%; }
+#steps { position: absolute; left: 100px; right: 60px; top: 400px; }
+.step { position: relative; font-size: 54px; font-weight: 600; line-height: 1.25; margin: 0 0 42px 0; display: flex; gap: 26px; align-items: baseline; }
+.step .n { font-size: 34px; font-weight: 800; color: #ea580c; min-width: 52px; }
+.step .txt { position: relative; }
+.step .x { position: absolute; left: -4px; right: -4px; top: 55%; height: 6px; background: #ea580c; border-radius: 3px; transform-origin: 0 50%; }
+.view { position: absolute; overflow: hidden; box-shadow: 0 30px 70px rgba(15,23,42,.22); }
+#codeview { left: 40px; top: 330px; width: 1000px; height: 262px; border-radius: 18px; background: #181818; }
+#cardview { left: 183px; top: 640px; width: 714px; height: 639px; border-radius: 49px; background: #fff; }
+.fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+#look { position: absolute; inset: 0; opacity: 0; }
+#hookcard { position: absolute; left: 183px; top: 470px; width: 714px; height: 639px; border-radius: 49px; overflow: hidden; box-shadow: 0 30px 70px rgba(15,23,42,.22); }
+#hookq { position: absolute; left: 0; right: 0; top: 1150px; text-align: center; font-size: 40px; font-weight: 600; color: #64748b; }
+#end { position: absolute; inset: 0; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+#end .mark { width: 150px; height: 150px; }
+#end .name { margin-top: 30px; font-size: 104px; font-weight: 800; letter-spacing: -0.04em; }
+#end .ch { display: inline-block; }
+#end .line { margin-top: 18px; font-size: 44px; font-weight: 700; max-width: 860px; line-height: 1.2; text-wrap: balance; }
+#end .meta { margin-top: 34px; font-size: 30px; color: #64748b; }
+#end .url { margin-top: 18px; font-size: 32px; color: #4f46a5; }
+  </style>
+  <div id="root" data-composition-id="pov" data-width="1080" data-height="1350">
+  <div class="title t-big" id="t1" data-layout-allow-overflow><span class="m"><span class="w iris">POV: </span></span><span class="m"><span class="w">you </span></span><span class="m"><span class="w">changed </span></span><span class="m"><span class="w">a </span></span><span class="m"><span class="w">gradient.</span></span></div>
+  <div id="hookcard"><video id="hook-card" class="clip fill" src="assets/footage/edit-card.mp4" muted playsinline data-start="0" data-duration="2.5" data-media-start="0.3" data-track-index="4"></video></div>
+  <div id="hookq" data-layout-allow-overflow><span class="m"><span class="w">Did </span></span><span class="m"><span class="w">it </span></span><span class="m"><span class="w">work?</span></span></div>
+  <div id="chip" class="mono"><span class="old" id="old">from-sky-400<i class="strike" id="strike"></i></span><span class="new" id="new">from-orange-400</span></div>
+  <div class="title t-big" id="t2" data-layout-allow-overflow><span class="m"><span class="w">To </span></span><span class="m"><span class="w">see </span></span><span class="m"><span class="w">it:</span></span></div>
+  <div id="steps"><div class="step" id="s0"><span class="n">01</span><span class="txt">Ctrl+C, then npm run dev.<i class="x"></i></span></div><div class="step" id="s1"><span class="n">02</span><span class="txt">Wait for it to compile.<i class="x"></i></span></div><div class="step" id="s2"><span class="n">03</span><span class="txt">Log in again.<i class="x"></i></span></div><div class="step" id="s3"><span class="n">04</span><span class="txt">Dashboard → Settings → Billing.<i class="x"></i></span></div><div class="step" id="s4"><span class="n">05</span><span class="txt">Open the modal.<i class="x"></i></span></div><div class="step" id="s5"><span class="n">06</span><span class="txt">Resize to phone width.<i class="x"></i></span></div></div>
+  <div class="title t-big" id="t3" data-layout-allow-overflow><span class="m"><span class="w">Or </span></span><span class="m"><span class="w">just </span></span><span class="m"><span class="w iris">look.</span></span></div>
+  <div class="title" id="t3b" data-layout-allow-overflow><span class="m"><span class="w">Arguseye </span></span><span class="m"><span class="w">renders </span></span><span class="m"><span class="w">it </span></span><span class="m"><span class="w">beside </span></span><span class="m"><span class="w">your </span></span><span class="m"><span class="w">code.</span></span></div>
+  <div id="look"><div class="view" id="codeview"><video id="look-code" class="clip fill" src="assets/footage/edit-code.mp4" muted playsinline data-start="10" data-duration="5" data-media-start="4" data-playback-rate="1.5" data-track-index="2"></video><video id="hold-code" class="clip fill" src="assets/footage/edit-code.mp4" muted playsinline data-start="15" data-duration="1.25" data-media-start="11.6" data-track-index="2"></video></div><div class="view" id="cardview"><video id="look-card" class="clip fill" src="assets/footage/edit-card.mp4" muted playsinline data-start="10" data-duration="5" data-media-start="4" data-playback-rate="1.5" data-track-index="3"></video><video id="hold-card" class="clip fill" src="assets/footage/edit-card.mp4" muted playsinline data-start="15" data-duration="1.25" data-media-start="11.6" data-track-index="3"></video></div></div>
+  <div id="end"><img class="mark" src="assets/brand/icon.svg" alt="Arguseye" /><div class="name" id="wordmark" data-layout-allow-overflow><span class="ch">A</span><span class="ch">r</span><span class="ch">g</span><span class="ch">u</span><span class="ch">s</span><span class="ch">e</span><span class="ch">y</span><span class="ch">e</span></div><div class="line" id="endline" data-layout-allow-overflow><span class="m"><span class="w">Skip </span></span><span class="m"><span class="w">the </span></span><span class="m"><span class="w">dev-server </span></span><span class="m"><span class="w">ritual.</span></span></div><div class="meta">VS Code extension · MCP server for coding agents · open source</div><div class="url mono" data-var-text="repo-url">github.com/DarkWorldCoder/arguseye</div></div>
+  </div>
+  <script>
+(function () {
+  const tl = gsap.timeline({ paused: true });
+  const B = (k) => 0.625 * k;
+  const W = (sel) => Array.from(document.querySelectorAll(sel + " .w"));
+  function rise(sel, t, gap = 0.06) { W(sel).forEach((w, i) => { gsap.set(w, { yPercent: 115 }); tl.to(w, { yPercent: 0, duration: 0.55, ease: "expo.out" }, t + i * gap); }); }
+  function sink(sel, t, gap = 0.025) { W(sel).forEach((w, i) => { tl.to(w, { yPercent: -115, duration: 0.28, ease: "power3.in" }, t - 0.28 + i * gap); tl.set(w, { opacity: 0 }, t + i * gap + 0.01); }); }
+
+  // HOOK (frame 0 reads): the old class gets struck, the new one lands
+  gsap.set("#strike", { scaleX: 0 });
+  tl.to("#strike", { scaleX: 1, duration: 0.35, ease: "power2.out" }, B(1.5));
+  gsap.set("#new", { opacity: 0, x: 40 });
+  tl.to("#new", { opacity: 1, x: 0, duration: 0.5, ease: "expo.out" }, B(2));
+  rise("#hookq", B(1.8));
+  sink("#hookq", B(4));
+  tl.to("#hookcard", { y: 80, opacity: 0, duration: 0.3, ease: "power3.in" }, B(4) - 0.3);
+  sink("#t1", B(4));
+  tl.to("#chip", { yPercent: -60, opacity: 0, duration: 0.28, ease: "power3.in" }, B(4) - 0.28);
+
+  // THE RITUAL: each step lands on a beat and a half
+  rise("#t2", B(4) + 0.02);
+  document.querySelectorAll(".step").forEach((s, i) => {
+    gsap.set(s, { opacity: 0, x: 60 });
+    tl.to(s, { opacity: 1, x: 0, duration: 0.45, ease: "expo.out" }, B(5 + 1.5 * i));
+  });
+  // all six get struck at once, then the list drops away
+  gsap.set(".step .x", { scaleX: 0 });
+  tl.to(".step .x", { scaleX: 1, duration: 0.3, ease: "power2.out", stagger: 0.04 }, B(14.6));
+  tl.to("#steps", { y: 60, opacity: 0, duration: 0.3, ease: "power3.in" }, B(16) - 0.3);
+  sink("#t2", B(16));
+
+  // OR JUST LOOK: the real recording, code above, card below
+  rise("#t3", B(16) + 0.02); rise("#t3b", B(16) + 0.25, 0.04);
+  tl.set("#look", { opacity: 0.35, y: 60 }, B(16));
+  tl.to("#look", { opacity: 1, duration: 0.2, ease: "none" }, B(16));
+  tl.to("#look", { y: 0, duration: 0.5, ease: "expo.out" }, B(16));
+
+  // END: inverse zoom-through arrival
+  tl.to(["#look", "#t3", "#t3b"], { scale: 0.8, duration: 0.2, ease: "power3.in" }, B(26) - 0.2);
+  tl.to(["#look", "#t3", "#t3b"], { opacity: 0, duration: 0.2, ease: "none" }, B(26) - 0.2);
+  tl.set("#end", { scale: 1.25, opacity: 0.15 }, B(26));
+  tl.to("#end", { scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, B(26));
+  document.querySelectorAll("#wordmark .ch").forEach((c, i) => { gsap.set(c, { opacity: 0, y: 34, filter: "blur(6px)" }); tl.to(c, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.4, ease: "expo.out" }, B(26) + 0.15 + i * 0.035); });
+  rise("#endline", B(27) + 0.1, 0.07);
+  gsap.set("#end .meta", { opacity: 0 }); tl.to("#end .meta", { opacity: 1, duration: 0.3, ease: "none" }, B(27) + 0.3);
+  gsap.set("#end .url", { clipPath: "inset(0 100% 0 0)" }); tl.to("#end .url", { clipPath: "inset(0 0% 0 0)", duration: 0.6, ease: "none" }, B(27) + 0.6);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["pov"] = tl;
+})();
+  </script>
+</template>
