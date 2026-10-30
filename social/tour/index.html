@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"repo-url","type":"string","label":"Repository","default":"github.com/DarkWorldCoder/arguseye"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1350" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: #0f172a; }
+      #root { position: relative; width: 100%; height: 100%; background: #0f172a; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="22.5" data-width="1080" data-height="1350"
+         data-motion-blur="on" data-motion-blur-events="on">
+      <div id="tour" class="clip" style="z-index:1" data-composition-id="tour" data-composition-src="compositions/tour.html"
+           data-start="0" data-duration="22.5" data-track-index="1" data-track-kind="graphics" data-width="1080" data-height="1350"></div>
+
+      <audio id="music" class="clip" src="assets/audio/music.wav" data-start="0" data-duration="22.5" data-media-start="12.51"
+             data-track-index="2" data-volume="1"
+             data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0.3},{"t":21.0,"v":0.3},{"t":22.5,"v":0}]}]}'></audio>
+      <audio id="sfx-type-a" class="clip" src="assets/audio/sfx_003.mp3" data-start="0.000" data-duration="1.25" data-track-index="3" data-volume="0.32"></audio>
+      <audio id="sfx-type-b" class="clip" src="assets/audio/sfx_003.mp3" data-start="1.250" data-duration="1.2" data-track-index="4" data-volume="0.32"></audio>
+      <audio id="sfx-pop-sunset" class="clip" src="assets/audio/sfx_004.mp3" data-start="2.414" data-duration="0.72" data-track-index="5" data-volume="0.5"></audio>
+      <audio id="sfx-whoosh-cold" class="clip" src="assets/audio/sfx_002.mp3" data-start="2.997" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-whoosh-c" class="clip" src="assets/audio/sfx_002.mp3" data-start="5.497" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-whoosh-d" class="clip" src="assets/audio/sfx_002.mp3" data-start="7.372" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-whoosh-e" class="clip" src="assets/audio/sfx_002.mp3" data-start="9.247" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-whoosh-agent" class="clip" src="assets/audio/sfx_002.mp3" data-start="11.122" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-whoosh-stat" class="clip" src="assets/audio/sfx_002.mp3" data-start="15.497" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-whoosh-end" class="clip" src="assets/audio/sfx_002.mp3" data-start="17.997" data-duration="0.57" data-track-index="6" data-volume="0.3"></audio>
+      <audio id="sfx-click-quickopen" class="clip" src="assets/audio/sfx_001.mp3" data-start="4.482" data-duration="0.36" data-track-index="7" data-volume="0.45"></audio>
+      <audio id="sfx-pop-np" class="clip" src="assets/audio/sfx_004.mp3" data-start="4.914" data-duration="0.72" data-track-index="5" data-volume="0.4"></audio>
+      <audio id="sfx-pop-chart" class="clip" src="assets/audio/sfx_004.mp3" data-start="6.164" data-duration="0.72" data-track-index="5" data-volume="0.4"></audio>
+      <audio id="sfx-pop-pass" class="clip" src="assets/audio/sfx_004.mp3" data-start="8.039" data-duration="0.72" data-track-index="5" data-volume="0.4"></audio>
+      <audio id="sfx-pop-chat" class="clip" src="assets/audio/sfx_004.mp3" data-start="9.914" data-duration="0.72" data-track-index="5" data-volume="0.4"></audio>
+      <audio id="sfx-pop-err" class="clip" src="assets/audio/sfx_004.mp3" data-start="12.414" data-duration="0.72" data-track-index="5" data-volume="0.4"></audio>
+      <audio id="sfx-pop-png" class="clip" src="assets/audio/sfx_004.mp3" data-start="13.664" data-duration="0.72" data-track-index="5" data-volume="0.4"></audio>
+      <audio id="sfx-type-cmd1" class="clip" src="assets/audio/sfx_003.mp3" data-start="11.500" data-duration="0.6" data-track-index="3" data-volume="0.28"></audio>
+      <audio id="sfx-type-cmd2" class="clip" src="assets/audio/sfx_003.mp3" data-start="13.225" data-duration="0.55" data-track-index="4" data-volume="0.28"></audio>
+      <audio id="sfx-click-ring" class="clip" src="assets/audio/sfx_001.mp3" data-start="14.357" data-duration="0.36" data-track-index="7" data-volume="0.45"></audio>
+      <audio id="sfx-pop-stat" class="clip" src="assets/audio/sfx_004.mp3" data-start="15.639" data-duration="0.72" data-track-index="8" data-volume="0.4"></audio>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+    </script>
+  </body>
+</html>

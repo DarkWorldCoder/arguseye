@@ -1,0 +1,8 @@
+renders/
+.hyperframes/
+.thumbnails/
+.waveform-cache/
+assets/footage/*.mp4
+assets/footage/sunset-still.png
+assets/footage/still-*.png
+assets/*.json
