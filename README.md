@@ -29,7 +29,7 @@ Requires Node.js 22+, installed project dependencies, and Chromium or Google Chr
 If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorldCoder/arguseye/stargazers) helps other developers find it.
 
 <p align="center">
-  <a href="https://darkworldcoder.github.io/arguseye/#demo"><img src="https://darkworldcoder.github.io/arguseye/assets/hero.svg" alt="Illustrated workflow: real component source, a cropped preview, and structured evidence returned to the coding agent. Open the interactive website demo." width="1000"></a>
+  <a href="https://darkworldcoder.github.io/arguseye/#film"><img src="https://darkworldcoder.github.io/arguseye/assets/arguseye-loop.gif" alt="One render_component call: Arguseye reads the project, finds the PricingCard's call site and props, wraps it in the app's layouts and theme, bundles the packages once and renders it. The agent then fixes the button label and the phone preview reflows. Click to watch the 58-second film." width="900"></a>
 </p>
 
 <p align="center">
