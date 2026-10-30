@@ -1,6 +1,6 @@
 <template>
   <style>
-    #root { position: absolute; inset: 0; overflow: hidden; background: #0f172a; font-family: "Inter", sans-serif; color: #fff; }
+    #root { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(circle at 12% 8%, rgba(249,115,22,.10), transparent 42%), radial-gradient(circle at 92% 88%, rgba(108,112,201,.16), transparent 46%), linear-gradient(165deg, #ffffff 0%, #f5f7fc 48%, #eceffb 100%); font-family: "Inter", sans-serif; color: #0f172a; }
     .mono { font-family: "JetBrains Mono", monospace; }
     #shotwrap { position: absolute; inset: 0; opacity: 0; transform-origin: 540px 700px; }
     #shot { position: absolute; inset: 0; clip-path: inset(400px 31px 377.4px 31px round 14px); }
@@ -9,11 +9,11 @@
     .fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
     /* cold open: the real code line on top, the real card below */
     #split { position: absolute; inset: 0; transform-origin: 540px 700px; }
-    .view { position: absolute; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+    .view { position: absolute; overflow: hidden; box-shadow: 0 30px 70px rgba(15, 23, 42, .22); }
     #codeview { left: 40px; top: 330px; width: 1000px; height: 262px; border-radius: 18px; background: #181818; }
     #cardview { left: 183px; top: 640px; width: 714px; height: 639px; border-radius: 49px; background: #fff; }
     /* agent panel: real render_component results */
-    #agent { position: absolute; left: 50px; top: 300px; width: 980px; height: 960px; opacity: 0; border-radius: 28px; background: #0b1222; border: 1px solid #1e293b; padding: 34px 38px; box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+    #agent { position: absolute; left: 50px; top: 300px; width: 980px; height: 960px; opacity: 0; border-radius: 28px; background: #0b1222; border: 1px solid #1e293b; padding: 34px 38px; box-shadow: 0 30px 70px rgba(15,23,42,.28); }
     #agent .hd { font-size: 28px; color: #64748b; letter-spacing: .02em; }
     #agent .cmd { margin-top: 22px; font-size: 30px; color: #e2e8f0; white-space: nowrap; overflow: hidden; }
     #agent .cmd .fn { color: #a5a8f0; } #agent .cmd .arg { color: #94a3b8; }
@@ -27,29 +27,36 @@
     #ring { position: absolute; right: -10px; top: -10px; width: 120px; height: 342px; border: 5px solid #f97316; border-radius: 18px; opacity: 0; }
     /* stat card: measured benchmark */
     #stat { position: absolute; left: 60px; right: 60px; top: 380px; opacity: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
-    .col { border-radius: 28px; padding: 40px 34px; background: #111a2e; border: 1px solid #1e293b; text-align: center; }
-    .col.win { background: #16133a; border-color: #6c70c9; }
-    .col .who { font-size: 30px; color: #94a3b8; line-height: 1.25; }
+    .col { border-radius: 28px; padding: 40px 34px; background: #ffffff; border: 1px solid #e2e8f0; text-align: center; box-shadow: 0 20px 50px rgba(15,23,42,.08); }
+    .col.win { background: #f1f0ff; border-color: #6c70c9; }
+    .col .who { font-size: 30px; color: #64748b; line-height: 1.25; }
     .col .num { font-size: 210px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; margin-top: 18px; }
-    .col .unit { font-size: 32px; color: #cbd5e1; margin-top: 6px; }
-    #statnote { position: absolute; left: 80px; right: 80px; top: 930px; text-align: center; font-size: 32px; color: #94a3b8; opacity: 0; line-height: 1.4; }
+    .col .unit { font-size: 32px; color: #475569; margin-top: 6px; }
+    #statnote { position: absolute; left: 80px; right: 80px; top: 930px; text-align: center; font-size: 32px; color: #64748b; opacity: 0; line-height: 1.4; }
     /* titles: overlays; a landed title holds still */
     .title { position: absolute; left: 0; right: 0; text-align: center; font-weight: 700; letter-spacing: -0.02em; }
     .t-big { font-size: 64px; line-height: 1.1; }
-    .t-sub { font-size: 40px; font-weight: 500; color: #94a3b8; letter-spacing: -0.01em; }
+    .t-sub { font-size: 40px; font-weight: 500; color: #64748b; letter-spacing: -0.01em; }
     .w { display: inline-block; white-space: pre; }
-    .iris { color: #f97316; }
+    .iris { color: #ea580c; }
+    .m { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.08em; margin-bottom: -0.08em; }
+    .hl { position: relative; display: inline-block; white-space: pre; }
+    .ul { position: absolute; left: 2%; right: 2%; bottom: -6px; height: 8px; border-radius: 6px; background: #ea580c; transform-origin: 0 50%; }
+    .roll { color: #ea580c; }
+    .rollwin { height: 1.12em; overflow: hidden; }
+    .rollstack > div { height: 1.12em; line-height: 1.12em; }
+    .ch { display: inline-block; }
     #t1 { top: 110px; } #t1b { top: 200px; }
-    #t2 { top: 120px; } #t2b { top: 205px; }
-    #t3 { top: 130px; }
+    #t2 { top: 60px; } #t2r { top: 132px; } #t2b { top: 222px; }
+    #t3 { top: 70px; } #t3b { top: 145px; }
     #t4 { top: 150px; }
     /* end card */
     #end { position: absolute; inset: 0; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
     #end .mark { width: 150px; height: 150px; }
     #end .name { margin-top: 30px; font-size: 104px; font-weight: 800; letter-spacing: -0.04em; }
     #end .line { margin-top: 18px; font-size: 42px; font-weight: 600; letter-spacing: -0.01em; max-width: 820px; line-height: 1.2; text-wrap: balance; }
-    #end .meta { margin-top: 34px; font-size: 30px; color: #94a3b8; }
-    #end .url { margin-top: 18px; font-size: 32px; color: #c7c9f3; }
+    #end .meta { margin-top: 34px; font-size: 30px; color: #64748b; }
+    #end .url { margin-top: 18px; font-size: 32px; color: #4f46a5; }
   </style>
 
   <div id="root" data-composition-id="tour" data-width="1080" data-height="1350">
@@ -101,17 +108,19 @@
     </div>
     <div id="statnote">Measured on one fixture.</div>
 
-    <div class="title t-big" id="t1"><span class="w">Your </span><span class="w iris">dev </span><span class="w iris">server </span><span class="w">isn't </span><span class="w">running.</span></div>
-    <div class="title t-sub" id="t1b"><span class="w">The </span><span class="w">preview </span><span class="w">still </span><span class="w">updates </span><span class="w">as </span><span class="w">you </span><span class="w">type.</span></div>
-    <div class="title t-big" id="t2"><span class="w">Open </span><span class="w">any </span><span class="w">component.</span></div>
-    <div class="title t-sub" id="t2b"><span class="w">Real </span><span class="w">props </span><span class="w">from </span><span class="w">where </span><span class="w">your </span><span class="w">app </span><span class="w">uses </span><span class="w">it.</span></div>
-    <div class="title t-big" id="t3"><span class="w">Your </span><span class="w">coding </span><span class="w">agent </span><span class="w iris">sees </span><span class="w iris">it </span><span class="w iris">too.</span></div>
-    <div class="title t-big" id="t4"><span class="w">Fewer </span><span class="w">steps </span><span class="w">for </span><span class="w">your </span><span class="w">agent.</span></div>
+    <div class="title t-big" id="t1" data-layout-allow-overflow><span class="m"><span class="w">Your </span></span><span class="hl"><span class="m"><span class="w iris">dev </span></span><span class="m"><span class="w iris">server</span></span><i class="ul" id="t1u"></i></span><span class="m"><span class="w"> </span></span><span class="m"><span class="w" id="isnt">isn't </span></span><span class="m"><span class="w">running.</span></span></div>
+    <div class="title t-sub" id="t1b" data-layout-allow-overflow><span class="m"><span class="w">The </span></span><span class="m"><span class="w">preview </span></span><span class="m"><span class="w">still </span></span><span class="m"><span class="w">updates </span></span><span class="m"><span class="w">as </span></span><span class="m"><span class="w">you </span></span><span class="m"><span class="w">type.</span></span></div>
+    <div class="title t-big" id="t2" data-layout-allow-overflow><span class="m"><span class="w">Open </span></span><span class="m"><span class="w">any</span></span></div>
+    <div class="title t-big roll" id="t2r" data-layout-allow-overflow><div class="rollwin" data-layout-allow-overflow><div class="rollstack" id="rollstack"><div>component.</div><div>music player.</div><div>revenue chart.</div><div>boarding pass.</div><div>chat thread.</div></div></div></div>
+    <div class="title t-sub" id="t2b" data-layout-allow-overflow><span class="m"><span class="w">Real </span></span><span class="m"><span class="w">props </span></span><span class="m"><span class="w">from </span></span><span class="m"><span class="w">where </span></span><span class="m"><span class="w">your </span></span><span class="m"><span class="w">app </span></span><span class="m"><span class="w">uses </span></span><span class="m"><span class="w">it.</span></span></div>
+    <div class="title t-big" id="t3" data-layout-allow-overflow><span class="m"><span class="w">Your </span></span><span class="m"><span class="w">coding </span></span><span class="m"><span class="w">agent</span></span></div>
+    <div class="title t-big" id="t3b" data-layout-allow-overflow><span class="m"><span class="w iris">sees </span></span><span class="m"><span class="w iris">it </span></span><span class="m"><span class="w iris">too.</span></span></div>
+    <div class="title t-big" id="t4" data-layout-allow-overflow><span class="m"><span class="w">Fewer </span></span><span class="m"><span class="w">steps </span></span><span class="m"><span class="w">for </span></span><span class="m"><span class="w">your </span></span><span class="m"><span class="w">agent.</span></span></div>
 
     <div id="end">
       <img class="mark" src="assets/brand/icon.svg" alt="Arguseye" />
-      <div class="name">Arguseye</div>
-      <div class="line">See every component as your app renders it.</div>
+      <div class="name" id="wordmark" data-layout-allow-overflow><span class="ch">A</span><span class="ch">r</span><span class="ch">g</span><span class="ch">u</span><span class="ch">s</span><span class="ch">e</span><span class="ch">y</span><span class="ch">e</span></div>
+      <div class="line" id="endline" data-layout-allow-overflow><span class="m"><span class="w">See </span></span><span class="m"><span class="w">every </span></span><span class="m"><span class="w">component </span></span><span class="m"><span class="w">as </span></span><span class="m"><span class="w">your </span></span><span class="m"><span class="w">app </span></span><span class="m"><span class="w">renders </span></span><span class="m"><span class="w">it.</span></span></div>
       <div class="meta">VS Code extension · MCP server · open source</div>
       <div class="url mono" data-var-text="repo-url">github.com/DarkWorldCoder/arguseye</div>
     </div>
@@ -127,8 +136,8 @@
       const st = { x: 31, y: 400, lz: Math.log(0.5302) };
       const apply = () => { cam.style.transform = `translate(${st.x}px, ${st.y}px) scale(${Math.exp(st.lz)})`; };
       apply();
-      tl.to(st, { x: -1175, y: 250, lz: Math.log(1.2), duration: 0.6, ease: "power2.inOut", onUpdate: apply }, B(8));
-      tl.to("#shot", { clipPath: "inset(250px 0px 0px 0px round 0px)", duration: 0.6, ease: "power2.inOut" }, B(8));
+      tl.to(st, { x: -1175, y: 300, lz: Math.log(1.2), duration: 0.6, ease: "power2.inOut", onUpdate: apply }, B(8));
+      tl.to("#shot", { clipPath: "inset(300px 0px 0px 0px round 0px)", duration: 0.6, ease: "power2.inOut" }, B(8));
 
       // ---- cut-the-curve seams, current = LEFT (±130 px, mirrored power4, ignite at 0.35) ----
       function exitLeft(sel, t) {
@@ -146,32 +155,37 @@
       exitLeft("#agent", B(25)); enterLeft("#stat", B(25));
       tl.to("#statnote", { opacity: 1, duration: 0.3, ease: "none" }, B(25) + 0.3);
 
-      // ---- titles ----
-      const words = (sel) => Array.from(document.querySelectorAll(sel + " .w"));
-      function greyIn(sel, t, gap = 0.07) {
-        words(sel).forEach((w, i) => { gsap.set(w, { opacity: 0 }); tl.to(w, { opacity: 1, duration: 0.12, ease: "none" }, t + i * gap); });
+      // ---- kinetic type: masked line reveals (words rise out of their own mask), exits leave upward ----
+      const W = (sel) => Array.from(document.querySelectorAll(sel + " .w"));
+      function rise(sel, t, gap = 0.06, dur = 0.55) {
+        W(sel).forEach((w, i) => { gsap.set(w, { yPercent: 115 }); tl.to(w, { yPercent: 0, duration: dur, ease: "expo.out" }, t + i * gap); });
       }
-      function waterfall(outSels, inSel, t) {
-        outSels.forEach((s) => words(s).forEach((w, i) => {
-          tl.to(w, { x: -230, duration: 0.34, ease: "power4.in" }, t - 0.34 + i * 0.022);
-          tl.to(w, { opacity: 0, duration: 0.18, ease: "none" }, t - 0.34 + i * 0.022);
-        }));
-        let gap = 0.05, at = t;
-        words(inSel).forEach((w) => {
-          gsap.set(w, { x: 230, opacity: 0 });
-          tl.set(w, { opacity: 0.35 }, at);
-          tl.to(w, { x: 0, duration: 0.3, ease: "power4.out" }, at);
-          tl.to(w, { opacity: 1, duration: 0.18, ease: "none" }, at);
-          at += gap; gap *= 0.84;
-        });
+      function sink(sel, t, gap = 0.025) {
+        W(sel).forEach((w, i) => tl.to(w, { yPercent: -115, duration: 0.28, ease: "power3.in" }, t - 0.28 + i * gap));
       }
-      // frame 0 already carries the hook line (it is also the thumbnail)
-      greyIn("#t1b", 0.55);
-      waterfall(["#t1", "#t1b"], "#t2", B(5) + 0.05);
-      greyIn("#t2b", B(8) + 0.05);
-      waterfall(["#t2", "#t2b"], "#t3", B(18) + 0.05);
-      waterfall(["#t3"], "#t4", B(25) + 0.05);
-
+      function soft(sel, t, gap = 0.06) {
+        W(sel).forEach((w, i) => { gsap.set(w, { opacity: 0, filter: "blur(6px)" }); tl.to(w, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power2.out" }, t + i * gap); });
+      }
+      // hook: frame 0 already reads; the underline draws under "dev server" and "isn't" lands with a punch
+      gsap.set("#t1u", { scaleX: 0 });
+      tl.to("#t1u", { scaleX: 1, duration: 0.45, ease: "expo.out" }, 0.25);
+      tl.fromTo("#isnt", { scale: 1.18 }, { scale: 1, duration: 0.4, ease: "back.out(1.6)", immediateRender: false }, 0.35);
+      soft("#t1b", 0.6);
+      sink("#t1", B(5)); sink("#t1b", B(5));
+      tl.to("#t1u", { scaleX: 0, transformOrigin: "100% 50%", duration: 0.2, ease: "power3.in" }, B(5) - 0.24);
+      // tour: "Open any" + a slot-machine roll synced to each render landing
+      rise("#t2", B(5) + 0.02);
+      gsap.set("#t2r .rollwin", { clipPath: "inset(0 0 100% 0)" });
+      tl.to("#t2r .rollwin", { clipPath: "inset(0 0 0% 0)", duration: 0.5, ease: "expo.out" }, B(5) + 0.14);
+      const rollTo = (i, t) => tl.to("#rollstack", { yPercent: -20 * i, duration: 0.42, ease: "power4.out" }, t);
+      rollTo(1, B(8)); rollTo(2, B(10)); rollTo(3, B(13)); rollTo(4, B(16));
+      soft("#t2b", B(8) + 0.12);
+      sink("#t2", B(18)); sink("#t2b", B(18));
+      tl.to("#t2r .rollwin", { clipPath: "inset(100% 0 0 0)", duration: 0.28, ease: "power3.in" }, B(18) - 0.28);
+      // agent: two masked lines, the second in the accent
+      rise("#t3", B(18) + 0.04); rise("#t3b", B(18) + 0.22);
+      sink("#t3", B(25)); sink("#t3b", B(25));
+      rise("#t4", B(25) + 0.04);
       // ---- agent panel: lines type and land on beats ----
       const typeOn = (sel, t, d) => { gsap.set(sel, { clipPath: "inset(0 100% 0 0)" }); tl.to(sel, { clipPath: "inset(0 0% 0 0)", duration: d, ease: "none" }, t); };
       typeOn("#cmd1", B(18) + 0.25, 0.55);
@@ -183,16 +197,27 @@
       tl.to("#box320", { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" }, B(22) + 0.12);
       tl.to("#ring", { opacity: 1, duration: 0.15, ease: "none" }, B(23));
 
-      // ---- stat numbers count up (deterministic) ----
-      const n6 = { v: 0 }, n2 = { v: 0 };
-      tl.to(n6, { v: 6, duration: 0.5, ease: "power2.out", onUpdate: () => (document.getElementById("n6").textContent = Math.round(n6.v)) }, B(25) + 0.1);
-      tl.to(n2, { v: 2, duration: 0.5, ease: "power2.out", onUpdate: () => (document.getElementById("n2").textContent = Math.round(n2.v)) }, B(25) + 0.25);
+      // ---- stat: 6 counts up, then 2 slams in on the next beat ----
+      const n6 = { v: 0 };
+      tl.to(n6, { v: 6, duration: 0.55, ease: "power2.out", onUpdate: () => (document.getElementById("n6").textContent = Math.round(n6.v)) }, B(25) + 0.1);
+      gsap.set("#n2", { opacity: 0, scale: 1.7 });
+      tl.to("#n2", { opacity: 1, duration: 0.08, ease: "none" }, B(26));
+      tl.to("#n2", { scale: 1, duration: 0.5, ease: "expo.out" }, B(26));
 
-      // ---- end: inverse zoom-through arrival ----
+      // ---- end: inverse zoom-through arrival, then the wordmark letter by letter ----
       tl.to(["#stat", "#statnote", "#t4"], { scale: 0.8, duration: 0.2, ease: "power3.in" }, B(29) - 0.2);
       tl.to(["#stat", "#statnote", "#t4"], { opacity: 0, duration: 0.2, ease: "none" }, B(29) - 0.2);
       tl.set("#end", { scale: 1.25, opacity: 0.15 }, B(29));
       tl.to("#end", { scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, B(29));
+      document.querySelectorAll("#wordmark .ch").forEach((c, i) => {
+        gsap.set(c, { opacity: 0, y: 34, filter: "blur(6px)" });
+        tl.to(c, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.4, ease: "expo.out" }, B(29) + 0.15 + i * 0.035);
+      });
+      rise("#endline", B(30) + 0.1, 0.05);
+      gsap.set(["#end .meta"], { opacity: 0 });
+      tl.to("#end .meta", { opacity: 1, duration: 0.3, ease: "none" }, B(31));
+      gsap.set("#end .url", { clipPath: "inset(0 100% 0 0)" });
+      tl.to("#end .url", { clipPath: "inset(0 0% 0 0)", duration: 0.6, ease: "none" }, B(31) + 0.3);
 
       window.__timelines = window.__timelines || {};
       window.__timelines["tour"] = tl;
