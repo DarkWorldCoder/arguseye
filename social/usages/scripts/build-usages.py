@@ -41,7 +41,8 @@ TRIPS = [
     (7, '<BoardingPass passenger="Maximiliana Featherstonehaugh" from="SFO" fromCity="San Francisco" to="NRT" toCity="Tokyo Narita" flight="AX 880" gate="G98" seat="41K" boarding="10:50" />', True),
 ]
 TERM = [
-    ("J0", "cmd", "$ npx arguseye usages components/BoardingPass.tsx"),
+    ("J0", "cmd", "$ npx @ayushniroula/arguseye usages \\"),
+    ("J0b", "cmd", "    components/BoardingPass.tsx"),
     ("J1", "", "["),
     ("J2", "", '  { "id": "app/(app)/showcase/page.tsx:13",'),
     ("J3", "", '    "props": { "passenger": "Maya Chen", … } },'),
@@ -90,7 +91,8 @@ b { font-weight: 400; } .tag { color: #7ee2a8; } .att { color: #79c0ff; } .str {
 #term { top: 300px; }
 #term .code { padding-left: 26px; }
 #term .tl { white-space: pre; color: #e6edf3; }
-#term .cmd { color: #e6edf3; margin-bottom: 8px; }
+#term .cmd { color: #e6edf3; }
+#term #J0b { margin-bottom: 8px; }
 #count { position: absolute; left: 0; right: 0; top: 1040px; text-align: center; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; }
 #count .roll { display: inline-block; height: 1.1em; overflow: hidden; vertical-align: top; color: #6d28d9; }
 #count .roll .col { display: block; }
@@ -175,7 +177,7 @@ js = r"""
 
   // S3 (B17 - B25): one command; each usage row ticks the counter
   rise("#t3", B(17) + 0.08, 0.06);
-  type("#J0", B(17.4), 0.9);
+  type("#J0", B(17.4), 0.5); type("#J0b", B(18.3), 0.4);
   ["#J1", "#J2", "#J3", "#J4", "#J5", "#J6", "#J7", "#J8"].forEach((s) => gsap.set(s, { opacity: 0 }));
   tl.set("#J1", { opacity: 1 }, B(19));
   [[["#J2", "#J3"], B(19.4)], [["#J4", "#J5"], B(20.4)], [["#J6", "#J7", "#J8"], B(21.4)]].forEach(([rows, t], k) => {

@@ -28,7 +28,8 @@ def line(id_, text, cls="", hl=()):
 
 # terminal lines: (id, class, text). Commands are what a user types; outputs are what the CLI printed.
 TERM = [
-    ("L1a", "cmd", '$ npx arguseye shot components/BoardingPass.tsx \\'),
+    ("L1a", "cmd", '$ npx @ayushniroula/arguseye shot \\'),
+    ("L1d", "cmd", '    components/BoardingPass.tsx \\'),
     ("L1b", "cmd", '    --usage "app/(app)/showcase/page.tsx:13" \\'),
     ("L1c", "cmd", '    --capture-dir .baseline'),
     ("O1a", "ok", "BoardingPass.png · 900 ms"),
@@ -36,7 +37,8 @@ TERM = [
     ("D0", "dim gap", "components/BoardingPass.tsx"),
     ("D1", "del", '- <p className="text-lg font-bold text-slate-900">'),
     ("D2", "add", '+ <p className="text-3xl font-bold text-indigo-600">'),
-    ("L2", "cmd gap", "$ npx arguseye diff --baseline .baseline --out .diff"),
+    ("L2", "cmd gap", "$ npx @ayushniroula/arguseye diff \\"),
+    ("L2b", "cmd", "    --baseline .baseline --out .diff"),
     ("O2", "warn", "changed: 3.83% changed pixels; evidence in .diff"),
 ]
 S = 1.7  # evidence card scale (340 px wide renders)
@@ -209,12 +211,12 @@ js = r"""
   tl.to("#cam4", { scale: 1.56, y: 44, duration: 0.75, ease: "power4.out" }, B(17.5) + 0.22);
   tl.to("#cam4", { scale: 1.6, duration: B(29) - B(17.5) - 0.97, ease: "sine.inOut" }, B(17.5) + 0.97);
   ["O1a", "O1b", "D0", "D1", "D2", "O2"].forEach((id) => gsap.set("#" + id, { opacity: 0 }));
-  type("L1a", B(18), 0.7); type("L1b", B(19.2), 0.55); type("L1c", B(20.1), 0.35);
+  type("L1a", B(18), 0.45); type("L1d", B(18.8), 0.35); type("L1b", B(19.45), 0.5); type("L1c", B(20.3), 0.3);
   show("O1a", B(20.9)); show("O1b", B(20.9) + 0.12);
   sink("#t4a", B(21.6)); rise("#t4b", B(21.7), 0.06);
   show("D0", B(22)); show("D1", B(22) + 0.14); show("D2", B(22) + 0.28);
   sink("#t4b", B(24.2)); rise("#t4c", B(24.3), 0.06);
-  type("L2", B(24.5), 0.8);
+  type("L2", B(24.5), 0.45); type("L2b", B(25.3), 0.4);
   show("O2", B(26));
   seam("#s4", "#s6", B(29));
 
