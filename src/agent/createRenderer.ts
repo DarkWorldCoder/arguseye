@@ -5,6 +5,7 @@ import path from "node:path";
 import { compareCaptures, type DiffResult } from "./compareCaptures.js";
 import { chromium, type Browser, type CDPSession, type Locator, type Page } from "playwright-core";
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
+import { createResolver } from "../server/resolver.js";
 import type { Frame, PreviewTarget } from "../server/page.js";
 import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
@@ -124,6 +125,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   const prewarmed: Promise<void> = (async () => {
     await server.ready();
     if (!options.warmup) return;
+    // A speculative React page must not add missing React packages to a Vue-only project's bundle.
+    if (!createResolver().resolveFileSync(path.join(options.root, "package.json"), "react").path) return;
     try {
       // The usage index parses the whole project on its first use (seconds on a large codebase): do it now.
       await usages.list(path.join(options.root, "package.json"), "default");

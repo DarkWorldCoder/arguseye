@@ -10,6 +10,15 @@ let browser: Browser;
 beforeAll(async () => { renderer = await createRenderer({ root }); browser = await chromium.launch({ channel: "chrome" }); });
 afterAll(async () => { await browser?.close(); await renderer?.close(); });
 describe("Vue using the project's own runtime and SFC compiler", () => {
+  it("renders a Vue-only project after package warm-up", async () => {
+    const warming = await createRenderer({ root, warmup: true });
+    try {
+      await warming.ready();
+      const result = await warming.render({ file, props: { title: "Warm Vue", price: 12 } });
+      expect(result.errors).toEqual([]);
+      expect(result.snapshot).toContain('heading "Warm Vue"');
+    } finally { await warming.close(); }
+  });
   it("renders script-setup TypeScript with scoped styles and global app CSS, without React installed", async () => {
     const result = await renderer.render({ file, props: { title: "Vue Desk", price: 12 } });
     expect(result.errors).toEqual([]);
