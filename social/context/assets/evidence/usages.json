@@ -1,0 +1,22 @@
+[
+  {
+    "id": "app/(marketing)/docs/page.tsx:6",
+    "props": {
+      "items": [
+        "Docs",
+        "Agents",
+        "Render evidence"
+      ]
+    },
+    "unresolved": [],
+    "context": [
+      {
+        "kind": "host",
+        "tag": "div",
+        "props": {
+          "className": "w-full max-w-3xl overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-indigo-950 px-10 py-12"
+        }
+      }
+    ]
+  }
+]
