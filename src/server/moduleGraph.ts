@@ -182,13 +182,29 @@ export class ModuleGraph {
   }
 }
 
-/** A stylesheet as a JS module: injects (or replaces) its <style>; CSS modules also export their class map. */
+const FONT_FACE = /@font-face\s*\{[^{}]*\}/g;
+
+/**
+ * A stylesheet as a JS module: injects (or replaces) its <style>; CSS modules also export their class map.
+ * @font-face rules live in their own <style>, rewritten only when they change: replacing a font rule makes the
+ * browser create a new FontFace and reload it, which hides text (font-display: block) on every edit that
+ * regenerates the stylesheet, such as a new Tailwind class.
+ */
 function cssModule(file: string, { css, classes }: { css: string; classes?: Record<string, string> }): string {
   const id = JSON.stringify(file);
+  const fonts = (css.match(FONT_FACE) ?? []).join("\n");
+  const rest = fonts ? css.replace(FONT_FACE, "") : css;
   return [
     `let style = document.querySelector(\`style[data-file=\${JSON.stringify(${id})}]\`);`,
     `if (!style) { style = document.createElement("style"); style.dataset.file = ${id}; document.head.append(style); }`,
-    `style.textContent = ${JSON.stringify(css)};`,
+    `let fonts = document.querySelector(\`style[data-fonts=\${JSON.stringify(${id})}]\`);`,
+    `const fontCss = ${JSON.stringify(fonts)};`,
+    `if (fontCss) {`,
+    `  if (!fonts) { fonts = document.createElement("style"); fonts.dataset.fonts = ${id}; style.before(fonts); }`,
+    `  if (fonts.textContent !== fontCss) fonts.textContent = fontCss;`,
+    `} else fonts?.remove();`,
+    `const css = ${JSON.stringify(rest)};`,
+    `if (style.textContent !== css) style.textContent = css;`,
     classes ? `export default ${JSON.stringify(classes)};` : "",
   ].join("\n");
 }

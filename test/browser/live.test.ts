@@ -58,6 +58,20 @@ describe("live updates from unsaved edits", () => {
     server.updateBuffer(cardCss, undefined);
   });
 
+  it("keeps @font-face rules (and their loaded fonts) when an edit regenerates the stylesheet", async () => {
+    await openCard();
+    const fontFace = '@font-face { font-family: "Edit Font"; src: url(/missing-edit-font.woff2) format("woff2"); font-display: block; }\n';
+    const withFont = fontFace + onDisk(cardCss);
+    server.updateBuffer(cardCss, withFont);
+    await expect.poll(() => page.evaluate(() => [...document.fonts].some((f) => f.family.includes("Edit Font")))).toBe(true);
+    await page.evaluate(() => { (window as any).__face = [...document.fonts].find((f) => f.family.includes("Edit Font")); });
+
+    // A class edit regenerates the stylesheet; the font rules are unchanged, so the face must survive (no reload, no text blink).
+    server.updateBuffer(cardCss, withFont.replace("rgb(22, 101, 52)", "rgb(0, 0, 255)"));
+    await expect.poll(() => page.locator(".card__price").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(0, 0, 255)");
+    expect(await page.evaluate(() => [...document.fonts].includes((window as any).__face))).toBe(true);
+  });
+
   it("re-runs importers when a plain (non-component) module changes", async () => {
     await openCard();
 
