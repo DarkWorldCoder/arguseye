@@ -3,6 +3,7 @@
 ## 0.0.8
 
 - An agent's edit on disk is no longer hidden by a usage lookup. `render_usages`, `list_usages` and the export lookup read the edited file before the render checked for changes, so the render showed the old component and Tailwind never generated the edit's new classes (`render_diff` then reported "unchanged"). Found by a Claude Code session that refused to call its task done.
+- `render_diff` and `arguseye diff` replay the baseline's parent box: a baseline rendered `in_context`, inside a `frame`, or with actions or storage is re-rendered the same way. Before, the after-render dropped them, so an unchanged component in context reported ~100% changed pixels. Found by a second Claude Code session, which checked the PNG hashes and called the number wrong.
 
 ## 0.0.6
 

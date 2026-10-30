@@ -38,3 +38,23 @@ describe("a component inside the box its call site gives it", () => {
     expect(pngSize(result.png)).toEqual({ width: 240, height: 180 });
   });
 });
+
+describe("a diff against an in-context or framed baseline", () => {
+  it("re-renders inside the same parent, so an unchanged component reports no change", async () => {
+    const baseline = await renderer.render({ file: card, exportName: "ProductCard", usage: "app/deals/page.tsx:7", inContext: true });
+    const diff = await renderer.diff(baseline.captureId!);
+    expect(pngSize(diff.after.png)).toEqual({ width: 320, height: 260 });
+    expect(diff.status).toBe("unchanged");
+    expect(diff.after.contextApplied).toEqual(["main", "aside"]);
+  });
+
+  it("re-renders inside the same frame", async () => {
+    const baseline = await renderer.render({
+      file: card, exportName: "ProductCard", props: { title: "Framed", price: 1 },
+      frame: { width: 240, height: 180, background: "rgb(0, 32, 82)" },
+    });
+    const diff = await renderer.diff(baseline.captureId!);
+    expect(pngSize(diff.after.png)).toEqual({ width: 240, height: 180 });
+    expect(diff.status).toBe("unchanged");
+  });
+});

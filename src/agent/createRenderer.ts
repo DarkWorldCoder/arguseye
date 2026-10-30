@@ -39,7 +39,8 @@ export type RenderResult = {
   png: Buffer;
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
-  target: { file: string; exportName: string; props: Record<string, unknown> };
+  /** What was rendered and how; a diff replays the same request against the current source. */
+  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage">;
   viewport: { width: number; height: number };
   sourceRevision: string;
   unresolved: string[];
@@ -209,7 +210,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     diff: (baselineId) => serial(async () => {
       const before = captures.get(baselineId);
       if (!before) throw new Error(`Unknown or expired baseline "${baselineId}"; render the component again to capture a new baseline.`);
-      const after = await render({ ...structuredClone(before.target), viewport: before.viewport });
+      // Same props, parent box, frame, actions and storage as the baseline. The usage is replayed only for its
+      // ancestors (in-context), so a baseline without context still compares after its call site moved.
+      const { usage, inContext, ...replay } = structuredClone(before.target);
+      const after = await render({ ...replay, ...(inContext && usage ? { usage, inContext } : {}), viewport: before.viewport });
       after.unresolved = [...before.unresolved];
       after.warnings = unique([...before.warnings, ...after.warnings]);
       after.complete &&= before.complete;
@@ -325,7 +329,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         layoutsApplied: server.layoutsFor(target.route),
         timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
         ...(actions.length ? { actionsApplied } : {}),
-        target: structuredClone({ file: rest.file, exportName: rest.exportName ?? "default", props }), viewport: { ...viewport },
+        target: structuredClone({
+          file: rest.file, exportName: rest.exportName ?? "default", props,
+          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}),
+        }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,
       };
       if (!allErrors.length) result.captureId = remember(result);
