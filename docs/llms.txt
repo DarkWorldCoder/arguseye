@@ -13,6 +13,7 @@ Arguseye renders real React, browser-renderable Next.js, and Vue 3 components us
 - [Product and interactive examples](https://darkworldcoder.github.io/arguseye/)
 - [Installation and compatibility guide](https://darkworldcoder.github.io/arguseye/guide.html)
 - [Arguseye vs Storybook and Playwright MCP](https://darkworldcoder.github.io/arguseye/compare.html)
+- [Let Claude Code (or Codex, Cursor) see the UI it changes: setup and a real diff example](https://darkworldcoder.github.io/arguseye/claude-code-ui.html)
 - [npm package](https://www.npmjs.com/package/@ayushniroula/arguseye)
 - [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
 
