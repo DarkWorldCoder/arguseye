@@ -312,10 +312,18 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       marks.push(performance.now());
       const { box, inPage, runtimeWarnings } = await page.evaluate(() => {
-        // The box the component sits in (a frame or the call site's innermost ancestor), else the whole root.
-        const r = (document.querySelector("[data-cp-box]") ?? document.getElementById("root")!).getBoundingClientRect();
+        // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
+        // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
+        const framed = document.querySelector("[data-cp-box]");
+        const root = document.getElementById("root")!;
+        const r = (framed ?? root).getBoundingClientRect();
+        let [left, right] = [r.left, r.right];
+        if (!framed) {
+          const spans = [...root.children].map((c) => c.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
+          if (spans.length) [left, right] = [Math.max(r.left, Math.min(...spans.map((b) => b.left))), Math.min(r.right, Math.max(...spans.map((b) => b.right)))];
+        }
         return {
-          box: { x: r.x, y: r.y, width: Math.max(1, r.width), height: Math.max(1, r.height) },
+          box: { x: left, y: r.y, width: Math.max(1, right - left), height: Math.max(1, r.height) },
           inPage: (window as any).__CP__.errors as string[],
           runtimeWarnings: ((window as any).__CP__.warnings ?? []) as string[],
         };

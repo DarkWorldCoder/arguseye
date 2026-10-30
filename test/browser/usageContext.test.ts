@@ -58,3 +58,11 @@ describe("a diff against an in-context or framed baseline", () => {
     expect(diff.status).toBe("unchanged");
   });
 });
+
+describe("a component with no parent box", () => {
+  it("is captured as wide as it renders, not as wide as the viewport", async () => {
+    const result = await renderer.render({ file: path.join(root, "components/Chip.tsx"), exportName: "Chip", props: { label: "New" } });
+    expect(result.errors).toEqual([]);
+    expect(pngSize(result.png).width).toBe(180);
+  });
+});

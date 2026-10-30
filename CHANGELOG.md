@@ -4,6 +4,7 @@
 
 - An agent's edit on disk is no longer hidden by a usage lookup. `render_usages`, `list_usages` and the export lookup read the edited file before the render checked for changes, so the render showed the old component and Tailwind never generated the edit's new classes (`render_diff` then reported "unchanged"). Found by a Claude Code session that refused to call its task done.
 - `render_diff` and `arguseye diff` replay the baseline's parent box: a baseline rendered `in_context`, inside a `frame`, or with actions or storage is re-rendered the same way. Before, the after-render dropped them, so an unchanged component in context reported ~100% changed pixels. Found by a second Claude Code session, which checked the PNG hashes and called the number wrong.
+- Screenshots are cropped to the component's width as well as its height: a 340 px card is captured 340 px wide instead of as wide as the viewport (about a quarter of the pixels, so fewer image tokens for agents). Frames and in-context renders keep their parent box.
 
 ## 0.0.6
 
