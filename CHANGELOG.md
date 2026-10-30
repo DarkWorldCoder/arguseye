@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.6
+
+- Live preview no longer blinks text while you type: `@font-face` rules keep their own stylesheet, so an edit that regenerates the CSS (for example a new Tailwind class) does not recreate and reload the fonts.
+- `render_component`, `render_usages`, `list_usages`, `describe_props` and `arguseye shot` pick the file's component when no export is named: the default export, else the first PascalCase export. Named-export components no longer need `--export`.
+
 ## 0.0.5
 
 - npm package carries `mcpName` for the official MCP Registry; `server.json` on the 2025-12-11 schema.
