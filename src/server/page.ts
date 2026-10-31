@@ -36,6 +36,7 @@ export function decodeTarget(encoded: string): PreviewTarget {
 }
 
 import type { Wrapper } from "../project/appContext.js";
+import { frameworkOf } from "../project/framework.js";
 
 export type PageContext = {
   state: { epoch: number; versions: Record<string, number>; live: boolean };
@@ -74,9 +75,9 @@ const fail = (message) => { window.__CP__.errors.push(String(message)); window._
 addEventListener("error", (e) => fail(e.error?.stack ?? e.message));
 addEventListener("unhandledrejection", (e) => fail(e.reason?.stack ?? e.reason));
 </script>
-${target.file.endsWith(".vue") ? "" : '<script type="module" src="/@refresh-setup"></script>'}
+${frameworkOf(target.file) === "react" ? '<script type="module" src="/@refresh-setup"></script>' : ""}
 ${globals}
-<script type="module" src="/@runtime${target.file.endsWith(".vue") ? "?framework=vue" : ""}"></script>
+<script type="module" src="/@runtime${frameworkOf(target.file) === "react" ? "" : "?framework=" + frameworkOf(target.file)}"></script>
 </head><body${bodyClass ? ` class="${attr(bodyClass)}"` : ""}><div id="root"></div></body></html>`;
 }
 

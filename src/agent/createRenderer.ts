@@ -11,6 +11,7 @@ import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
 import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
 import { pickExport } from "../project/pickExport.js";
+import { frameworkOf } from "../project/framework.js";
 
 export type RenderRequest = PreviewTarget & {
   viewport?: { width: number; height: number };
@@ -222,7 +223,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       after.unresolved = [...before.unresolved];
       after.warnings = unique([...before.warnings, ...after.warnings]);
       after.complete &&= before.complete;
-      const page = await pages.get(`${before.target.file.endsWith(".vue") ? "vue" : "react"}:${before.viewport.width}x${before.viewport.height}`)!;
+      const page = await pages.get(`${frameworkOf(before.target.file)}:${before.viewport.width}x${before.viewport.height}`)!;
       return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
     }),
     async close() {
@@ -251,7 +252,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       }
       target.route = resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
       const contextApplied = target.context?.map((w) => (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
-      const key = `${rest.file.endsWith(".vue") ? "vue" : "react"}:${viewport.width}x${viewport.height}`;
+      const key = `${frameworkOf(rest.file)}:${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
       const isNew = !warm;
       if (!warm) pages.set(key, (warm = warmPage(viewport, target)));

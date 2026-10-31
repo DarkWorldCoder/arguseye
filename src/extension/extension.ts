@@ -52,7 +52,7 @@ export type PreviewApi = {
   compareChanges(): Promise<DiffResult>;
 };
 
-const PREVIEWABLE = /\.(tsx|jsx|vue)$/;
+const PREVIEWABLE = /\.(tsx|jsx|vue|svelte)$/;
 /** Typing pause before the preview re-renders; short enough to feel live, long enough to batch keystrokes. */
 const TYPING_DEBOUNCE_MS = 30;
 
@@ -114,7 +114,7 @@ class PreviewPanel implements vscode.Disposable {
 
   async open(document: vscode.TextDocument | undefined) {
     if (!document || !PREVIEWABLE.test(document.fileName)) {
-      vscode.window.showInformationMessage("Open a .tsx, .jsx or .vue component file to preview it.");
+      vscode.window.showInformationMessage("Open a .tsx, .jsx, .vue or .svelte component file to preview it.");
       return;
     }
     this.panel ??= this.createPanel();

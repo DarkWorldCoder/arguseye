@@ -1,6 +1,6 @@
 ---
 name: arguseye
-description: Preview React, browser-renderable Next.js and Vue 3 components from project source without starting the app. Use to inspect UI edits, literal-prop usage variants, component states and visual differences through Arguseye MCP tools or its CLI. Reports missing context; use application-level browser tests for complete journeys.
+description: Preview React (incl. React Router and Remix), browser-renderable Next.js, Vue 3 and Svelte 5 components from project source without starting the app. Use to inspect UI edits, literal-prop usage variants, component states and visual differences through Arguseye MCP tools or its CLI. Reports missing context; use application-level browser tests for complete journeys.
 ---
 
 # Arguseye

@@ -1,4 +1,5 @@
 import { createVueCompiler } from "./createVueCompiler.js";
+import { createSvelteCompiler } from "./createSvelteCompiler.js";
 import { readFile } from "node:fs/promises";
 import { join as pathJoin } from "node:path";
 import type { ResolverFactory } from "oxc-resolver";
@@ -12,7 +13,7 @@ import { routerPackage } from "../project/routerPackage.js";
 import { modularizeBarrelImports } from "./modularize.js";
 import { createResolver } from "./resolver.js";
 
-const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue)$/;
+const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
 /** Turns project files into browser ESM the preview page can import directly. */
 export class ModuleGraph {
@@ -20,6 +21,7 @@ export class ModuleGraph {
   private boundaries = new Set<string>();
   private imagesAsObjects: boolean;
   private vue: ReturnType<typeof createVueCompiler>;
+  private svelte: ReturnType<typeof createSvelteCompiler>;
   private transformed = new Map<string, { source: string; code: string }>();
   /** Project files each module imports, from its last load; feeds `crawl`. */
   private projectImports = new Map<string, string[]>();
@@ -37,6 +39,7 @@ export class ModuleGraph {
     private root: string,
   ) {
     this.vue = createVueCompiler(root, css);
+    this.svelte = createSvelteCompiler(root, css);
     this.imagesAsObjects = importsImagesAsObjects(root);
   }
 
@@ -113,14 +116,14 @@ export class ModuleGraph {
     if (isStylesheet(file)) return cssModule(file, await this.css.process(file, source));
     let cached = this.transformed.get(file);
     if (!cached || cached.source !== source) {
-      const vue = file.endsWith(".vue");
-      const input = vue ? await this.vue.compile(file, source) : source;
-      const modular = vue ? input : modularizeBarrelImports(file, input, this.resolver);
-      const { code, errors } = await transform(vue ? file + ".ts" : file, modular, {
-        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: !vue },
+      const vue = file.endsWith(".vue"), svelte = file.endsWith(".svelte"), sfc = vue || svelte;
+      const input = vue ? await this.vue.compile(file, source) : svelte ? await this.svelte.compile(file, source) : source;
+      const modular = sfc ? input : modularizeBarrelImports(file, input, this.resolver);
+      const { code, errors } = await transform(vue ? file + ".ts" : svelte ? file + ".js" : file, modular, {
+        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: !sfc },
       });
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
-      cached = { source, code: vue ? code : this.withRefresh(file, code) };
+      cached = { source, code: sfc ? code : this.withRefresh(file, code) };
       this.transformed.set(file, cached);
     }
     return this.rewriteImports(file, cached.code);

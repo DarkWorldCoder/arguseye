@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Svelte 5 (and 4) components: compiled with the project's own `svelte/compiler` (TypeScript scripts, runes, scoped styles, `<style lang="scss">` through the CSS pipeline), mounted with Svelte's `mount`, previewed in VS Code, and their call sites in `.svelte` markup found with literal props (runtime ones reported unresolved). Edits remount; component state resets.
+- React Router 7, 6.4+ and Remix v2 components render inside the project's own memory data router, so `Link`, `NavLink` and router hooks work. `@remix-run/react` routes through the project's router; `Meta`, `Links`, `Scripts` and friends render nothing.
+
 ## 0.0.9
 
 - `theme: "light" | "dark"` on `render_component`, `render_usages`, `arguseye shot --theme` and a Theme picker in the VS Code panel. `dark` adds the `dark` class to `<html>`, sets `color-scheme` and (headless) emulates `prefers-color-scheme`; `light` removes the class; without it the app renders as written. Baselines record the theme, so `render_diff` compares like for like.

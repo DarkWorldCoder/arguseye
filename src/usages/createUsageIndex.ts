@@ -11,7 +11,7 @@ type Import = { source: string; name: string; local: string };
 type Call = { local: string; offset: number; props: Record<string, unknown>; unresolved: string[]; context?: Wrapper[] };
 type Parsed = { code: string; imports: Import[]; exports: Array<{ name: string; local: string; source?: string }>; calls: Call[] };
 const SKIP = new Set(["node_modules", ".git", ".next", "dist", "build", "out", "coverage", ".turbo", ".cache", ".vscode-test", "dist-test"]);
-const SOURCE = /\.(?:[jt]sx?|vue)$/;
+const SOURCE = /\.(?:[jt]sx?|vue|svelte)$/;
 
 /** An incremental source index shared across usage queries and renders; only edited modules are parsed again. */
 export function createUsageIndex(root: string, options: { readSource?: (file: string) => Promise<string>; version?: (file: string) => number } = {}) {
@@ -88,6 +88,7 @@ export function createUsageIndex(root: string, options: { readSource?: (file: st
 
 function parseModule(file: string, code: string, root: string): Parsed {
   if (file.endsWith(".vue")) return parseVue(file, code, root);
+  if (file.endsWith(".svelte")) return parseSvelte(file, code, root);
   const result: Parsed = { code, imports: [], exports: [], calls: [] };
   const { program } = parseSync(file, code);
   for (const node of program.body as any[]) {
@@ -120,6 +121,56 @@ function parseModule(file: string, code: string, root: string): Parsed {
     result.calls.push({ local: opening.name.name, offset: opening.start, props, unresolved });
   } }).visit(program);
   for (const call of result.calls) call.context = jsxContext(call.offset, elements, result.imports, code);
+  return result;
+}
+
+/**
+ * A .svelte file: imports from its instance <script>, usages from component tags in the markup. Literal attribute
+ * values become props (text, or a `{...}` expression that is a literal); anything else is reported unresolved.
+ * Reads the Svelte 5 "modern" AST, or Svelte 4's legacy one.
+ */
+function parseSvelte(file: string, code: string, root: string): Parsed {
+  const compiler = createRequire(path.join(root, "package.json"))("svelte/compiler");
+  let ast: any, modern = true;
+  try { ast = compiler.parse(code, { filename: file, modern: true }); } catch { ast = compiler.parse(code, { filename: file }); }
+  if (!ast.fragment) modern = false;
+  const scriptNode = ast.instance;
+  const script = scriptNode ? (modern ? code.slice(scriptNode.content.start, scriptNode.content.end) : code.slice(scriptNode.content.start, scriptNode.content.end)) : "";
+  const result = parseModule(file + ".ts", script, root);
+  result.code = code; result.calls = [];
+  const expressionValue = (start: number, end: number) => {
+    const expr = parseSync("expression.ts", "(" + code.slice(start, end) + ")").program.body[0] as any;
+    return literal(expr.expression);
+  };
+  function attributeValue(value: any): unknown {
+    if (value === true) return true;
+    const parts = Array.isArray(value) ? value : [value];
+    if (parts.every((p: any) => p.type === "Text")) return parts.map((p: any) => p.data ?? p.raw ?? "").join("");
+    if (parts.length === 1 && (parts[0].type === "ExpressionTag" || parts[0].type === "MustacheTag")) return expressionValue(parts[0].expression.start, parts[0].expression.end);
+    throw new Error("not literal");
+  }
+  function walk(node: any) {
+    if (!node || typeof node !== "object") return;
+    const isComponent = modern ? node.type === "Component" : node.type === "InlineComponent";
+    if (isComponent) {
+      const imp = result.imports.find((i) => i.local === node.name);
+      if (imp) {
+        const props: Record<string, unknown> = {}, unresolved: string[] = [];
+        for (const attr of node.attributes ?? []) {
+          const source = code.slice(attr.start, attr.end);
+          if (attr.type !== "Attribute") { unresolved.push(source); continue; }
+          try { props[attr.name] = attributeValue(attr.value); } catch { unresolved.push(source); }
+        }
+        const children = modern ? node.fragment?.nodes ?? [] : node.children ?? [];
+        if (children.some((c: any) => c.type !== "Text" || (c.data ?? "").trim())) unresolved.push("children=" + code.slice(node.start, node.end).slice(0, 80));
+        result.calls.push({ local: imp.local, offset: node.start, props, unresolved });
+      }
+    }
+    const kids = modern ? [...(node.fragment?.nodes ?? []), ...(node.nodes ?? [])] : node.children ?? [];
+    for (const child of kids) walk(child);
+    for (const key of ["consequent", "alternate", "body", "fallback", "pending", "then", "catch"]) if (node[key]) walk(node[key]);
+  }
+  walk(modern ? ast.fragment : ast.html);
   return result;
 }
 

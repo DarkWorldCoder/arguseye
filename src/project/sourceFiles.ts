@@ -2,7 +2,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 const SKIP = new Set(["node_modules", ".git", ".next", "dist", "build", "out", "coverage", ".turbo", ".cache", ".vscode-test", "dist-test", "public"]);
-const SOURCE = /\.(?:[jt]sx?|vue)$/;
+const SOURCE = /\.(?:[jt]sx?|vue|svelte)$/;
 
 /** Every source file in the project that could be a component or import one. */
 export async function sourceFiles(dir: string): Promise<string[]> {

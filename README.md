@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/@ayushniroula/arguseye"><img alt="npm" src="https://img.shields.io/npm/v/@ayushniroula/arguseye?color=6476e9"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/ayushniroula.arguseye?label=VS%20Code&color=007acc"></a>
   <a href="https://darkworldcoder.github.io/arguseye/guide.html#license"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
-  <img alt="React, Next.js, Vue" src="https://img.shields.io/badge/React%20%C2%B7%20Next.js%20%C2%B7%20Vue-supported-22c55e">
+  <img alt="React, Next.js, Vue, Svelte" src="https://img.shields.io/badge/React%20%C2%B7%20Next.js%20%C2%B7%20Vue%20%C2%B7%20Svelte-supported-22c55e">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-server-93c5fd">
   <a href="https://darkworldcoder.github.io/arguseye/guide.html#contributing"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-f8fafc"></a>
 </p>
@@ -18,7 +18,7 @@
 
 [Watch the 58-second film](https://darkworldcoder.github.io/arguseye/#film) · [Claude Code setup guide](https://darkworldcoder.github.io/arguseye/claude-code-ui.html) · [Agent setup and downloadable skill](https://darkworldcoder.github.io/arguseye/agents.html) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
 
-Arguseye gives coding agents eyes on real React, browser-renderable Next.js, and Vue 3 components, without starting your app or writing stories. It uses your source, installed packages, discovered usage props, and supported layout context. Each render returns a cropped PNG, accessibility text, and structured evidence—including unresolved inputs, warnings, and errors.
+Arguseye gives coding agents eyes on real React, browser-renderable Next.js, Vue 3 and Svelte 5 components (React Router and Remix included), without starting your app or writing stories. It uses your source, installed packages, discovered usage props, and supported layout context. Each render returns a cropped PNG, accessibility text, and structured evidence—including unresolved inputs, warnings, and errors.
 
 ```bash
 npx @ayushniroula/arguseye install claude

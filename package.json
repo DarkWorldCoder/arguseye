@@ -76,7 +76,8 @@
   "activationEvents": [
     "onLanguage:typescriptreact",
     "onLanguage:javascriptreact",
-    "onLanguage:vue"
+    "onLanguage:vue",
+    "onLanguage:svelte"
   ],
   "contributes": {
     "commands": [
@@ -92,7 +93,7 @@
         {
           "command": "componentPreview.open",
           "group": "navigation",
-          "when": "resourceExtname =~ /\\.(tsx|jsx|vue)$/"
+          "when": "resourceExtname =~ /\\.(tsx|jsx|vue|svelte)$/"
         }
       ]
     },
@@ -113,6 +114,9 @@
     "react",
     "nextjs",
     "vue",
+    "svelte",
+    "react-router",
+    "remix",
     "component",
     "preview",
     "mcp",

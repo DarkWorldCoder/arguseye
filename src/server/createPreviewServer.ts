@@ -1,4 +1,6 @@
 import { vueRuntime } from "./vueRuntime.js";
+import { svelteRuntime } from "./svelteRuntime.js";
+import { frameworkOf } from "../project/framework.js";
 import http from "node:http";
 import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, statSync, watch } from "node:fs";
@@ -9,7 +11,7 @@ import { CssPipeline, isStylesheet } from "./cssPipeline.js";
 import { contentType } from "./assets.js";
 import { createFontContext } from "../project/createFontContext.js";
 
-const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue)$/;
+const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
@@ -163,14 +165,13 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss, router }));
     }
     if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true }));
-    (file.endsWith(".vue") ? ["vue"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"]).forEach((spec) => deps.add(spec));
+    ({ vue: ["vue"], svelte: ["svelte"], react: ["react", "react-dom", "react-dom/client", "react-refresh/runtime"] })[frameworkOf(file)].forEach((spec) => deps.add(spec));
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
     // (only the providers: the layout itself may import server-only code).
     const app = appContext();
     if (app.entry) await readSource(app.entry);
-    if (!file.endsWith(".vue")) await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
-    else deps.add("vue");
+    if (frameworkOf(file) === "react") await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
     await deps.ensureBuilt();
     return { generation: deps.generation, cached: deps.cached };
   }
@@ -274,6 +275,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return send(res, 200, "text/javascript", refreshSetup);
       }
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "vue") return send(res, 200, "text/javascript", vueRuntime);
+      if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "svelte") { deps.add("svelte"); return send(res, 200, "text/javascript", svelteRuntime); }
       if (url.pathname === "/@runtime") {
         ["react", "react-dom", "react-dom/client"].forEach((d) => deps.add(d));
         return send(res, 200, "text/javascript", reactRuntime);
