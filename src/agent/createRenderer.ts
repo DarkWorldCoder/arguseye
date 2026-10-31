@@ -315,18 +315,24 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (propsSource === "sample") warnings.push("Sample props were generated from types; these are not real application data.");
 
       const settled = await page.evaluate(async () => {
-        // Canvas scenes (React Three Fiber, charts) size their drawing buffer from a ResizeObserver and draw on a
-        // later frame: wait until every visible canvas's buffer matches its on-screen box, then two frames to draw
-        // (at most 60 frames).
+        // ResizeObserver clients can debounce their first measurement, so the default 300×150 canvas can
+        // briefly look settled. Require stable CSS/buffer sizes across frames before capturing, bounded at 60.
+        let canvasesPending = false;
         if (document.querySelector("canvas")) {
           const frame = () => new Promise((done) => requestAnimationFrame(() => done(undefined)));
-          const sized = () => [...document.querySelectorAll("canvas")].every((c) => {
-            const { width, height } = c.getBoundingClientRect();
-            if (!width || !height) return true;
-            return Math.abs(c.width - Math.round(width * devicePixelRatio)) <= 1 && Math.abs(c.height - Math.round(height * devicePixelRatio)) <= 1;
-          });
-          for (let i = 0; i < 60 && !sized(); i++) await frame();
-          await frame(); await frame();
+          let previous = "", stable = 0;
+          for (let i = 0; i < 60 && stable < 6; i++) {
+            await frame();
+            const sizes = [...document.querySelectorAll("canvas")].map((c) => {
+              const { width, height } = c.getBoundingClientRect();
+              return { width, height, bufferWidth: c.width, bufferHeight: c.height };
+            }).filter((c) => c.width && c.height);
+            const current = JSON.stringify(sizes);
+            const sized = sizes.every((c) => Math.abs(c.bufferWidth - Math.round(c.width * devicePixelRatio)) <= 1 && Math.abs(c.bufferHeight - Math.round(c.height * devicePixelRatio)) <= 1);
+            stable = sized && current === previous ? stable + 1 : 0;
+            previous = current;
+          }
+          canvasesPending = stable < 6;
         }
         const pending = [...document.images].filter((img) => !img.complete);
         if (pending.length || document.fonts.status !== "loaded") {
@@ -335,7 +341,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             new Promise((r) => setTimeout(r, 300)),
           ]);
         }
-        return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"]);
+        return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : []);
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       marks.push(performance.now());

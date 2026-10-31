@@ -58,6 +58,8 @@ describe("popular component libraries, each inside its provider", () => {
     expect(orange.errors).toEqual([]);
     expect(pngSize(orange.png)).toEqual({ width: 320, height: 240 });
     expect(orange.canvases).toEqual([{ width: 320, height: 240 }]);
+    expect(orange.timings!.settle).toBeLessThanOrEqual(1200);
+    expect(orange.warnings.join("\n")).not.toContain("Assets did not settle");
     // The cube's colour reaches the pixels: the same scene in another colour is a different image.
     const blue = await renderer.render({ file: file("SpinningBox.tsx"), props: { color: "#2563eb" } });
     expect(blue.errors).toEqual([]);
