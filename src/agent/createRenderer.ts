@@ -141,12 +141,16 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     }
   })();
 
+  /** The colour scheme each warm page currently emulates. */
+  const schemes = new WeakMap<Page, PreviewTarget["theme"]>();
+
   /** Bundle generation each warm page was loaded under. */
   const generations = new WeakMap<Page, number>();
 
   async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget): Promise<Page> {
     const page = await browser.newPage({ viewport });
     await page.emulateMedia({ colorScheme: target.theme ?? null });
+    schemes.set(page, target.theme);
     const errors: string[] = [];
     const loaded = new Set<string>(); loadedModules.set(page, loaded);
     page.on("request", (request) => { const url = new URL(request.url()); if (url.pathname.startsWith("/@fs/")) loaded.add(decodeURIComponent(url.pathname.slice(4))); });
@@ -265,7 +269,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       }, storage ?? null);
       if (isNew && storage) await page.evaluate((t) => (window as any).__CP__.show(t), target); // mounted before the seed: show again
       if (!isNew) {
-        await page.emulateMedia({ colorScheme: rest.theme ?? null }); // a warm page may have been used for the other theme
+        // A warm page may have been used for the other theme; re-emulate only on a change (it is a CDP round trip).
+        if (schemes.get(page) !== rest.theme) { await page.emulateMedia({ colorScheme: rest.theme ?? null }); schemes.set(page, rest.theme); }
         const state = server.syncDisk();
         const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
         if (generation !== generations.get(page)) {
