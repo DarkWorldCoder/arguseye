@@ -13,6 +13,7 @@ const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue)$/;
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
+import { routerPackage } from "../project/routerPackage.js";
 import { publicEnv } from "../project/publicEnv.js";
 import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
@@ -125,6 +126,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const serveErrors: ServeError[] = [];
   const errorsSince = (since: number) => serveErrors.filter((e) => e.at >= since);
 
+  /** The project's data-router package, if any: components that use Link or router hooks render inside it. */
+  const router = routerPackage(options.root);
+
   /** Where the generated wrapper "lives", so its imports resolve like the layout's. */
   const wrapperFile = (entry: string | undefined) =>
     entry ? entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
@@ -142,7 +146,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     try {
       for (const file of await sourceFiles(options.root)) await graph.crawl(file);
       const app = appContext();
-      await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
+      await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
       await deps.ensureBuilt();
     } catch (error) {
       deps.restore(before);
@@ -156,7 +160,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     await warming;
     if (route) {
       const routed = appContext(route);
-      await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss }));
+      await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss, router }));
     }
     if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true }));
     (file.endsWith(".vue") ? ["vue"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"]).forEach((spec) => deps.add(spec));
@@ -165,7 +169,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     // (only the providers: the layout itself may import server-only code).
     const app = appContext();
     if (app.entry) await readSource(app.entry);
-    if (!file.endsWith(".vue")) await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers));
+    if (!file.endsWith(".vue")) await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
     else deps.add("vue");
     await deps.ensureBuilt();
     return { generation: deps.generation, cached: deps.cached };
@@ -241,7 +245,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         // Nested layouts' own global CSS (e.g. a template importing "swiper/css") loads with the wrapper.
         const rootCss = new Set(appContext().globalCss);
         const css = route ? app.globalCss.filter((f) => !rootCss.has(f)) : [];
-        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css })));
+        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css, router })));
       }
       if (url.pathname === "/@graph") {
         // Everything a target will import, so the page can preload it in one parallel batch instead of a waterfall.

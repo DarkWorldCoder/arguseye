@@ -7,7 +7,11 @@ const SHIMS: Record<string, string> = {
   "next/link": "next/link.tsx",
   "next/image": "next/image.tsx",
   "next/navigation": "next/navigation.ts",
+  "@remix-run/react": "remix/react.ts",
 };
+
+/** What a shim imports to reach the project's own data-router package (react-router or react-router-dom). */
+export const ROUTER_ALIAS = "@arguseye/router";
 
 /** `shims/` sits at the package root; this file runs from src/ in tests and from dist/ when bundled. */
 export const SHIMS_DIR = (() => {

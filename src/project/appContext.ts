@@ -233,7 +233,7 @@ function memberRoot(n: any): string | undefined {
  * Source of a module whose default export nests `children` inside `wrappers`. With `markInnermost`, the innermost
  * element gets `data-cp-box`, which the capture uses as the box the component sits in.
  */
-export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css = [] as string[] } = {}): string {
+export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css = [] as string[], router = undefined as string | undefined } = {}): string {
   const imports: string[] = css.map((file) => `import ${JSON.stringify(file)};`);
   const exprs: string[] = [];
   const importOf = (local: string, importName: string, source: string) =>
@@ -254,6 +254,21 @@ export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css 
     exprs.push(`h(${local}${w.member ? "." + w.member : ""}, ${propsCode}`);
   });
   const tree = exprs.length ? exprs.join(", ") + ", children" + ")".repeat(exprs.length) : "children";
+  if (router) {
+    // One memory data router per page; each render's tree reaches its single route through a context, so the
+    // real Link, NavLink and router hooks work and a live edit does not recreate the router (or its state).
+    return `import { createElement as h, createContext, useContext } from "react";
+import { createMemoryRouter, RouterProvider } from ${JSON.stringify(router)};
+${imports.join("\n")}
+const Slot = createContext(null);
+const Current = () => useContext(Slot);
+let router;
+export default function AppWrapper({ children }) {
+  router ??= createMemoryRouter([{ path: "*", element: h(Current) }], { initialEntries: ["/"] });
+  return h(Slot.Provider, { value: ${tree} }, h(RouterProvider, { router }));
+}
+`;
+  }
   return `import { createElement as h } from "react";
 ${imports.join("\n")}
 export default function AppWrapper({ children }) { return ${tree}; }

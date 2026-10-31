@@ -1,0 +1,2 @@
+{ "name": "router-app-fixture", "private": true,
+  "dependencies": { "react": "^19.2.0", "react-dom": "^19.2.0", "react-router": "^7.9.0" } }

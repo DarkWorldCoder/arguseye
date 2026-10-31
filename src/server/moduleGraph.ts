@@ -7,7 +7,8 @@ import { init, parse } from "es-module-lexer";
 import type { DepBundler } from "./depBundler.js";
 import { isStylesheet, type CssPipeline } from "./cssPipeline.js";
 import { assetModule, importsImagesAsObjects } from "./assets.js";
-import { isShim, shimFor } from "./shims.js";
+import { isShim, shimFor, ROUTER_ALIAS } from "./shims.js";
+import { routerPackage } from "../project/routerPackage.js";
 import { modularizeBarrelImports } from "./modularize.js";
 import { createResolver } from "./resolver.js";
 
@@ -169,6 +170,11 @@ export class ModuleGraph {
     if (specifier.startsWith("/@")) return specifier;
     const shim = shimFor(specifier);
     if (shim) return `/@fs${shim}${this.query(shim)}`;
+    if (specifier === ROUTER_ALIAS) {
+      const router = routerPackage(this.root);
+      if (!router) throw new Error(`${importer}: @remix-run/react renders with react-router-dom 6.4+ or react-router 7; neither is installed in the project.`);
+      return this.urlFor(importer, router);
+    }
     // Shims live in this package but must use the project's react, so they resolve from the project root.
     const from = isShim(importer) ? pathJoin(this.root, "index.js") : importer;
     const { path, error } = this.resolver.resolveFileSync(from, specifier);
