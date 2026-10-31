@@ -48,10 +48,10 @@ describe("real usages through aliases and barrels", () => {
 
 it("reports dropped runtime provider inputs even when the child renders", async () => {
   const layout = path.join(root, "app/layout.tsx");
-  writeFileSync(layout, 'import {Alert as Provider} from "../components/Alert"; const title = "App"; export default ({children}) => <Provider title={title}>{children}</Provider>;');
+  writeFileSync(layout, 'import {Alert as Provider} from "../components/Alert"; function getTitle() { return "App"; } export default ({children}) => <Provider title={getTitle()}>{children}</Provider>;');
   const result = await renderer.render({ file: path.join(root, "components/ProductCard.tsx"), exportName: "ProductCard", props: { title: "Desk", price: 1 } });
   expect(result.errors).toEqual([]);
-  expect(result.warnings.join()).toContain("title={title}");
+  expect(result.warnings.join()).toContain("title={getTitle()}");
   expect(result.complete).toBe(false);
 });
 

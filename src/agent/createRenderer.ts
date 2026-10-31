@@ -258,7 +258,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         }
       }
       target.route = resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
-      const contextApplied = target.context?.map((w) => (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
+      const contextApplied = target.context?.flatMap((w) => w.kind === "prelude" ? [] : (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
       const key = `${frameworkOf(rest.file)}:${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
       const isNew = !warm;
@@ -345,7 +345,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       marks.push(performance.now());
-      const { box, inPage, runtimeWarnings, portals, canvases } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings, portals, canvases, empty } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
@@ -370,6 +370,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           portals: portaled.length,
           // A <canvas> (WebGL, charts) has no accessible content: report it so an agent knows the pixels are the evidence.
           canvases: [...document.querySelectorAll("canvas")].map((c) => c.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0).map((b) => ({ width: Math.round(b.width), height: Math.round(b.height) })),
+          // Nothing with a size and no text: the component returned null or empty elements for these props.
+          empty: !portaled.length && !root.innerText.trim() && ![...root.querySelectorAll("*")].some((el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0; }),
           inPage: (window as any).__CP__.errors as string[],
           runtimeWarnings: ((window as any).__CP__.warnings ?? []) as string[],
         };
@@ -378,6 +380,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals ? "body" : "#root").ariaSnapshot()]);
       warnings.push(...runtimeWarnings);
       const allErrors = unique([...inPage, ...errors]);
+      if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
       const result: RenderResult = {
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,

@@ -42,6 +42,10 @@ export type PageContext = {
   state: { epoch: number; versions: Record<string, number>; live: boolean };
   /** `NEXT_PUBLIC_*` and friends from the project's env files, as the app's build would expose them. */
   env: Record<string, string>;
+  /** `import.meta.env` for Vite projects: mode flags and variables with an exposed prefix. */
+  metaEnv?: Record<string, string | boolean>;
+  /** vite.config `define` entries: global name → JS source of the value. */
+  define?: Record<string, string>;
   htmlClass?: string;
   bodyClass?: string;
   /** Module URLs of the app's global stylesheets, loaded before the component so the cascade matches. */
@@ -58,7 +62,7 @@ export function themedClass(htmlClass: string | undefined, theme: PreviewTarget[
   return classes.join(" ") || undefined;
 }
 
-export function previewHtml(target: PreviewTarget, { state, env, htmlClass, bodyClass, globalCssUrls }: PageContext): string {
+export function previewHtml(target: PreviewTarget, { state, env, metaEnv = {}, define = {}, htmlClass, bodyClass, globalCssUrls }: PageContext): string {
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
   const envJson = JSON.stringify({ NODE_ENV: "development", ...env }).replace(/</g, "\\u003c");
@@ -70,6 +74,16 @@ window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
 window.__CP__.importModule = (url) => import(url);
 window.process ??= { env: ${envJson} };
+window.__CP__.metaEnv = ${JSON.stringify(metaEnv).replace(/</g, "\\u003c")};
+// vite.config \`define\` values: globals the app's build would have inlined.
+for (const [key, source] of Object.entries(${JSON.stringify(define).replace(/</g, "\\u003c")})) {
+  try {
+    const value = new Function("return (" + source + ")")();
+    const parts = key.split(".");
+    if (parts[0] === "import" && parts[1] === "meta" && parts[2] === "env") window.__CP__.metaEnv[parts.slice(3).join(".")] = value;
+    else { let o = window; for (const p of parts.slice(0, -1)) o = o[p] ??= {}; o[parts.at(-1)] = value; }
+  } catch {}
+}
 window.global ??= window;
 const fail = (message) => { window.__CP__.errors.push(String(message)); window.__CP__.status = "error"; };
 addEventListener("error", (e) => fail(e.error?.stack ?? e.message));
@@ -84,6 +98,11 @@ ${globals}
 /** Installs the React Refresh hook before react-dom loads (module scripts run in document order). */
 export const refreshSetup = `import RR from "/@deps/react-refresh/runtime.js";
 RR.injectIntoGlobalHook(window);
+// Remember committed roots, so the settle step can see a Suspense boundary still showing its fallback.
+const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+const commit = hook.onCommitFiberRoot;
+window.__CP__.fiberRoots = new Set();
+hook.onCommitFiberRoot = (id, root, ...rest) => { window.__CP__.fiberRoots.add(root); return commit.call(hook, id, root, ...rest); };
 window.$RefreshReg$ = () => {};
 window.$RefreshSig$ = () => (type) => type;
 window.__CP__.refresh = RR;`;
@@ -114,7 +133,7 @@ const preloaded = new Set();
 const preload = async (target) => {
   try {
     const q = "file=" + encodeURIComponent(target.file) + (target.route ? "&route=" + encodeURIComponent(target.route) : "");
-    const urls = await (await fetch("/@graph?" + q)).json();
+    const urls = await (await realFetch("/@graph?" + q)).json();
     const fresh = urls.filter((u) => !preloaded.has(u));
     for (const u of fresh) {
       preloaded.add(u);
@@ -130,19 +149,50 @@ const preload = async (target) => {
 const explain = async (error, since) => {
   if (!/Failed to fetch|Importing a module script failed|error loading dynamically imported module/i.test(String(error))) return [String(error?.stack ?? error)];
   try {
-    const served = await (await fetch("/@errors?since=" + since)).json();
+    const served = await (await realFetch("/@errors?since=" + since)).json();
     if (served.length) return served.map((e) => e.message);
   } catch {}
   return [String(error?.stack ?? error)];
 };
 
-/** The frame is settled once fonts are ready and the component's images have loaded (or 3 s passed). */
-const settled = () => {
+/** fetch() calls the component started and has not seen answered yet (data loading on mount). */
+let inFlight = 0, lastNetwork = 0;
+const realFetch = window.fetch;
+window.fetch = function (...args) {
+  inFlight++;
+  return realFetch.apply(this, args).finally(() => { inFlight--; lastNetwork = performance.now(); });
+};
+
+/** A Suspense boundary in a committed tree that still shows its fallback (React.lazy, use(), suspending data). */
+const suspended = () => {
+  for (const root of cp.fiberRoots ?? []) {
+    const stack = [root.current];
+    while (stack.length) {
+      const fiber = stack.pop();
+      if (fiber.tag === 13 && fiber.memoizedState !== null) return true;
+      if (fiber.child) stack.push(fiber.child);
+      if (fiber.sibling) stack.push(fiber.sibling);
+    }
+  }
+  return false;
+};
+
+/**
+ * The frame is settled once lazy parts and data requests the component started on mount have resolved, fonts are
+ * ready and its images have loaded (or 3 s passed).
+ */
+const settled = async () => {
+  const until = performance.now() + 3000;
+  const frame = () => new Promise((done) => requestAnimationFrame(done));
+  // A macrotask lets effects fire their requests; then wait while anything is loading, plus two frames to commit.
+  await new Promise((done) => setTimeout(done, 0));
+  while (performance.now() < until && (inFlight > 0 || suspended() || performance.now() - lastNetwork < 32)) await frame();
+  if (performance.now() >= until) cp.warnings = [...(cp.warnings ?? []), inFlight ? "Requests were still pending after 3 s; the capture shows the loading state." : "A Suspense boundary still showed its fallback after 3 s."];
   // Lazy images below the fold would never load in a headless viewport (and the wait would hit the cap every time).
   for (const img of document.getElementById("root").querySelectorAll("img[loading=lazy]")) img.loading = "eager";
   const images = [...document.getElementById("root").querySelectorAll("img")].filter((img) => !img.complete);
   const loads = images.map((img) => new Promise((done) => { img.addEventListener("load", done, { once: true }); img.addEventListener("error", done, { once: true }); }));
-  const timeout = new Promise((done) => setTimeout(done, 3000));
+  const timeout = new Promise((done) => setTimeout(done, Math.max(0, until - performance.now())));
   return Promise.race([Promise.all([document.fonts.ready, ...loads]), timeout]);
 };
 
@@ -186,6 +236,7 @@ cp.show = async (target, state) => {
   if (state) Object.assign(cp, state);
   cp.target = target;
   cp.errors = [];
+  cp.warnings = [];
   cp.status = "loading";
   const since = Date.now();
   // A forced theme: the dark class and color-scheme on <html>; without one, the app's own class stays as it is.

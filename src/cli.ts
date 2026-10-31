@@ -10,6 +10,7 @@ import { createMcpServer } from "./agent/mcpServer.js";
 import { createPreviewServer } from "./server/createPreviewServer.js";
 import { findUsages } from "./usages/findUsages.js";
 import { routeFor } from "./project/routeFor.js";
+import { audit } from "./agent/audit.js";
 
 const HELP = `arguseye: inspect React and Vue components and verify UI edits, no dev server
 
@@ -31,6 +32,9 @@ const HELP = `arguseye: inspect React and Vue components and verify UI edits, no
 
   arguseye install <claude|codex|gemini|cursor|windsurf|vscode|antigravity|copilot|print|all> [--project DIR] [--dry-run]
       Write the MCP server entry and the skill where that agent reads them (merges existing config)
+
+  arguseye audit [DIR] [--limit N] [--json] [--out report.json] [--root DIR]
+      Render every component under DIR once with sample props: what renders, what errors, what comes out empty
 
   arguseye serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
       Start the preview server and print a URL that shows the component live (updates as files change)`;
@@ -54,6 +58,7 @@ const { positionals, values } = parseArgs({
     output: { type: "string", default: "both" },
     "capture-dir": { type: "string" },
     baseline: { type: "string" },
+    limit: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -100,6 +105,20 @@ if (values.help || !command) {
     console.log(values.json ? JSON.stringify(diffEvidence(result)) : `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels; evidence in ${values.out}`);
     process.exitCode = result.status === "incomplete" ? 1 : 0;
   } finally { await renderer.close(); }
+} else if (command === "audit") {
+  const renderer = await createRenderer({ root });
+  try {
+    const report = await audit(renderer, root, file ? path.resolve(root, file) : root, {
+      limit: values.limit ? Number(values.limit) : Infinity,
+      onEntry: (e) => { if (!values.json) console.log(`${e.status.padEnd(7)} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}${e.errors ? "\n        " + e.errors[0] : ""}`); },
+    });
+    if (values.out) await writeFile(values.out, JSON.stringify(report, null, 2));
+    if (values.json) console.log(JSON.stringify(report));
+    else console.log(`\n${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped${report.topErrors.length ? "\nMost common errors:\n" + report.topErrors.map((t) => `  ${t.count}× ${t.message}`).join("\n") : ""}`);
+    process.exitCode = report.error ? 1 : 0;
+  } finally {
+    await renderer.close();
+  }
 } else if ((command === "shot" || command === "usages") && file) {
   const renderer = await createRenderer({ root });
   try {

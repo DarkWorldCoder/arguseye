@@ -67,7 +67,9 @@ export class CssPipeline {
 
   /** Compiles with the project's own `sass` / `sass-embedded`. */
   private async sass(file: string, source: string): Promise<string> {
-    const sass = await this.importFromProject("sass").catch(() => this.importFromProject("sass-embedded"));
+    const loaded = await this.importFromProject("sass").catch(() => this.importFromProject("sass-embedded"));
+    // Node exposes a CommonJS build's exports as `default`; the ESM build has them at the top level.
+    const sass = loaded.compileStringAsync ? loaded : loaded.default;
     const result = await sass.compileStringAsync(source, {
       url: pathToFileURL(file),
       syntax: file.endsWith(".sass") ? "indented" : "scss",

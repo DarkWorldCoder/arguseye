@@ -1,0 +1,1 @@
+export default function FixedToast() { return <div role="alert" style={{ position: "fixed", right: 16, bottom: 16, padding: 12, background: "#0f172a", color: "white", borderRadius: 8 }}>Saved!</div>; }

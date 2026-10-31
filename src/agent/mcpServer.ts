@@ -4,6 +4,17 @@ import { renderEvidence, diffEvidence } from "./renderEvidence.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createRenderer, type RenderRequest, type RenderResult } from "./createRenderer.js";
+import { audit } from "./audit.js";
+
+/** Sent to the agent when it connects: when to reach for these tools, so it uses them without being asked. */
+const INSTRUCTIONS = `Arguseye shows you UI you cannot otherwise see: it renders React (incl. Next.js, React Router, Remix), Vue and Svelte components straight from source, inside the app's own layout, providers, global CSS, Tailwind and fonts, in a headless browser. No dev server, no stories, no login.
+
+Use it whenever you create or change a UI component, its styles or its props:
+- After the edit, call render_component on the file (pass usage from list_usages for real props). Read errors first, then the accessibility snapshot, then the image.
+- Before saying a UI change is done, render it again and read \`changes\`; for a shared component, render_usages checks every call site.
+- Use theme "dark" when the app has a dark mode, viewport "mobile" for responsive work, actions to open menus, dialogs or tabs.
+- After a refactor or dependency upgrade, audit_components renders everything once and lists what broke.
+It is faster than starting the app and driving a browser (about 50 ms per render once warm) and works when the app cannot boot.`;
 
 /** Cap for render_usages so one call stays cheap on tokens. */
 const MAX_USAGES = 12;
@@ -23,7 +34,7 @@ const look = {
 export async function createMcpServer(options: { root: string; warmup?: boolean }) {
   const root = path.resolve(options.root);
   const renderer = await createRenderer({ root, warmup: options.warmup ?? true });
-  const server = new McpServer({ name: "arguseye", version: "0.0.1" });
+  const server = new McpServer({ name: "arguseye", version: "0.0.1" }, { instructions: INSTRUCTIONS });
   const abs = (file: string) => path.resolve(root, file);
   const rel = (file: string) => path.relative(root, file);
 
@@ -77,7 +88,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     "render_component",
     {
       description:
-        "See a component exactly as it looks in the app, without a dev server: returns a PNG cropped to the component and its accessibility tree. Pass `usage` (from list_usages) to use the props from a real call site, or `props` as JSON; with neither, required props are filled with samples from the TypeScript type (see describe_props).",
+        "Use after creating or editing any UI component to see it exactly as it looks in the app, without a dev server: returns a PNG cropped to the component and its accessibility tree. Pass `usage` (from list_usages) to use the props from a real call site, or `props` as JSON; with neither, required props are filled with samples from the TypeScript type (see describe_props).",
       inputSchema: {
         ...target,
         usage: z.string().optional().describe('Usage id from list_usages, e.g. "app/page.tsx:9"'),
@@ -165,6 +176,24 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
         if (!page.total) content.push({ type: "text", text: "No usages found in the project." });
         if (page.nextOffset !== null) content.push({ type: "text", text: `${page.total - page.nextOffset} more usages; continue with cursor ${page.nextOffset}` });
         return { isError: page.results.some((r) => r.errors.length > 0), content, structuredContent: { results: page.results.map((r) => ({ ...renderEvidence(r), usage: r.usage })), total: page.total, nextCursor: page.nextOffset === null ? null : String(page.nextOffset), coverage: "Isolated component renders with discovered literal props; surrounding pages are not exercised." } };
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "audit_components",
+    {
+      description: "Render every component in the project (or a folder) once with sample props and report which render, which throw and which come out empty. Use after a refactor, a dependency upgrade or a shared-style change, or to get to know a new codebase's UI. Text only; render_component shows any one of them.",
+      inputSchema: { dir: z.string().optional().describe("Folder to audit, relative to the project root; default the whole project"), limit: z.number().int().min(1).max(500).optional().describe("Most components to render (default 200)") },
+    },
+    async (args) => {
+      try {
+        const report = await audit(renderer, root, args.dir ? abs(args.dir) : root, { limit: args.limit ?? 200 });
+        const lines = report.entries.filter((e) => e.status !== "ok").map((e) => `${e.status} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.errors ? ": " + tidy(e.errors[0]) : ""}`);
+        const text = `${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped\n${lines.join("\n")}`;
+        return { isError: report.error > 0, content: [{ type: "text" as const, text }], structuredContent: report as any };
       } catch (error) {
         return failure(error);
       }

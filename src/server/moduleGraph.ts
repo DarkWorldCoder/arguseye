@@ -12,12 +12,15 @@ import { isShim, shimFor, ROUTER_ALIAS } from "./shims.js";
 import { routerPackage } from "../project/routerPackage.js";
 import { modularizeBarrelImports } from "./modularize.js";
 import { createResolver } from "./resolver.js";
+import { applyAlias, readViteConfig, type ViteConfig } from "../project/viteConfig.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
 /** Turns project files into browser ESM the preview page can import directly. */
 export class ModuleGraph {
   private resolver: ResolverFactory = createResolver();
+  /** Aliases from the project's vite.config (tsconfig paths are handled by the resolver). */
+  readonly vite: ViteConfig;
   private boundaries = new Set<string>();
   private imagesAsObjects: boolean;
   private vue: ReturnType<typeof createVueCompiler>;
@@ -38,6 +41,7 @@ export class ModuleGraph {
     private css: CssPipeline,
     private root: string,
   ) {
+    this.vite = readViteConfig(root);
     this.vue = createVueCompiler(root, css);
     this.svelte = createSvelteCompiler(root, css);
     this.imagesAsObjects = importsImagesAsObjects(root);
@@ -110,6 +114,7 @@ export class ModuleGraph {
   }
 
   async load(file: string): Promise<string> {
+    if (file.endsWith(".json")) return jsonModule(file, await this.readSource(file));
     if (!SCRIPT_EXT.test(file) && !isStylesheet(file)) return assetModule(file, this.imagesAsObjects);
 
     const source = await this.readSource(file);
@@ -120,10 +125,14 @@ export class ModuleGraph {
       const input = vue ? await this.vue.compile(file, source) : svelte ? await this.svelte.compile(file, source) : source;
       const modular = sfc ? input : modularizeBarrelImports(file, input, this.resolver);
       const { code, errors } = await transform(vue ? file + ".ts" : svelte ? file + ".js" : file, modular, {
+        // JSX in .js files is common (Create React App, older Vite and webpack setups): parse plain JS as JSX.
+        ...(/\.(m|c)?js$/.test(file) && !sfc ? { lang: "jsx" as const } : {}),
         sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: !sfc },
       });
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
-      cached = { source, code: sfc ? code : this.withRefresh(file, code) };
+      // Vite exposes env through import.meta.env; the page holds the values, each module that reads them gets them.
+      const env = code.includes("import.meta.env") ? "import.meta.env = window.__CP__.metaEnv;\n" : "";
+      cached = { source, code: env + (sfc ? code : this.withRefresh(file, code)) };
       this.transformed.set(file, cached);
     }
     return this.rewriteImports(file, cached.code);
@@ -180,7 +189,8 @@ export class ModuleGraph {
     }
     // Shims live in this package but must use the project's react, so they resolve from the project root.
     const from = isShim(importer) ? pathJoin(this.root, "index.js") : importer;
-    const { path, error } = this.resolver.resolveFileSync(from, specifier);
+    const aliased = isShim(importer) ? undefined : applyAlias(this.vite.aliases, specifier);
+    const { path, error } = this.resolver.resolveFileSync(from, aliased ?? specifier);
     if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer}: ${error}`);
     if (path.includes("/node_modules/") && !isStylesheet(path)) {
       this.deps.add(specifier);
@@ -190,6 +200,18 @@ export class ModuleGraph {
     return SCRIPT_EXT.test(path) ? `/@fs${path}${query}` : `/@fs${path}?import&${query.slice(1)}`;
   }
 }
+
+/** A JSON import as bundlers serve it: the parsed value as the default export, top-level keys as named exports. */
+function jsonModule(file: string, source: string): string {
+  let value: unknown;
+  try { value = JSON.parse(source); } catch (error) { throw new Error(`${file}: invalid JSON (${(error as Error).message})`); }
+  const named = value && typeof value === "object" && !Array.isArray(value)
+    ? Object.keys(value).filter((k) => /^[A-Za-z_$][\w$]*$/.test(k) && !RESERVED.has(k)).map((k) => `export const ${k} = json[${JSON.stringify(k)}];`)
+    : [];
+  return [`const json = ${JSON.stringify(value)};`, "export default json;", ...named].join("\n");
+}
+
+const RESERVED = new Set("break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await".split(" "));
 
 const FONT_FACE = /@font-face\s*\{[^{}]*\}/g;
 

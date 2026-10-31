@@ -16,7 +16,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
 import { routerPackage } from "../project/routerPackage.js";
-import { publicEnv } from "../project/publicEnv.js";
+import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
 import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 import type { Wrapper } from "../project/appContext.js";
@@ -233,7 +233,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         const app = appContext();
         const globalCssUrls = globalStyles(app);
-        return send(res, 200, "text/html", previewHtml(target, { state, env: publicEnv(options.root), globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
+        return send(res, 200, "text/html", previewHtml(target, { state, env: publicEnv(options.root), metaEnv: importMetaEnv(options.root, graph.vite.envPrefix), define: graph.vite.define, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
       if (url.pathname === "/@context") {
         const { file, wrappers } = decodeContext(url.searchParams.get("c") ?? "");

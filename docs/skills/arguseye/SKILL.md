@@ -1,6 +1,6 @@
 ---
 name: arguseye
-description: Preview React, browser-renderable Next.js and Vue 3 components from project source without starting the app. Use to inspect UI edits, literal-prop usage variants, component states and visual differences through Arguseye MCP tools or its CLI. Reports missing context; use application-level browser tests for complete journeys.
+description: Preview React (incl. React Router and Remix), browser-renderable Next.js, Vue 3 and Svelte 5 components from project source without starting the app. Use to inspect UI edits, literal-prop usage variants, component states and visual differences through Arguseye MCP tools or its CLI. Reports missing context; use application-level browser tests for complete journeys.
 ---
 
 # Arguseye
@@ -12,19 +12,24 @@ Render component source in Chromium with the project's packages, styles, assets 
 - For a shared component: inspect relevant call-site variants with `render_usages`, following pagination when broader coverage is needed. Use `usage` plus `in_context: true` to reconstruct its parent elements.
 - When a component needs a state: pass `actions` (click, hover, fill, press, scroll, wait) and `storage` (localStorage/sessionStorage flags). Storage seeds do not reconstruct a backend or an authenticated application journey.
 - When a component has no usage yet: `describe_props` gives the schema and sample props; `frame` gives it a parent box of a chosen size and background.
+- After a refactor, a dependency upgrade or a change to shared styles: `audit_components` renders every component once and lists which throw and which come out empty.
 
 ## Tools (MCP server `arguseye`)
 | Tool | Use |
 |---|---|
-| `render_component {file, export?, usage?, props?, viewport?, in_context?, frame?, actions?, storage?, output?}` | Render with a discovered usage or explicit props. `viewport`: `mobile`, `tablet`, `desktop` or `WxH`. Without supplied inputs, required props may be generated from TypeScript samples. |
+| `render_component {file, export?, usage?, props?, viewport?, theme?, in_context?, frame?, actions?, storage?, output?}` | Render with a discovered usage or explicit props. `viewport`: `mobile`, `tablet`, `desktop` or `WxH`. `theme`: `light` or `dark` forces the colour scheme (the `dark` class on `<html>`, `color-scheme`, `prefers-color-scheme`); check both when the app has a dark mode. Without supplied inputs, required props may be generated from TypeScript samples. |
 | `list_usages {file, export?}` | Every call site with literal props, unresolved runtime props, and the JSX ancestors (`context`). |
-| `render_usages {file, export?, viewport?, cursor?, limit?, output?}` | A page of isolated literal-prop variants, not full-page integration tests. `limit` is 1–12; pass the returned `nextCursor` as `cursor` until it is null. |
+| `render_usages {file, export?, viewport?, theme?, cursor?, limit?, output?}` | A page of isolated literal-prop variants, not full-page integration tests. `limit` is 1–12; pass the returned `nextCursor` as `cursor` until it is null. |
 | `describe_props {file, export?}` | Props from the TypeScript type, with sample values. |
+| `audit_components {dir?, limit?}` | Render every component under `dir` once with sample props; reports ok, error (first line) and empty per file. |
 | `render_diff {baselineId, output?}` | Compare current code with a successful render's `captureId`, reusing resolved props and viewport. Returns before/after/highlighted images and change evidence. |
 
 Function props are passed as `{ "$fn": "(x) => ..." }`. Paths are relative to the project root the server was started with.
 
 For render tools, `output` is `"image"`, `"summary"` or `"both"` (default). Use summary for a compact text response, image for visual inspection, or both when needed. Structured evidence remains available separately from image bytes.
+
+## What it handles without setup
+Providers from the root layout or from `src/main.tsx` (React Query, Redux, i18n set up by a side-effect import, theme providers), `React.lazy`/Suspense and data loaded on mount (the capture waits for them, up to 3 s), animations, charts and WebGL canvases, portals (dialogs, menus, toasts), virtualized lists, JSX in `.js`, tsconfig paths and `vite.config` aliases, `import.meta.env`/`define`, CSS modules, Sass, Tailwind v3/v4, JSON and image imports, custom elements. A component that renders nothing for the given props comes back with a warning instead of a blank image.
 
 ## Reading a result
 - `errors[]` are real: a resolve error names the import and the importer; a render error carries the component stack. Fix them before trusting the pixels.
@@ -38,13 +43,14 @@ For render tools, `output` is `"image"`, `"summary"` or `"both"` (default). Use 
 
 Successful renders return an immutable `captureId`. The renderer retains the latest 64 captures per session; restarting the server or eviction makes an old ID unavailable. Capture again when the error names an unknown or expired baseline.
 
-An explicit `render_diff` reuses the file, export, resolved props and viewport. It does **not** replay `actions`, `storage`, `frame` or call-site parent context. For stateful/contextual comparisons, render again with the same explicit inputs and inspect `changes`; do not assume a saved baseline restores the live editor's interaction state. Next.js server execution, Nuxt context and arbitrary runtime providers require the application environment.
+An explicit `render_diff` replays the baseline's file, export, resolved props, viewport, theme, `frame`, `in_context` parent box, `actions` and `storage` (since 0.0.8), so a stateful or contextual baseline compares like for like. It does not restore the live editor's interaction state. Next.js server execution, Nuxt context and arbitrary runtime providers require the application environment.
 
 ## Without MCP (CLI)
 ```bash
 npx @ayushniroula/arguseye shot src/components/Card.tsx --export Card --usage app/page.tsx:12 --in-context --out card.png
 npx @ayushniroula/arguseye usages src/components/Card.tsx --export Card
 npx @ayushniroula/arguseye serve src/components/Card.tsx --export Card --port 4321
+npx @ayushniroula/arguseye audit src/components --out audit.json
 ```
 
 Use `shot --json` for structured metadata and `--output summary` to omit the ordinary PNG output. CLI baselines survive separate commands when explicitly saved in a chosen directory:

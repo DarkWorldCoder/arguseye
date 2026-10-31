@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Vite apps: providers set up in `src/main.tsx` around `<App />` (React Query, Redux and other `createRoot(...).render(...)` wrappers) apply to every preview, including module-level values passed to them (`const queryClient = new QueryClient()`) and side-effect imports such as `import "./i18n"`.
+- `React.lazy`, Suspense boundaries and `fetch` calls a component starts on mount are waited for (up to 3 s) before the capture, so the result shows the loaded state instead of the fallback; a warning says when the cap was hit.
+- `vite.config` aliases (string `find`, `path.resolve(__dirname, ...)`, `fileURLToPath(new URL(..., import.meta.url))`), `define` and `envPrefix` are read statically; `import.meta.env` has the mode flags and the exposed env variables. `REACT_APP_*` variables reach `process.env`.
+- JSX in `.js` files; JSON imports export the parsed value (and top-level keys); the project's CommonJS `sass` build compiles.
+- A component that renders nothing visible for the given props comes back with a warning that says so.
+- `arguseye audit [DIR]` and the `audit_components` MCP tool render every component once with sample props and report what renders, what throws and what comes out empty.
+- The MCP server sends instructions to connecting agents on when to use it, so they reach for it after UI edits without being told.
+- `test/fixtures/edge-app`: 35 kinds of component in one Vite app with real libraries (React Query, Redux Toolkit, Zustand, i18next, Recharts, Framer Motion, react-window, lodash, Sass), all rendering in `test/browser/edge.test.ts`.
+
 ## 0.0.10
 
 - Canvas capture waits for stable CSS and drawing-buffer dimensions, including delayed ResizeObserver measurements; bounded settling reports a warning if the canvas remains unsettled. Canvas settling has its own latency cost.

@@ -23,7 +23,21 @@ type Content = Array<{ type: string; text?: string; data?: string; mimeType?: st
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["describe_props", "list_usages", "render_component", "render_diff", "render_usages"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "describe_props", "list_usages", "render_component", "render_diff", "render_usages"]);
+  });
+
+  it("tells a connecting agent when to use it, without being asked", () => {
+    const instructions = client.getInstructions()!;
+    expect(instructions).toMatch(/whenever you create or change a UI component/);
+    expect(instructions).toContain("render_component");
+  });
+
+  it("audit_components renders a folder once and lists what is not ok", async () => {
+    const result = await client.callTool({ name: "audit_components", arguments: { dir: "components", limit: 50 } });
+    const report = result.structuredContent as any;
+    expect(report.total).toBeGreaterThan(0);
+    expect(report.ok).toBeGreaterThan(0);
+    expect((result.content as Content)[0].text).toMatch(/^\d+ components: \d+ ok/);
   });
 
   it("render_component returns a PNG and a compact text snapshot for a real usage, by project-relative path", async () => {

@@ -21,10 +21,16 @@ export type AppContext = {
 
 export type Wrapper =
   | { kind: "host"; tag: string; props: Record<string, unknown> }
-  | { kind: "component"; source: string; importName: string; member?: string; props: Record<string, unknown>; refs?: Record<string, Ref> };
+  | { kind: "component"; source: string; importName: string; member?: string; props: Record<string, unknown>; refs?: Record<string, Ref> }
+  /** Statements the entry runs before rendering that providers depend on: side-effect imports (`import "./i18n"`) and
+   * the module-level values passed to providers (`const queryClient = new QueryClient()`), copied verbatim. */
+  | { kind: "prelude"; code: string[] };
 
-/** A prop whose value is an identifier imported by the layout (e.g. `theme={theme}`): re-imported by the wrapper. */
-export type Ref = { source: string; importName: string; member?: string };
+/**
+ * A prop whose value is an identifier imported by the layout (e.g. `theme={theme}`): re-imported by the wrapper.
+ * `local` names a value the entry declares itself, which the wrapper re-creates from the prelude.
+ */
+export type Ref = { source: string; importName: string; member?: string; local?: string };
 
 /** Components that only inject global styles; as siblings of `{children}` they still shape every page. */
 const GLOBAL_STYLE_SIBLINGS = new Set(["CssBaseline", "ScopedCssBaseline", "GlobalStyles", "Global"]);
@@ -169,6 +175,33 @@ function wrapperChain(program: any, code: string, warnings: string[]): Wrapper[]
     ReturnStatement(node: any) { if (!chain) walk(node.argument, []); },
     ArrowFunctionExpression(node: any) { if (!chain && node.expression) walk(node.body, []); },
   }).visit(program);
+  // A client entry (src/main.tsx) renders `<Providers><App /></Providers>` instead of nesting `{children}`.
+  if (!chain) chain = renderedChain(program);
+
+  // Module-level values the entry declares and passes to providers, and the imports they need.
+  const locals = new Map<string, any>();
+  for (const node of program.body) {
+    const decl = node.type === "VariableDeclaration" ? node : node.type === "ExportNamedDeclaration" && node.declaration?.type === "VariableDeclaration" ? node.declaration : undefined;
+    for (const d of decl?.declarations ?? []) if (d.id.type === "Identifier" && d.init) locals.set(d.id.name, d);
+  }
+  const prelude: string[] = program.body
+    .filter((n: any) => n.type === "ImportDeclaration" && n.specifiers.length === 0 && !STYLE.test(n.source.value) && !/\.(svg|png|jpe?g|gif|webp|avif|ico)$/.test(n.source.value))
+    .map((n: any) => code.slice(n.start, n.end));
+  const needed = new Set<string>();
+  const need = (name: string) => {
+    if (needed.has(name)) return;
+    const decl = locals.get(name);
+    if (!decl) return;
+    needed.add(name);
+    for (const id of identifiers(decl.init)) if (id !== name) need(id);
+  };
+  const localRef = (expr: any): Ref | undefined => {
+    const rootName = expr.type === "Identifier" ? expr.name : expr.type === "MemberExpression" ? memberRootExpr(expr) : undefined;
+    if (!rootName || !locals.has(rootName)) return undefined;
+    need(rootName);
+    const member = expr.type === "MemberExpression" ? code.slice(expr.start, expr.end).split(".").slice(1).join(".") : undefined;
+    return { source: "", importName: "", local: rootName, member };
+  };
 
   const wrappers: Wrapper[] = [];
   const elements = chain ?? [];
@@ -181,7 +214,7 @@ function wrapperChain(program: any, code: string, warnings: string[]): Wrapper[]
     for (const attr of attributes) {
       if (attr.type !== "JSXAttribute" || attr.name.type !== "JSXIdentifier") { warnings.push("Runtime provider input omitted: " + code.slice(attr.start, attr.end)); continue; }
       const expr = attr.value?.type === "JSXExpressionContainer" ? attr.value.expression : undefined;
-      const ref = expr ? importedRef(expr, imports, code) : undefined;
+      const ref = expr ? importedRef(expr, imports, code) ?? localRef(expr) : undefined;
       if (ref) { refs[attr.name.name] = ref; continue; }
       try {
         props[attr.name.name] = attr.value === null ? true : expr ? literal(expr) : literal(attr.value);
@@ -209,7 +242,55 @@ function wrapperChain(program: any, code: string, warnings: string[]): Wrapper[]
       if (imported) wrappers.push({ kind: "component", source: imported.source, importName: imported.importName, props: {} });
     }
   }
-  return wrappers;
+  if (needed.size) {
+    // The imports the copied declarations use, then the declarations in source order.
+    const used = new Set<string>();
+    for (const name of needed) for (const id of identifiers(locals.get(name).init)) used.add(id);
+    for (const node of program.body) {
+      if (node.type === "ImportDeclaration" && node.specifiers.some((sp: any) => used.has(sp.local.name))) prelude.push(code.slice(node.start, node.end));
+    }
+    // A value that needs something the copy lacks (a local function, a runtime global) stays undefined instead of
+    // breaking every provider.
+    for (const [name, decl] of locals) if (needed.has(name)) prelude.push(`let ${name}; try { ${name} = (${code.slice(decl.init.start, decl.init.end)}); } catch (error) { console.warn("Arguseye could not re-create ${name} from the app entry:", error); }`);
+  }
+  return prelude.length ? [{ kind: "prelude", code: prelude }, ...wrappers] : wrappers;
+}
+
+/** Every identifier name in an expression (a cheap over-approximation of the names it reads). */
+function identifiers(node: any, out = new Set<string>()): Set<string> {
+  if (!node || typeof node !== "object") return out;
+  if (Array.isArray(node)) { for (const n of node) identifiers(n, out); return out; }
+  if ((node.type === "Identifier" || node.type === "JSXIdentifier") && typeof node.name === "string") out.add(node.name);
+  for (const [key, value] of Object.entries(node)) if (key !== "parent" && value && typeof value === "object") identifiers(value, out);
+  return out;
+}
+
+/**
+ * The providers around the app in `createRoot(el).render(...)`, `hydrateRoot(el, ...)` or `ReactDOM.render(...)`:
+ * every element down to the rendered app component (the innermost one, usually `<App />`), which is left out.
+ */
+function renderedChain(program: any): any[] | undefined {
+  let rendered: any;
+  new Visitor({
+    CallExpression(node: any) {
+      if (rendered) return;
+      const name = node.callee.type === "MemberExpression" ? node.callee.property.name : node.callee.name;
+      const arg = name === "render" ? node.arguments[0] : name === "hydrateRoot" || name === "hydrate" ? node.arguments[1] ?? node.arguments[0] : undefined;
+      const jsx = arg?.type === "ParenthesizedExpression" ? arg.expression : arg;
+      if (jsx?.type === "JSXElement") rendered = jsx;
+    },
+  }).visit(program);
+  if (!rendered) return undefined;
+  const chain: any[] = [];
+  let node = rendered;
+  for (;;) {
+    const kids = node.children.filter((c: any) => c.type === "JSXElement");
+    if (!kids.length) break;
+    chain.push(node);
+    const nameOf = (el: any) => el.openingElement.name.name ?? "";
+    node = kids.find((k: any) => /^App$/.test(nameOf(k))) ?? kids.find((k: any) => k.children.some((c: any) => c.type === "JSXElement")) ?? kids.at(-1);
+  }
+  return chain;
 }
 
 /** `theme={theme}` or `theme={themes.light}` where the root identifier is imported: something the wrapper can import too. */
@@ -240,12 +321,18 @@ export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css 
     importName === "default" ? `import ${local} from ${JSON.stringify(source)};`
     : importName === "*" ? `import * as ${local} from ${JSON.stringify(source)};`
     : `import { ${importName} as ${local} } from ${JSON.stringify(source)};`;
+  const preludes = wrappers.flatMap((w) => (w.kind === "prelude" ? w.code : []));
+  imports.push(...preludes.filter((line) => line.startsWith("import")));
+  const declarations = preludes.filter((line) => !line.startsWith("import"));
+  wrappers = wrappers.filter((w) => w.kind !== "prelude");
   wrappers.forEach((w, i) => {
+    if (w.kind === "prelude") return;
     const props = markInnermost && i === wrappers.length - 1 ? { ...w.props, "data-cp-box": "" } : w.props;
     if (w.kind === "host") return exprs.push(`h(${JSON.stringify(w.tag)}, ${JSON.stringify(props)}`);
     const local = `W${i}`;
     imports.push(importOf(local, w.importName, w.source));
     const refEntries = Object.entries(w.refs ?? {}).map(([prop, ref], j) => {
+      if (ref.local) return `${JSON.stringify(prop)}: ${ref.local}${ref.member ? "." + ref.member : ""}`;
       const refLocal = `R${i}_${j}`;
       imports.push(importOf(refLocal, ref.importName, ref.source));
       return `${JSON.stringify(prop)}: ${refLocal}${ref.member ? "." + ref.member : ""}`;
@@ -260,6 +347,7 @@ export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css 
     return `import { createElement as h, createContext, useContext } from "react";
 import { createMemoryRouter, RouterProvider } from ${JSON.stringify(router)};
 ${imports.join("\n")}
+${declarations.join("\n")}
 const Slot = createContext(null);
 const Current = () => useContext(Slot);
 let router;
@@ -271,6 +359,7 @@ export default function AppWrapper({ children }) {
   }
   return `import { createElement as h } from "react";
 ${imports.join("\n")}
+${declarations.join("\n")}
 export default function AppWrapper({ children }) { return ${tree}; }
 `;
 }
