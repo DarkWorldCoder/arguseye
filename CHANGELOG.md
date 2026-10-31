@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Dialogs, menus, popovers and toasts rendered in a portal on `<body>` are part of the capture and the accessibility snapshot (`portals` in the result). Before, an open Radix/shadcn dialog came back as an empty snapshot and a crop of its trigger.
+- An unknown `usage` id names the usages that exist; the CLI prints `error: ...` instead of a Node stack trace.
+- `scripts/benchmark-real.mjs`: real MUI, Mantine, Chakra, styled-components, Radix, React Router, Svelte, Vue and Next.js components over MCP (cold, warm p50/p95, edit to pixels, image and text tokens). Results in benchmarks/README.md.
 - Svelte 5 (and 4) components: compiled with the project's own `svelte/compiler` (TypeScript scripts, runes, scoped styles, `<style lang="scss">` through the CSS pipeline), mounted with Svelte's `mount`, previewed in VS Code, and their call sites in `.svelte` markup found with literal props (runtime ones reported unresolved). Edits remount; component state resets.
 - React Router 7, 6.4+ and Remix v2 components render inside the project's own memory data router, so `Link`, `NavLink` and router hooks work. `@remix-run/react` routes through the project's router; `Meta`, `Links`, `Scripts` and friends render nothing.
 

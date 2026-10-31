@@ -126,6 +126,10 @@ if (values.help || !command) {
       else console.log(`${out} · ${result.ms} ms\nerrors: ${result.errors.length ? "\n- " + result.errors.join("\n- ") : "none"}\n${result.snapshot}`);
       process.exitCode = result.errors.length ? 1 : 0;
     }
+  } catch (error) {
+    // A clean one-line error (no Node stack) that names what to pass instead, for people and agents alike.
+    console.error(`error: ${(error as Error).message ?? error}`);
+    process.exitCode = 1;
   } finally {
     await renderer.close();
   }

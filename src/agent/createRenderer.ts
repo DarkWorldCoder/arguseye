@@ -57,6 +57,8 @@ export type RenderResult = {
   propsSource: "given" | "usage" | "sample" | "none";
   /** The ancestors (tag or component name) the component was rendered inside, outermost first. */
   contextApplied?: string[];
+  /** Visible elements the component rendered outside itself (dialogs, menus, toasts in a portal), included in the capture and snapshot. */
+  portals?: number;
   /** How many of the requested actions ran before capture (all of them unless one failed). */
   actionsApplied?: number;
   /** What changed since the previous render of the same target in this session (absent on the first render). */
@@ -182,7 +184,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   async function resolveProps(target: PreviewTarget, usage: string | undefined, resolved?: Usage): Promise<{ props: Record<string, unknown>; propsSource: RenderResult["propsSource"]; unresolved: string[] }> {
     if (usage) {
       const found = resolved ?? (await usages.list(target.file, target.exportName)).find((u) => u.id === usage);
-      if (!found) throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${target.file}`);
+      if (!found) {
+        const known = (await usages.list(target.file, target.exportName)).map((u) => u.id);
+        throw new Error(`No usage "${usage}" of ${target.exportName ?? "default"} from ${path.relative(options.root, target.file)}. ${known.length ? "Usages: " + known.join(", ") : "It has no usages in the project; pass props instead."}`);
+      }
       return { props: { ...found.props, ...target.props }, propsSource: "usage", unresolved: found.unresolved };
     }
     if (target.props && Object.keys(target.props).length) return { props: target.props, propsSource: "given", unresolved: [] };
@@ -319,29 +324,41 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       marks.push(performance.now());
-      const { box, inPage, runtimeWarnings } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings, portals } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
         const root = document.getElementById("root")!;
         const r = (framed ?? root).getBoundingClientRect();
-        let [left, right] = [r.left, r.right];
+        let [left, right, top, bottom] = [r.left, r.right, r.top, r.bottom];
         if (!framed) {
           const spans = [...root.children].map((c) => c.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
           if (spans.length) [left, right] = [Math.max(r.left, Math.min(...spans.map((b) => b.left))), Math.min(r.right, Math.max(...spans.map((b) => b.right)))];
         }
+        // Dialogs, menus, popovers and toasts render into a portal on <body>, outside #root: the capture grows to
+        // include whatever is visible there (a modal overlay makes it the whole viewport, as on screen).
+        const portaled = framed ? [] : [...document.body.children]
+          .filter((el) => el !== root && !["SCRIPT", "STYLE", "LINK", "TEMPLATE", "NOSCRIPT"].includes(el.tagName))
+          .map((el) => el.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
+        for (const b of portaled) {
+          left = Math.max(0, Math.min(left, b.left)); top = Math.max(0, Math.min(top, b.top));
+          right = Math.min(innerWidth, Math.max(right, b.right)); bottom = Math.min(innerHeight, Math.max(bottom, b.bottom));
+        }
         return {
-          box: { x: left, y: r.y, width: Math.max(1, right - left), height: Math.max(1, r.height) },
+          box: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) },
+          portals: portaled.length,
           inPage: (window as any).__CP__.errors as string[],
           runtimeWarnings: ((window as any).__CP__.warnings ?? []) as string[],
         };
       });
-      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator("#root").ariaSnapshot()]);
+      // With portaled content the snapshot is the whole body, so an open dialog's text and buttons are in it.
+      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals ? "body" : "#root").ariaSnapshot()]);
       warnings.push(...runtimeWarnings);
       const allErrors = unique([...inPage, ...errors]);
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
       const result: RenderResult = {
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        ...(portals ? { portals } : {}),
         layoutsApplied: server.layoutsFor(target.route),
         timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
         ...(actions.length ? { actionsApplied } : {}),
