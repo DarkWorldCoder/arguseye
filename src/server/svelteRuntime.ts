@@ -41,6 +41,16 @@ cp.show = async (target, state) => {
     const into = host(target);
     instance = svelte.mount ? svelte.mount(Component, { target: into, props }) : new Component({ target: into, props });
     if (svelte.flushSync) svelte.flushSync(); else await svelte.tick();
+    // Components with top-level await (experimental.async) mount empty and fill in later; svelte.settled() can
+    // resolve before that work is tracked, so wait for content to appear (2 s cap), then for 50 ms of quiet.
+    if (svelte.settled) await Promise.race([svelte.settled(), new Promise((done) => setTimeout(done, 2000))]);
+    if (!into.textContent.trim() && !into.querySelector("*:not(template)")) await new Promise((done) => {
+      let quiet;
+      const observer = new MutationObserver(() => { clearTimeout(quiet); quiet = setTimeout(finish, 50); });
+      const cap = setTimeout(finish, 2000);
+      function finish() { observer.disconnect(); clearTimeout(cap); clearTimeout(quiet); done(undefined); }
+      observer.observe(into, { childList: true, subtree: true, characterData: true });
+    });
   } catch (error) {
     const served = await fetch("/@errors?since=" + (Date.now() - 5000)).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));

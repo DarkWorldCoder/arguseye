@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- WebGL and canvas components (React Three Fiber, charts): the capture waits until every canvas's drawing buffer matches its on-screen size and has drawn; results list `canvases` (their content is only in the PNG).
+- Svelte: the project's `svelte.config.(js|mjs|cjs)` `compilerOptions` apply (e.g. `experimental.async`), and components with a top-level `await` are captured once their content appears.
+- Tested against Storybook's own renderer test components (React, Vue 3, Svelte 5; MIT, in `test/fixtures/storybook-cases`) with the args and checks from Storybook's stories: state, a form submit with delayed state, raw HTML, an unrenderable component reported as an error, `$effect`, top-level `await`, Options API with an imported stylesheet.
 - Dialogs, menus, popovers and toasts rendered in a portal on `<body>` are part of the capture and the accessibility snapshot (`portals` in the result). Before, an open Radix/shadcn dialog came back as an empty snapshot and a crop of its trigger.
 - An unknown `usage` id names the usages that exist; the CLI prints `error: ...` instead of a Node stack trace.
 - `scripts/benchmark-real.mjs`: real MUI, Mantine, Chakra, styled-components, Radix, React Router, Svelte, Vue and Next.js components over MCP (cold, warm p50/p95, edit to pixels, image and text tokens). Results in benchmarks/README.md.

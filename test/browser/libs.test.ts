@@ -53,6 +53,17 @@ describe("popular component libraries, each inside its provider", () => {
     expect(pngSize(result.png)).toEqual({ width: 1280, height: 800 });
   });
 
+  it("renders a React Three Fiber (WebGL) scene and reports the canvas", async () => {
+    const orange = await renderer.render({ file: file("SpinningBox.tsx"), props: { color: "#ea580c" } });
+    expect(orange.errors).toEqual([]);
+    expect(pngSize(orange.png)).toEqual({ width: 320, height: 240 });
+    expect(orange.canvases).toEqual([{ width: 320, height: 240 }]);
+    // The cube's colour reaches the pixels: the same scene in another colour is a different image.
+    const blue = await renderer.render({ file: file("SpinningBox.tsx"), props: { color: "#2563eb" } });
+    expect(blue.errors).toEqual([]);
+    expect(blue.png.equals(orange.png)).toBe(false);
+  });
+
   it("an unknown usage id names the usages that exist", async () => {
     await expect(renderer.render({ file: file("MuiPlan.tsx"), usage: "app/page.tsx:6" })).rejects.toThrow(/Usages: app\/page\.tsx:10/);
   });

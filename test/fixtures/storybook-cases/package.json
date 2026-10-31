@@ -1,0 +1,3 @@
+{ "name": "storybook-cases-fixture", "private": true, "type": "module",
+  "description": "Storybook's own renderer test components (MIT, storybookjs/storybook code/renderers/*/template) for React, Vue 3 and Svelte 5.",
+  "dependencies": { "react": "^19.2.0", "react-dom": "^19.2.0", "prop-types": "^15.8.1", "vue": "^3.5.0", "svelte": "^5.40.0" } }

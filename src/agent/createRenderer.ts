@@ -57,6 +57,8 @@ export type RenderResult = {
   propsSource: "given" | "usage" | "sample" | "none";
   /** The ancestors (tag or component name) the component was rendered inside, outermost first. */
   contextApplied?: string[];
+  /** Visible <canvas> elements (WebGL scenes, charts): their content is only in the PNG, not in the snapshot. */
+  canvases?: Array<{ width: number; height: number }>;
   /** Visible elements the component rendered outside itself (dialogs, menus, toasts in a portal), included in the capture and snapshot. */
   portals?: number;
   /** How many of the requested actions ran before capture (all of them unless one failed). */
@@ -313,6 +315,19 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (propsSource === "sample") warnings.push("Sample props were generated from types; these are not real application data.");
 
       const settled = await page.evaluate(async () => {
+        // Canvas scenes (React Three Fiber, charts) size their drawing buffer from a ResizeObserver and draw on a
+        // later frame: wait until every visible canvas's buffer matches its on-screen box, then two frames to draw
+        // (at most 60 frames).
+        if (document.querySelector("canvas")) {
+          const frame = () => new Promise((done) => requestAnimationFrame(() => done(undefined)));
+          const sized = () => [...document.querySelectorAll("canvas")].every((c) => {
+            const { width, height } = c.getBoundingClientRect();
+            if (!width || !height) return true;
+            return Math.abs(c.width - Math.round(width * devicePixelRatio)) <= 1 && Math.abs(c.height - Math.round(height * devicePixelRatio)) <= 1;
+          });
+          for (let i = 0; i < 60 && !sized(); i++) await frame();
+          await frame(); await frame();
+        }
         const pending = [...document.images].filter((img) => !img.complete);
         if (pending.length || document.fonts.status !== "loaded") {
           await Promise.race([
@@ -324,7 +339,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       marks.push(performance.now());
-      const { box, inPage, runtimeWarnings, portals } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings, portals, canvases } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
@@ -347,6 +362,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         return {
           box: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) },
           portals: portaled.length,
+          // A <canvas> (WebGL, charts) has no accessible content: report it so an agent knows the pixels are the evidence.
+          canvases: [...document.querySelectorAll("canvas")].map((c) => c.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0).map((b) => ({ width: Math.round(b.width), height: Math.round(b.height) })),
           inPage: (window as any).__CP__.errors as string[],
           runtimeWarnings: ((window as any).__CP__.warnings ?? []) as string[],
         };
@@ -359,6 +376,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const result: RenderResult = {
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
+        ...(canvases.length ? { canvases } : {}),
         layoutsApplied: server.layoutsFor(target.route),
         timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
         ...(actions.length ? { actionsApplied } : {}),

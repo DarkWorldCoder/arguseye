@@ -1,5 +1,7 @@
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { CssPipeline } from "./cssPipeline.js";
 
 /**
@@ -8,6 +10,21 @@ import type { CssPipeline } from "./cssPipeline.js";
  */
 export function createSvelteCompiler(root: string, css: CssPipeline) {
   let svelte: { compile: Function; preprocess: Function; VERSION: string } | undefined;
+  // The project's svelte.config compilerOptions (experimental.async, runes, customElement...) apply as in its build.
+  let projectOptions: Promise<Record<string, unknown>> | undefined;
+  const loadProjectOptions = async (): Promise<Record<string, unknown>> => {
+    for (const name of ["svelte.config.js", "svelte.config.mjs", "svelte.config.cjs"]) {
+      const file = path.join(root, name);
+      if (!existsSync(file)) continue;
+      try {
+        const mod = await import(pathToFileURL(file).href);
+        return ((mod.default ?? mod)?.compilerOptions as Record<string, unknown>) ?? {};
+      } catch {
+        return {}; // a config that cannot load outside the app's build (adapters, Vite plugins) falls back to defaults
+      }
+    }
+    return {};
+  };
   const previous = new Map<string, { source: string; code: string }>();
   return {
     async compile(file: string, source: string): Promise<string> {
@@ -22,9 +39,10 @@ export function createSvelteCompiler(root: string, css: CssPipeline) {
           return { code: (await css.process(`${file}.style.${lang}`, content)).css };
         },
       }, { filename: file });
+      const own = await (projectOptions ??= loadProjectOptions());
       const options = major >= 5
-        ? { filename: file, generate: "client", dev: true, css: "injected" }
-        : { filename: file, generate: "dom", dev: true, css: "injected" };
+        ? { ...own, filename: file, generate: "client", dev: true, css: "injected" }
+        : { ...own, filename: file, generate: "dom", dev: true, css: "injected" };
       let compiled;
       try {
         compiled = svelte!.compile(preprocessed, options);
