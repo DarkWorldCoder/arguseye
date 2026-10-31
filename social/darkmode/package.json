@@ -1,0 +1,11 @@
+{
+  "name": "arguseye-social-darkmode",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.190 preview",
+    "check": "npx --yes hyperframes@0.8.190 check",
+    "render": "npx --yes hyperframes@0.8.190 render",
+    "publish": "npx --yes hyperframes@0.8.190 publish"
+  }
+}
