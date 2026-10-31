@@ -17,5 +17,8 @@
     "lodash": "^4.17.21",
     "sass": "^1.93.0"
   },
-  "devDependencies": { "vite": "^7.1.0", "@vitejs/plugin-react": "^5.0.0" }
+  "devDependencies": {
+    "vite": "^7.1.0",
+    "@vitejs/plugin-react": "^5.0.0"
+  }
 }

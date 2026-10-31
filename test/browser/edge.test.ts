@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js";
 
@@ -66,5 +67,19 @@ describe("edge cases: every kind of component renders", () => {
   it("a component that throws comes back as a structured error with the message", async () => {
     const result = await renderer.render({ file: at("Thrower.tsx") });
     expect(result.errors.join("\n")).toContain("Thrower exploded on purpose");
+  });
+
+  it("a package that cannot be bundled fails only the components that import it", async () => {
+    // An installed package whose own dependency is missing, written into node_modules for this test only.
+    const pkg = path.join(root, "node_modules/broken-pkg");
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ name: "broken-pkg", version: "1.0.0", type: "module", main: "index.js" }));
+    writeFileSync(path.join(pkg, "index.js"), 'export { format } from "a-dependency-that-is-not-installed";\n');
+    onTestFinished(() => rmSync(pkg, { recursive: true, force: true }));
+    const broken = await renderer.render({ file: at("BrokenImport.tsx") });
+    expect(broken.errors.join("\n")).toMatch(/broken-pkg" could not be bundled.*a-dependency-that-is-not-installed/s);
+    const fine = await renderer.render({ file: at("MemoCard.tsx"), exportName: "MemoCard", props: { title: "after" } });
+    expect(fine.errors).toEqual([]);
+    expect(fine.snapshot).toContain("Memo card: after");
   });
 });

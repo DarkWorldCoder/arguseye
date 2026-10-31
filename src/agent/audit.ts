@@ -54,4 +54,5 @@ export async function audit(renderer: Renderer, root: string, dir = root, { limi
   };
 }
 
-const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim().slice(0, 400) ?? s;
+/** The line that names the problem: skips blank lines and generic headers such as "Build failed with 2 errors:". */
+const firstLine = (s: string) => s.split("\n").map((l) => l.trim()).find((l) => l && !/^(Build failed with \d+ errors?:?|errors?:)$/i.test(l))?.slice(0, 400) ?? s;

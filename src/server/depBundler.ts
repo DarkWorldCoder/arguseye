@@ -9,6 +9,9 @@ import { rolldown } from "rolldown";
 import { ResolverFactory } from "oxc-resolver";
 import { init, parse } from "es-module-lexer";
 
+/** The line of a bundler error that names the problem, not "Build failed with N errors:". */
+const firstUsefulLine = (message: string) => message.split("\n").map((l) => l.trim()).find((l) => l && !/^Build failed with \d+ errors?:?$/.test(l))?.slice(0, 300) ?? message;
+
 const FACADE = "\0facade:";
 const cjsLexerReady = initCjsLexer();
 
@@ -79,6 +82,8 @@ export class DepBundler {
   private built = new Set<string>();
   private files = new Map<string, string>();
   private building: Promise<void> | undefined;
+  /** Packages that could not be bundled (not installed, a broken entry): only their importers fail, with this reason. */
+  private broken = new Map<string, string>();
   /** Bumps on every build. Chunks may re-hash between builds, so a page must not mix two generations. */
   generation = 0;
   /** True when the current bundle came from the on-disk cache rather than a fresh build. */
@@ -121,6 +126,8 @@ export class DepBundler {
     const spec = name.replace(/\.js$/, "");
     if (!name.startsWith("_chunk-") && !this.wanted.has(spec)) this.wanted.add(spec);
     await this.ensureBuilt();
+    const reason = this.broken.get(spec);
+    if (reason !== undefined) return this.brokenModule(spec, reason);
     return this.files.get(name);
   }
 
@@ -159,7 +166,54 @@ export class DepBundler {
   }
 
   private async build(inProcess = false) {
-    const specs = [...this.wanted].sort();
+    try {
+      await this.buildSpecs([...this.wanted].filter((s) => !this.broken.has(s)).sort(), inProcess);
+    } catch (error) {
+      // One package that cannot be bundled must not take every component down with it: find it, set it aside
+      // with its reason, and build the rest.
+      const specs = [...this.wanted].filter((s) => !this.broken.has(s));
+      const failing: string[] = [];
+      for (const spec of specs) {
+        try { await this.probe(spec); } catch (e) { failing.push(spec); this.broken.set(spec, firstUsefulLine(String((e as Error).message ?? e))); }
+      }
+      if (!failing.length) throw error;
+      for (const spec of failing) this.built.add(spec);
+      await this.buildSpecs(specs.filter((s) => !this.broken.has(s)).sort(), inProcess);
+    }
+  }
+
+  /**
+   * Stands in for a package that could not be bundled: it declares the package's export names, so importers link,
+   * then throws the reason when evaluated (instead of a bare "does not provide an export named" error).
+   */
+  private async brokenModule(spec: string, reason: string): Promise<string> {
+    let names: string[] = [];
+    try {
+      const entry = this.resolver.resolveFileSync(path.join(this.root, "index.js"), spec).path;
+      if (entry) {
+        await init;
+        const [, exports] = parse(readFileSync(entry, "utf8"));
+        names = exports.flatMap((e) => ("name" in e ? [e.name] : []));
+        if (!names.length) names = await cjsExportNames(entry);
+      }
+    } catch {}
+    const declared = [...new Set(names)].filter((n) => n !== "default" && /^[A-Za-z_$][\w$]*$/.test(n));
+    return [
+      `throw new Error(${JSON.stringify(`Package "${spec}" could not be bundled for the preview: ${reason}`)});`,
+      declared.length ? `export let ${declared.join(", ")};` : "",
+      "export default undefined;",
+    ].join("\n");
+  }
+
+  /** Bundles one package on its own and discards the output: throws what a full build would throw for it. */
+  private async probe(spec: string) {
+    const unresolved: string[] = [];
+    const bundle = await rolldown(this.options([spec], new Map([[spec, await this.facade(spec)]]), unresolved));
+    try { await bundle.generate({ format: "esm" }); } finally { await bundle.close(); }
+    if (unresolved.length) throw new Error(unresolved[0]);
+  }
+
+  private async buildSpecs(specs: string[], inProcess: boolean) {
     const key = this.cacheKey(specs);
     const dir = path.join(this.cacheDir, key);
     // Large sets are built by a worker process that writes the cache and exits; the result is then read below.
@@ -207,12 +261,36 @@ export class DepBundler {
 
   private async bundle(specs: string[]) {
     const facades = new Map(await Promise.all(specs.map(async (s) => [s, await this.facade(s)] as const)));
-    const bundle = await rolldown({
+    const unresolved: string[] = [];
+    const bundle = await rolldown(this.options(specs, facades, unresolved));
+    let output;
+    try {
+      ({ output } = await bundle.generate({
+        format: "esm",
+        entryFileNames: "[name].js",
+        chunkFileNames: "_chunk-[hash].js",
+        // Smaller bundles parse faster in the browser; names are kept so React component names stay readable.
+        minify: { compress: true, mangle: false, codegen: { removeWhitespace: true } },
+      }));
+    } finally {
+      await bundle.close(); // a failed build must not keep its whole module graph in memory
+    }
+    if (unresolved.length) throw new Error(unresolved.join("\n"));
+    this.files = new Map(output.flatMap((o) => (o.type === "chunk" ? [[o.fileName, o.code] as const] : [])));
+    specs.forEach((s) => this.built.add(s));
+    this.generation++;
+  }
+
+  private options(specs: string[], facades: Map<string, string>, unresolved: string[] = []) {
+    return {
       input: Object.fromEntries(specs.map((s) => [s, FACADE + s])),
       cwd: this.root,
       platform: "browser",
       // "use client"/"use server" directives are expected in app packages and mean nothing to a preview.
       onLog: (level, log, defaultHandler) => {
+        // A package importing something that is not installed would reach the browser as a bare specifier and
+        // fail every chunk that shares it; collect it so the build fails and that package is set aside.
+        if (log.code === "UNRESOLVED_IMPORT") return void unresolved.push(log.message);
         if (log.code !== "MODULE_LEVEL_DIRECTIVE" && log.code !== "EMPTY_BUNDLE") defaultHandler(level, log);
       },
       resolve: { alias: { ...this.aliases, ...OWN } },
@@ -235,22 +313,7 @@ export class DepBundler {
           },
         },
       ],
-    });
-    let output;
-    try {
-      ({ output } = await bundle.generate({
-        format: "esm",
-        entryFileNames: "[name].js",
-        chunkFileNames: "_chunk-[hash].js",
-        // Smaller bundles parse faster in the browser; names are kept so React component names stay readable.
-        minify: { compress: true, mangle: false, codegen: { removeWhitespace: true } },
-      }));
-    } finally {
-      await bundle.close(); // a failed build must not keep its whole module graph in memory
-    }
-    this.files = new Map(output.flatMap((o) => (o.type === "chunk" ? [[o.fileName, o.code] as const] : [])));
-    specs.forEach((s) => this.built.add(s));
-    this.generation++;
+    } as Parameters<typeof rolldown>[0];
   }
 
   /** The file an aliased specifier (e.g. `react/jsx-dev-runtime` under a vendored React) resolves to. */
