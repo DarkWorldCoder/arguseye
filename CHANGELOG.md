@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.0.10
+
+- Canvas capture waits for stable CSS and drawing-buffer dimensions, including delayed ResizeObserver measurements; bounded settling reports a warning if the canvas remains unsettled. Canvas settling has its own latency cost.
 
 - WebGL and canvas components (React Three Fiber, charts): the capture waits until every canvas's drawing buffer matches its on-screen size and has drawn; results list `canvases` (their content is only in the PNG).
 - Svelte: the project's `svelte.config.(js|mjs|cjs)` `compilerOptions` apply (e.g. `experimental.async`), and components with a top-level `await` are captured once their content appears.

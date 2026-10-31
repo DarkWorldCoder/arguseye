@@ -2,18 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.DarkWorldCoder/arguseye",
   "title": "Arguseye",
-  "description": "Renders React, Next.js and Vue components from source for coding agents, with no dev server.",
+  "description": "Renders React, Next.js, Vue and Svelte components from source for coding agents, with no dev server.",
   "repository": {
     "url": "https://github.com/DarkWorldCoder/arguseye",
     "source": "github"
   },
   "websiteUrl": "https://darkworldcoder.github.io/arguseye/",
-  "version": "0.0.6",
+  "version": "0.0.10",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@ayushniroula/arguseye",
-      "version": "0.0.6",
+      "version": "0.0.10",
       "transport": {
         "type": "stdio"
       },

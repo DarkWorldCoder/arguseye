@@ -4,15 +4,16 @@ Arguseye is eyes for coding agents and developers: see a component, change it, a
 
 ## What is implemented
 
-- Your actual React/Next.js browser component or Vue 3 SFC, using the project's packages and Chromium.
+- Your actual React/Next.js browser component, Vue 3 SFC or Svelte component, using the project's packages and Chromium. React Router and Remix browser components use the project's memory data router.
 - Literal props from real JSX and Vue template usages, including aliases and local barrel re-exports. Runtime values remain explicitly unresolved.
 - Global styles, Tailwind v3/v4, PostCSS, Sass, CSS modules, assets, and statically reconstructable layout wrappers. Incomplete context is reported.
-- Warm browser pages and per-module compilation. Unsaved editor buffers update the live page; React refresh and Vue template/style updates preserve state. Vue script edits reset state with a warning.
+- Warm browser pages and per-module compilation. Unsaved editor buffers update the live page; React refresh and Vue template/style updates preserve state. Vue script edits and Svelte edits reset state with a warning.
 - MCP and CLI render evidence: PNG, accessibility snapshot, resolved inputs, source fingerprint, timing, warnings and errors. Responses can omit images.
 - Immutable baselines and before/after comparisons of pixels, dimensions, accessibility snapshots and errors. Comparisons report change or incomplete evidence, never automatic correctness.
 - Paginated usage rendering, with a maximum of 12 isolated variants per batch and an incremental source index.
 - A VS Code panel with export/usage selection, typed React prop controls, viewport presets, capture and comparison controls. Verification uses the shared renderer and unsaved source.
 - Imported root Next Google font variables can reuse the project's matching cached font faces from `.next/static`. This does not download or compile fonts; absent cached font assets remain unresolved.
+- Visible portaled dialogs and menus are included in captures and accessibility text. Canvas pixels are included in the PNG and canvas dimensions are reported separately; bounded canvas settling adds latency and reports unsettled dimensions.
 
 ## Product constraints
 

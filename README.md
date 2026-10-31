@@ -85,7 +85,7 @@ The installer merges into the chosen client's existing configuration. See [the i
 <details>
 <summary><strong>VS Code and GitHub Copilot</strong></summary>
 
-For the visual editor panel, install [Arguseye from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye) and run **Preview Component** on a `.tsx`, `.jsx`, or `.vue` file.
+For the visual editor panel, install [Arguseye from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye) and run **Preview Component** on a `.tsx`, `.jsx`, `.vue`, or `.svelte` file.
 
 For Copilot's MCP tools:
 

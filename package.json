@@ -1,8 +1,8 @@
 {
   "name": "arguseye",
   "displayName": "Arguseye",
-  "description": "Render React, browser-compatible Next.js, and Vue components from real source. Visual evidence for coding agents and VS Code, without starting the app.",
-  "version": "0.0.9",
+  "description": "Render React, browser-compatible Next.js, Vue and Svelte components from real source. Visual evidence for coding agents and VS Code, without starting the app.",
+  "version": "0.0.10",
   "mcpName": "io.github.DarkWorldCoder/arguseye",
   "publisher": "ayushniroula",
   "license": "MIT",

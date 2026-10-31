@@ -1,13 +1,13 @@
 # Arguseye — component previews beside your code
 
-Preview React, browser-renderable Next.js, and Vue 3 components from your project without starting the app or writing stories. Inspect unsaved edits, choose real usage props, and compare a change against a saved baseline.
+Preview React, browser-renderable Next.js, Vue 3, and Svelte components (including React Router and Remix browser components) from your project without starting the app or writing stories. Inspect unsaved edits, choose real usage props, and compare a change against a saved baseline.
 
 <p align="center"><img src="https://darkworldcoder.github.io/arguseye/assets/vscode-panel.png" alt="Actual VS Code screenshot showing component source beside the Arguseye preview, with export, usage, viewport, props and baseline controls" width="1000"></p>
 
 ## Start in VS Code
 
 1. Install **Arguseye** using the button on this page.
-2. Open your project and a `.tsx`, `.jsx`, or `.vue` component.
+2. Open your project and a `.tsx`, `.jsx`, `.vue`, or `.svelte` component.
 3. Run **Arguseye: Preview Component** from the Command Palette, use the eye icon in the editor title, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
 4. Choose an export, usage, and viewport. Edit your component and inspect the preview beside it.
 
@@ -17,10 +17,12 @@ Release builds target **Windows x64, macOS Apple Silicon, and Linux x64**. Scree
 
 ## A preview that follows your work
 
-- **Your source and packages.** Render with your project's React or Vue runtime, global styles, CSS modules, Tailwind, Sass, and assets.
+- **Your source and packages.** Render with your project's React, Vue, or Svelte runtime, global styles, CSS modules, Tailwind, Sass, and assets.
 - **Real usage inputs.** Select discovered call sites or adjust props in the panel. Runtime expressions and incomplete context stay visible.
-- **Unsaved edits.** Preview the buffer as you work. Ordinary React refreshes and Vue template/style changes preserve component state; Vue script changes remount and report the reset.
+- **Unsaved edits.** Preview the buffer as you work. Ordinary React refreshes and Vue template/style changes preserve component state; Vue script changes and Svelte edits remount and report the reset.
 - **Responsive checks.** Switch mobile, tablet, and desktop presets; fit the preview or inspect it at 1:1.
+- **Theme checks.** Choose light or dark; baseline comparisons replay the captured theme.
+- **Dialogs and canvases.** Captures include visible portaled UI and canvas pixels. Canvas content is reported separately from accessibility text; canvas settling can take longer than a simple component render.
 - **Before and after.** Capture a baseline, edit the source, and inspect changed pixels, dimensions, accessibility text, and new or resolved errors.
 
 ## Real VS Code screenshots
