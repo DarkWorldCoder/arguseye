@@ -34,4 +34,16 @@ describe("Next.js components render as Next renders them, without Next running",
     expect(await preview.style('img[alt="Dot"]', "position")).toBe("absolute");
     expect(await preview.style('img[alt="Dot"]', "object-fit")).toBe("cover");
   });
+
+  it("next/font/google and next/font/local work in any component, not only the root layout", async () => {
+    const fonts = await openPreview(root, { file: path.join(root, "components/FontTitle.tsx"), exportName: "FontTitle" });
+    try {
+      expect(fonts.errors).toEqual([]);
+      expect(await fonts.style("h1", "font-family")).toMatch(/^Inter, /);
+      expect(await fonts.style("code", "font-family")).toMatch(/^"Roboto Mono", .*monospace/);
+      const css = await fonts.page.locator("#cp-next-font-loaders").textContent();
+      expect(css).toContain("--font-brand:");
+      expect(css).toContain("public/fonts/Brand.woff2?raw");
+    } finally { await fonts.close(); }
+  });
 });

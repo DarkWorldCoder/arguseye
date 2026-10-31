@@ -8,6 +8,9 @@
 - JSX in `.js` files; JSON imports export the parsed value (and top-level keys); the project's CommonJS `sass` build compiles.
 - A component that renders nothing visible for the given props comes back with a warning that says so.
 - A package that cannot be bundled (an import it needs is not installed, a broken entry) no longer fails every component: it is set aside and only its importers fail, with an error that names the package and the missing import. Found on shadcn's Taxonomy app, where one such package turned all 67 components into "Build failed with 2 errors".
+- `next/font/google` and `next/font/local` work in any component (fonts defined in `lib/fonts.ts`, a layout rendered on its own), not only in the root layout: loaders return `className`, `variable` and `style` like Next's, and local font files load for real.
+- An exported object of components (`export const Icons = {...}`) gets an error that says so and names a member to render; `export: "Icons.logo"` renders it. The audit counts such exports as skipped.
+- `console.error` output during a render comes back as `console` in the result and in the MCP text, where apps often say why they failed (for example which env variable is missing).
 - `arguseye audit [DIR]` and the `audit_components` MCP tool render every component once with sample props and report what renders, what throws and what comes out empty.
 - The MCP server sends instructions to connecting agents on when to use it, so they reach for it after UI edits without being told.
 - `test/fixtures/edge-app`: 35 kinds of component in one Vite app with real libraries (React Query, Redux Toolkit, Zustand, i18next, Recharts, Framer Motion, react-window, lodash, Sass), all rendering in `test/browser/edge.test.ts`.

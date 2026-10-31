@@ -61,6 +61,8 @@ export type RenderResult = {
   canvases?: Array<{ width: number; height: number }>;
   /** Visible elements the component rendered outside itself (dialogs, menus, toasts in a portal), included in the capture and snapshot. */
   portals?: number;
+  /** console.error messages logged during the render (deduplicated, at most 5): often the reason behind an error. */
+  console?: string[];
   /** How many of the requested actions ran before capture (all of them unless one failed). */
   actionsApplied?: number;
   /** What changed since the previous render of the same target in this session (absent on the first render). */
@@ -119,6 +121,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   /** One warm page per viewport: later renders swap the target in place instead of reloading. */
   const pages = new Map<string, Promise<Page>>();
   const pageErrors = new WeakMap<Page, string[]>();
+  /** console.error output of the current render: apps explain many failures there (env validation, prop types). */
+  const pageConsole = new WeakMap<Page, string[]>();
   const loadedModules = new WeakMap<Page, Set<string>>();
   const cdp = new WeakMap<Page, CDPSession>();
   /** Last result per target signature, so a re-render can say what changed without a baseline id. */
@@ -161,6 +165,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     page.on("request", (request) => { const url = new URL(request.url()); if (url.pathname.startsWith("/@fs/")) loaded.add(decodeURIComponent(url.pathname.slice(4))); });
     pageErrors.set(page, errors);
     page.on("pageerror", (e) => errors.push(e.stack ?? e.message));
+    const logged: string[] = [];
+    pageConsole.set(page, logged);
+    page.on("console", (m) => { if (m.type() === "error" && logged.length < 20) logged.push(m.text().slice(0, 500)); });
     await load(page, target);
     cdp.set(page, await page.context().newCDPSession(page));
     return page;
@@ -266,6 +273,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const page = await warm;
       const errors = pageErrors.get(page)!;
       errors.length = 0;
+      const logged = pageConsole.get(page)!;
+      logged.length = 0;
       let reloaded = false;
       const marks: number[] = [performance.now()];
       // Storage is per render: cleared, then seeded, so one render's state never leaks into the next.
@@ -386,6 +395,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
+        ...(logged.length ? { console: unique(logged.filter((l) => !allErrors.some((e) => e.includes(l)))).slice(0, 5) } : {}),
         layoutsApplied: server.layoutsFor(target.route),
         timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
         ...(actions.length ? { actionsApplied } : {}),

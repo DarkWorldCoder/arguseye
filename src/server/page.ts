@@ -245,10 +245,16 @@ cp.show = async (target, state) => {
     await preload(target);
     const mod = await import(target.file === "/@empty" ? "/@fs/@empty" : moduleUrl(target.file));
     const name = target.exportName ?? "default";
-    const Component = mod[name];
+    // "Icons.logo" reaches a component inside an exported object, as JSX's <Icons.logo /> does.
+    const Component = name.split(".").reduce((value, key) => value?.[key], mod);
     if (typeof Component !== "function" && (typeof Component !== "object" || Component === null)) {
       const available = Object.keys(mod).join(", ") || "none";
       throw new Error("No component export " + JSON.stringify(name) + " in " + target.file + " (exports: " + available + ")");
+    }
+    // memo, forwardRef and lazy components are objects with $$typeof; any other object is a map of components or data.
+    if (typeof Component === "object" && !Component.$$typeof) {
+      const keys = Object.keys(Component);
+      throw new Error(JSON.stringify(name) + " is an object, not a component" + (keys.length ? "; render one of its members, e.g. export " + JSON.stringify(name + "." + keys[0]) + " (keys: " + keys.slice(0, 12).join(", ") + (keys.length > 12 ? ", …" : "") + ")" : ""));
     }
     root ??= createRoot(document.getElementById("root"), { onUncaughtError: fail, onRecoverableError: fail });
     if (target.fresh) mountKey++;

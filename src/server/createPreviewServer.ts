@@ -17,6 +17,7 @@ import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
 import { routerPackage } from "../project/routerPackage.js";
 import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
+import { nextFontModule } from "./nextFont.js";
 import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 import type { Wrapper } from "../project/appContext.js";
@@ -240,6 +241,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return send(res, 200, "text/javascript", await graph.loadVirtual(contextFile(file), wrapperModule(wrappers, { markInnermost: true })));
       }
       if (url.pathname === "/@next-fonts") return send(res, 200, "text/javascript", `let style = document.getElementById("cp-next-fonts"); if (!style) { style = document.createElement("style"); style.id = "cp-next-fonts"; document.head.append(style); } style.textContent = ${JSON.stringify(fonts.stylesheet())};`);
+      if (url.pathname === "/@next-font") {
+        return send(res, 200, "text/javascript", nextFontModule(url.searchParams.get("kind") ?? "google", url.searchParams.get("from") ?? options.root, (url.searchParams.get("names") ?? "").split(",").filter(Boolean)));
+      }
       if (url.pathname === "/@wrapper") {
         const route = url.searchParams.get("route") ?? undefined;
         const app = appContext(route);

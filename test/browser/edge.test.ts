@@ -82,4 +82,18 @@ describe("edge cases: every kind of component renders", () => {
     expect(fine.errors).toEqual([]);
     expect(fine.snapshot).toContain("Memo card: after");
   });
+
+  it("an exported object of components says so and names how to render a member", async () => {
+    const map = await renderer.render({ file: at("IconsMap.tsx"), exportName: "Icons" });
+    expect(map.errors.join("\n")).toMatch(/"Icons" is an object, not a component; render one of its members, e\.g\. export "Icons\.logo"/);
+    const logo = await renderer.render({ file: at("IconsMap.tsx"), exportName: "Icons.logo" });
+    expect(logo.errors).toEqual([]);
+    expect(logo.snapshot).toContain("Logo icon");
+  });
+
+  it("console.error output during the render comes back with the result", async () => {
+    const result = await renderer.render({ file: at("LogsError.tsx") });
+    expect(result.errors).toEqual([]);
+    expect(result.console).toEqual(["Missing VITE_API_URL: falling back to /api"]);
+  });
 });

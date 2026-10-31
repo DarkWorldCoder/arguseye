@@ -11,6 +11,8 @@ export type AuditEntry = {
   ms?: number;
   errors?: string[];
   warnings?: string[];
+  /** console.error output during the render, often the reason behind the error. */
+  console?: string[];
 };
 
 export type AuditReport = { root: string; total: number; ok: number; error: number; empty: number; skipped: number; entries: AuditEntry[]; topErrors: Array<{ message: string; count: number }> };
@@ -38,7 +40,14 @@ export async function audit(renderer: Renderer, root: string, dir = root, { limi
     try {
       const result = await renderer.render({ file, exportName });
       const empty = result.warnings.some((w) => w.includes("rendered nothing visible"));
-      entry = { file: rel, export: exportName, ms: result.ms, status: result.errors.length ? "error" : empty ? "empty" : "ok", ...(result.errors.length ? { errors: result.errors.map(firstLine) } : {}), ...(result.warnings.length ? { warnings: result.warnings } : {}) };
+      const notComponent = result.errors.length === 1 && /is an object, not a component/.test(result.errors[0]);
+      entry = {
+        file: rel, export: exportName, ms: result.ms,
+        status: notComponent ? "skipped" : result.errors.length ? "error" : empty ? "empty" : "ok",
+        ...(result.errors.length ? { errors: result.errors.map(firstLine) } : {}),
+        ...(result.warnings.length ? { warnings: result.warnings } : {}),
+        ...(result.console?.length ? { console: result.console } : {}),
+      };
     } catch (error) {
       entry = { file: rel, export: exportName, status: "error", errors: [firstLine(String((error as Error).message ?? error))] };
     }

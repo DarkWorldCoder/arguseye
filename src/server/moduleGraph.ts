@@ -13,6 +13,7 @@ import { routerPackage } from "../project/routerPackage.js";
 import { modularizeBarrelImports } from "./modularize.js";
 import { createResolver } from "./resolver.js";
 import { applyAlias, readViteConfig, type ViteConfig } from "../project/viteConfig.js";
+import { nextFontUrl } from "./nextFont.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
@@ -166,7 +167,7 @@ export class ModuleGraph {
     const urls: string[] = [];
     for (const imp of imports) {
       if (imp.type === "import-meta" || imp.specifier === undefined) continue;
-      const url = this.urlFor(file, imp.specifier);
+      const url = nextFontUrl(imp.specifier, file, imp.type === "static" ? code.slice(imp.importStart, imp.importEnd) : "") ?? this.urlFor(file, imp.specifier);
       urls.push(url);
       if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
       // A dynamic import's span includes its quotes; a static import's does not.

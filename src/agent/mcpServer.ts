@@ -54,7 +54,8 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     const errors = result.errors.length
       ? `errors:\n${result.errors.map((e) => `- ${tidy(e)}`).join("\n")}`
       : "errors: none";
-    return `${head.join(" · ")}\n${errors}\n${result.warnings.map((w) => "warning: " + w).join("\n")}\n${result.snapshot}`;
+    const logged = (result.console ?? []).map((l) => "console.error: " + tidy(l)).join("\n");
+    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}\n${result.snapshot}`;
   }
 
   /** Short stacks with project-relative paths instead of preview-server URLs. */
