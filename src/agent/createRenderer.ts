@@ -40,7 +40,7 @@ export type RenderResult = {
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
-  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage">;
+  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme">;
   viewport: { width: number; height: number };
   sourceRevision: string;
   unresolved: string[];
