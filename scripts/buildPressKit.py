@@ -17,7 +17,7 @@ FILES = {
 payload = {name: (ROOT / source).read_bytes() for name, source in FILES.items()}
 manifest = {
     "product": "Arguseye",
-    "factsCheckedOn": "2026-10-30",
+    "factsCheckedOn": "2026-10-31",
     "website": "https://darkworldcoder.github.io/arguseye/",
     "mediaNote": "Existing project logos and website artwork. No new application screenshots.",
     "files": {
