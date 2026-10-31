@@ -2,7 +2,7 @@
 
 > Local component previews and UI edit evidence for coding agents and VS Code developers.
 
-Arguseye renders real React, browser-renderable Next.js, and Vue 3 components using the project's installed packages. No running app or authored stories are required. Node.js 22+, installed project dependencies, and Chromium or Google Chrome are required.
+Arguseye renders real React (React Router and Remix included), browser-renderable Next.js, Vue 3 and Svelte 5 components using the project's installed packages, in light or dark (`theme`). No running app or authored stories are required. Node.js 22+, installed project dependencies, and Chromium or Google Chrome are required.
 
 ## Agent resources
 - [Agent setup](https://darkworldcoder.github.io/arguseye/agents.html)
@@ -17,7 +17,7 @@ Arguseye renders real React, browser-renderable Next.js, and Vue 3 components us
 - [npm package](https://www.npmjs.com/package/@ayushniroula/arguseye)
 - [VS Code extension](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye)
 
-Run `npx @ayushniroula/arguseye install claude` in the project. Other targets: codex, cursor, gemini, windsurf, vscode, copilot, antigravity, print. Restart the chosen agent. For the human panel, install extension `ayushniroula.arguseye` and run Preview Component on a .tsx, .jsx, or .vue file.
+Run `npx @ayushniroula/arguseye install claude` in the project. Other targets: codex, cursor, gemini, windsurf, vscode, copilot, antigravity, print. Restart the chosen agent. For the human panel, install extension `ayushniroula.arguseye` and run Preview Component on a .tsx, .jsx, .vue or .svelte file.
 
 ## Agent evidence
 Five MCP tools: render_component, list_usages, render_usages, describe_props, render_diff. Outputs include cropped PNG, accessibility snapshot, resolved props, unresolved inputs, source revision, viewport, timings, warnings, and errors. Image, summary, and both outputs are supported. Render usages are paginated, up to 12 per batch. The latest 64 captures are retained per MCP session; CLI baselines persist in an explicit directory.

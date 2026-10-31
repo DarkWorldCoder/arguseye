@@ -5,6 +5,9 @@
     "react.ico": "https://react.dev/favicon.ico",
     "next.ico": "https://nextjs.org/favicon.ico",
     "vue.svg": "https://vuejs.org/logo.svg",
-    "vscode.png": "https://code.visualstudio.com/assets/branding/code-stable.png"
-  }
+    "vscode.png": "https://code.visualstudio.com/assets/branding/code-stable.png",
+    "svelte.png": "https://svelte.dev/favicon.png",
+    "react-router.png": "https://reactrouter.com/favicon-light.png"
+  },
+  "retrieved_svelte_react_router": "2026-10-31"
 }
