@@ -9,6 +9,11 @@ for (const [name, options] of [
   ["default", {}],
   ["legacy-surface", { ignoreDefaultArgs: ["--enable-features=CDPScreenshotNewSurface"] }],
   ["compositor-flush", { args: ["--run-all-compositor-stages-before-draw"] }],
+  ["software-gpu", { args: ["--disable-gpu"] }],
+  ["swiftshader", { args: ["--use-angle=swiftshader"] }],
+  ["unlimited-frames", { args: ["--disable-frame-rate-limit"] }],
+  ["viewport-painted", {}],
+  ["view-painted", {}],
 ]) {
   const browser = await chromium.launch({ channel: "chromium-headless-shell", ...options });
   try {
@@ -20,7 +25,8 @@ for (const [name, options] of [
       const color = i % 2 ? "red" : "blue";
       await page.evaluate((color) => { document.querySelector("div").style.background = color; }, color);
       const start = performance.now();
-      const { data } = await session.send("Page.captureScreenshot", { format: "png", clip: { x: 0, y: 0, width: 340, height: 200, scale: 1 }, optimizeForSpeed: true, captureBeyondViewport: true });
+      if (name.endsWith("-painted")) await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+      const { data } = await session.send("Page.captureScreenshot", { format: "png", clip: { x: 0, y: 0, width: 340, height: 200, scale: 1 }, optimizeForSpeed: true, captureBeyondViewport: !name.endsWith("-painted"), ...(name === "view-painted" ? { fromSurface: false } : {}) });
       const ms = performance.now() - start;
       const hash = createHash("sha256").update(data).digest("hex");
       if (i < 2) hashes.set(color, hash);

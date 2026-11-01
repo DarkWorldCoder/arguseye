@@ -399,7 +399,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (url.pathname.startsWith("/@fs/")) {
         const file = fileFromUrl(url.pathname.slice("/@fs".length));
         access.assert(file);
-        return send(res, 200, "text/javascript", await graph.load(file));
+        const started = performance.now();
+        const code = await graph.load(file);
+        res.setHeader("server-timing", `transform;dur=${(performance.now() - started).toFixed(2)}`);
+        return send(res, 200, "text/javascript", code);
       }
       if (url.pathname.startsWith("/@deps/")) {
         const code = await deps.get(decodeURIComponent(url.pathname.slice("/@deps/".length)));

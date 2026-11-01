@@ -66,6 +66,8 @@ describe("preview server HTTP", () => {
     expect(body).toMatch(/from "\/@deps\/clsx\.js"/);
     expect(body).toContain(`"/@fs${path.join(root, "components/format.ts")}`);
     expect(body).toContain(`/@fs${path.join(root, "components/ProductCard.css")}?import`);
+    const response = await fetch(new URL(server.moduleUrl(card), server.url));
+    expect(response.headers.get("server-timing")).toMatch(/^transform;dur=\d+(\.\d+)?$/);
   });
 });
 

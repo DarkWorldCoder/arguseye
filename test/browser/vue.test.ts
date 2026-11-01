@@ -58,9 +58,11 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
       });
       const start = performance.now();
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy ("));
+      const updated = performance.now();
       await page.getByRole("button", { name: "Buy (1)" }).waitFor();
       const ms = performance.now() - start;
       console.log("Vue edit-to-pixels", Math.round(ms), "ms; mutation delivered", Math.round(observed - start), "ms; target 50 ms, enforced limit 100 ms");
+      console.log("Vue update phases", JSON.stringify({ buffer: updated - start, resources: await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("Card.vue")).map((e) => ({ duration: e.duration, serverTiming: (e as PerformanceResourceTiming).serverTiming }))) }));
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy (").replace("rgb(0, 80, 120)", "rgb(255, 0, 0)"));
       await expect.poll(() => page.locator("h2").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 0, 0)");
       expect(await page.locator("button").innerText()).toBe("Buy (1)");
