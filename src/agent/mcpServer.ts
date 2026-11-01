@@ -34,6 +34,11 @@ const target = {
   export: z.string().optional().describe('Export to render; defaults to "default"'),
 };
 const output = z.enum(["image", "summary", "both"]).optional().describe("Return images, compact evidence, or both (default)");
+const fixtureSchema = z.object({
+  now: z.string().optional(), randomSeed: z.number().int().min(0).max(0xffffffff).optional(), locale: z.string().optional(), timezoneId: z.string().optional(),
+  network: z.object({ policy: z.enum(["passthrough", "block-unmatched"]), responses: z.array(z.object({ url: z.string(), method: z.string().optional(), status: z.number().int().min(200).max(599).optional(), contentType: z.string().optional(), body: z.string() })).max(50) }).optional(),
+}).optional().describe("Explicit time/random/browser/network inputs replayed in a fresh context. Timers and crypto randomness remain real. Exact path/URL mocks; block-unmatched rejects other application requests.");
+const deadline = z.number().int().min(1).max(120000).optional().describe("Execution deadline in ms (default 30000); queued time is excluded");
 const look = {
   output,
   viewport: z.string().optional().describe('"mobile", "tablet", "desktop" (default) or "WIDTHxHEIGHT"'),
@@ -90,8 +95,8 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       .replaceAll(root + path.sep, "");
   }
 
-  async function renderContent(request: RenderRequest, output = "both") {
-    const result = await (await getRenderer()).render(request);
+  async function renderContent(request: RenderRequest, output = "both", control?: import("./createRenderer.js").RenderControl) {
+    const result = await (await getRenderer()).render(request, control);
     return {
       result,
       content: [
@@ -132,14 +137,15 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
         frame: z.object({ width: z.number(), height: z.number(), background: z.string().optional(), padding: z.number().optional() }).optional().describe("Render inside a stand-in parent box of this size and background"),
         actions: z.array(z.record(z.string(), z.unknown())).optional().describe('Steps before capture, e.g. [{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"},{"hover":{"text":"Save"}},{"press":"Enter"},{"wait":300}]. Targets: role+name, text, label, placeholder, testId, selector.'),
         storage: z.object({ local: z.record(z.string(), z.string()).optional(), session: z.record(z.string(), z.string()).optional() }).optional().describe("localStorage/sessionStorage seeded before mount (auth tokens, flags); cleared after"),
+        fixtures: fixtureSchema, timeoutMs: deadline,
         props: z.record(z.string(), z.unknown()).optional().describe("Props to render with (merged over the usage's props)"),
         ...look,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
-        const { result, content } = await renderContent(request, args.output);
+        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
+        const { result, content } = await renderContent(request, args.output, { signal: extra.signal, timeoutMs: args.timeoutMs });
         return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
       } catch (error) {
         return failure(error);
@@ -151,10 +157,10 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     annotations: EXECUTES_CODE,
     outputSchema: toolOutputSchema(diffOutputSchema),
     description: "Compare current source against an immutable captureId returned by render_component. Reuses the original resolved props and viewport; changed pixels are evidence, not a correctness verdict.",
-    inputSchema: { baselineId: z.string(), output },
-  }, async (args) => {
+    inputSchema: { baselineId: z.string(), output, timeoutMs: deadline },
+  }, async (args, extra) => {
     try {
-      const result = await (await getRenderer()).diff(args.baselineId);
+      const result = await (await getRenderer()).diff(args.baselineId, { signal: extra.signal, timeoutMs: args.timeoutMs });
       const content = [
         ...(args.output === "summary" ? [] : [result.before.png, result.after.png, result.diffPng].map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }))),
         ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\ncontext: before ${result.before.complete ? "complete" : "incomplete"}, after ${result.after.complete ? "complete" : "incomplete"}\n${result.after.warnings.join("\n")}\n${result.resolvedWarnings.map((w) => "resolved warning: " + w).join("\n")}\n${result.newErrors.join("\n")}` }]),
@@ -206,13 +212,13 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       annotations: EXECUTES_CODE,
       outputSchema: toolOutputSchema(usageRendersOutputSchema),
       description: `After changing a component, render it at every place it is used (up to ${MAX_USAGES}) with each call site's real props, to inspect isolated literal-prop variants. These are not full-page integration tests.`,
-      inputSchema: { ...target, ...look, cursor: z.string().optional(), limit: z.number().int().min(1).max(MAX_USAGES).optional() },
+      inputSchema: { ...target, ...look, timeoutMs: deadline, cursor: z.string().optional(), limit: z.number().int().min(1).max(MAX_USAGES).optional() },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
         const file = abs(args.file);
         if (args.cursor && !/^\d+$/.test(args.cursor)) throw new Error(`Invalid usage cursor "${args.cursor}"`);
-        const page = await (await getRenderer()).renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), theme: args.theme, offset: Number(args.cursor ?? 0), limit: args.limit });
+        const page = await (await getRenderer()).renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), theme: args.theme, offset: Number(args.cursor ?? 0), limit: args.limit }, { signal: extra.signal, timeoutMs: args.timeoutMs });
         const content = page.results.flatMap((result) => [
           ...(args.output === "summary" ? [] : [{ type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" }]),
           ...(args.output === "image" ? [] : [{ type: "text" as const, text: describe({ ...result.target, usage: result.usage, viewport: result.viewport }, result) }]),
@@ -232,13 +238,13 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       annotations: EXECUTES_CODE,
       outputSchema: toolOutputSchema(auditOutputSchema),
       description: "Render every component in the project (or a folder) once with sample props and report which render, which throw and which come out empty. Use after a refactor, a dependency upgrade or a shared-style change, or to get to know a new codebase's UI. Text only; render_component shows any one of them.",
-      inputSchema: { dir: z.string().optional().describe("Folder to audit, relative to the project root; default the whole project"), limit: z.number().int().min(1).max(500).optional().describe("Most components to render (default 200)") },
+      inputSchema: { cursor: z.string().optional().describe("Continuation from a previous bounded audit of the same unchanged source"), dir: z.string().optional().describe("Folder to audit, relative to the project root; default the whole project"), limit: z.number().int().min(1).max(500).optional().describe("Most components to render (default 200)") },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        const report = await audit(await getRenderer(), root, args.dir ? abs(args.dir) : root, { limit: args.limit ?? 200 });
+        const report = await audit(await getRenderer(), root, args.dir ? abs(args.dir) : root, { limit: args.limit ?? 200, cursor: args.cursor, signal: extra.signal });
         const lines = report.entries.filter((e) => e.status !== "ok").map((e) => `${e.status} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.errors ? ": " + tidy(e.errors[0]) : ""}`);
-        const text = `${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped\n${lines.join("\n")}`;
+        const text = `${report.nextCursor ? `Continue with cursor ${report.nextCursor}\n` : ""}${report.cancelled ? "Audit cancelled; completed entries preserved.\n" : ""}${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped\n${lines.join("\n")}`;
         return { isError: report.error > 0, content: [{ type: "text" as const, text }], structuredContent: { schemaVersion: 1 as const, errors: report.topErrors.map((e) => e.message), ...report } };
       } catch (error) {
         return failure(error);

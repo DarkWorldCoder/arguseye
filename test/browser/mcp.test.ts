@@ -23,6 +23,21 @@ afterAll(async () => close?.());
 
 type Content = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 
+it("continues a bounded audit without repeating components and rejects malformed cursors", async () => {
+  const first = await client.callTool({ name: "audit_components", arguments: { dir: "components", limit: 1 } });
+  const a = first.structuredContent as any;
+  expect(a.total).toBe(1);
+  expect(a.nextCursor).toEqual(expect.any(String));
+  const next = await client.callTool({ name: "audit_components", arguments: { dir: "components", limit: 1, cursor: a.nextCursor } });
+  const b = next.structuredContent as any;
+  expect(b.total).toBe(1);
+  expect(b.entries[0].file).not.toBe(a.entries[0].file);
+  expect(b.available).toBe(a.available);
+  const bad = await client.callTool({ name: "audit_components", arguments: { cursor: "not-a-cursor" } });
+  expect(bad.isError).toBe(true);
+  expect((bad.structuredContent as any).errors.join()).toMatch(/audit cursor/i);
+});
+
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();

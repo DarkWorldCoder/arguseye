@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { installFixtures, validateFixtures, type RenderFixtures, type FixtureProvenance } from "./renderFixtures.js";
 import { randomUUID } from "node:crypto";
 import { routeFor, routePath } from "../project/routeFor.js";
 import { defaultRouteFile } from "../project/appContext.js";
@@ -16,6 +18,8 @@ import { frameworkOf } from "../project/framework.js";
 import { FileAccessError } from "../server/createFileAccess.js";
 
 export type RenderRequest = PreviewTarget & {
+  /** Explicit replay inputs; uses a fresh page so module-level reads are deterministic too. */
+  fixtures?: RenderFixtures;
   viewport?: { width: number; height: number };
   /** Render with the props of a real usage, by its id from `listUsages` (e.g. `app/page.tsx:9`). */
   usage?: string;
@@ -40,10 +44,11 @@ export type Target = { role?: string; name?: string; text?: string; label?: stri
 export type RenderResult = {
   /** PNG cropped to the rendered component. */
   png: Buffer;
+  fixtureProvenance?: FixtureProvenance;
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
-  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme">;
+  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures">;
   viewport: { width: number; height: number };
   sourceRevision: string;
   unresolved: string[];
@@ -94,11 +99,19 @@ export type Changes = {
   resolvedWarnings: string[];
 };
 
+/** Retained browser pages and PNG buffers; excludes transient response buffers and Chromium heap. */
+export type SessionResources = { pages: number; captures: number; history: number; pngBytes: number };
+export type SessionLimits = { pages: number; captures: number; history: number; pngBytes: number };
+
+/** Cancels queued/in-flight work; the deadline starts when this request begins executing. */
+export type RenderControl = { signal?: AbortSignal; timeoutMs?: number };
+
 export type Renderer = {
-  render(request: RenderRequest): Promise<RenderResult>;
+  resources(): SessionResources;
+  render(request: RenderRequest, control?: RenderControl): Promise<RenderResult>;
   /** Renders one bounded page from a single usage-index query. */
-  renderUsages(request: RenderRequest & { offset?: number; limit?: number }): Promise<{ results: Array<RenderResult & { usage: string }>; total: number; nextOffset: number | null }>;
-  diff(baselineId: string): Promise<DiffResult>;
+  renderUsages(request: RenderRequest & { offset?: number; limit?: number }, control?: RenderControl): Promise<{ results: Array<RenderResult & { usage: string }>; total: number; nextOffset: number | null }>;
+  diff(baselineId: string, control?: RenderControl): Promise<DiffResult>;
   /** Imports a persisted CLI capture into this renderer's bounded session cache. */
   restoreCapture(capture: RenderResult): string;
   listUsages(file: string, exportName?: string): Promise<Usage[]>;
@@ -111,20 +124,50 @@ export type Renderer = {
 };
 
 /** Renders components headlessly so an agent can see them without running the app or a browser. */
-export async function createRenderer(options: { root: string; server?: PreviewServer; warmup?: boolean }): Promise<Renderer> {
+export async function createRenderer(options: { root: string; server?: PreviewServer; warmup?: boolean; limits?: Partial<SessionLimits> }): Promise<Renderer> {
+  const limits = { pages: 4, captures: 64, history: 16, pngBytes: 64 * 1024 * 1024, ...options.limits };
+  for (const [key, value] of Object.entries(limits)) if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Invalid session limit ${key}: ${value}`);
   const server = options.server ?? await createPreviewServer({ root: options.root, warmup: options.warmup });
   const usages = createUsageIndex(options.root, { readSource: server.readSource, version: server.version });
   let browser: Browser;
   try { browser = await launchChrome(); } catch (error) { if (!options.server) await server.close(); throw error; }
   const captures = new Map<string, RenderResult>();
   let queue: Promise<unknown> = Promise.resolve();
-  const serial = <T>(work: () => Promise<T>): Promise<T> => {
-    const result = queue.then(work); queue = result.catch(() => {}); return result;
+  type Job = { guard(): void; pages: Set<Promise<Page>>; openPages: Set<Page> };
+  const jobs = new AsyncLocalStorage<Job>();
+  const guard = () => jobs.getStore()?.guard();
+  let closing = false;
+  const serial = <T>(work: () => Promise<T>, control: RenderControl = {}): Promise<T> => {
+    const timeout = control.timeoutMs ?? 30000;
+    if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120000) return Promise.reject(new Error("Render deadline must be between 1 and 120000 ms"));
+    const result = queue.then(async () => {
+      let stopped: Error | undefined;
+      const job: Job = { pages: new Set(), openPages: new Set(), guard() { if (stopped) throw stopped; if (closing) throw new Error("Arguseye session is closed"); } };
+      let rejectStop: (e: Error) => void;
+      const stop = (message: string) => {
+        stopped = new Error(message);
+        for (const pending of job.pages) {
+          for (const [key, value] of pages) if (value === pending) pages.delete(key);
+          void pending.then((page) => page.close()).catch(() => {});
+        }
+        for (const page of job.openPages) void page.close().catch(() => {});
+        rejectStop(stopped);
+      };
+      const interrupted = new Promise<never>((_, reject) => { rejectStop = reject; });
+      const abort = () => stop("Render cancelled; no capture was saved. Render again to continue.");
+      const timer = setTimeout(() => stop(`Render timed out after ${timeout} ms; no capture was saved. Check async setup, network fixtures or retry with a longer deadline.`), timeout);
+      control.signal?.addEventListener("abort", abort, { once: true });
+      try {
+        if (control.signal?.aborted) abort();
+        return await Promise.race([interrupted, jobs.run(job, async () => { guard(); return work(); })]);
+      } finally { clearTimeout(timer); control.signal?.removeEventListener("abort", abort); }
+    });
+    queue = result.catch(() => {}); return result;
   };
   function remember(result: RenderResult): string {
     const id = randomUUID();
     captures.set(id, { ...structuredClone(result), png: Buffer.from(result.png), captureId: id });
-    if (captures.size > 64) captures.delete(captures.keys().next().value!);
+    trim();
     return id;
   }
 
@@ -139,6 +182,24 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   const cdp = new WeakMap<Page, CDPSession>();
   /** Last result per target signature, so a re-render can say what changed without a baseline id. */
   const lastResults = new Map<string, RenderResult>();
+  const replacedRoots = new WeakSet<Page>();
+  const retainedBytes = () => [...captures.values(), ...lastResults.values()].reduce((bytes, r) => bytes + r.png.byteLength, 0);
+  function trim() {
+    while (lastResults.size > limits.history) lastResults.delete(lastResults.keys().next().value!);
+    while (captures.size > limits.captures) captures.delete(captures.keys().next().value!);
+    while (retainedBytes() > limits.pngBytes && lastResults.size) lastResults.delete(lastResults.keys().next().value!);
+    while (retainedBytes() > limits.pngBytes && captures.size) captures.delete(captures.keys().next().value!);
+  }
+  async function retainPage(key: string, page: Promise<Page>) {
+    pages.delete(key); pages.set(key, page);
+    while (pages.size > limits.pages) {
+      const oldest = pages.keys().next().value!;
+      const evicted = pages.get(oldest)!; pages.delete(oldest);
+      await evicted.then((p) => p.close()).catch(() => {});
+    }
+    try { return await page; } catch (error) { if (pages.get(key) === page) pages.delete(key); throw error; }
+  }
+
 
   /**
    * After the package warm-up, the default page is opened with the most common route's providers already
@@ -155,8 +216,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const route = defaultRouteFile(options.root);
       const viewport = { width: 1280, height: 800 };
       const key = `react:${viewport.width}x${viewport.height}`;
-      if (!pages.has(key)) pages.set(key, warmPage(viewport, { file: "/@empty", exportName: "default", route }));
-      await pages.get(key);
+      if (!pages.has(key)) await retainPage(key, warmPage(viewport, { file: "/@empty", exportName: "default", route }));
     } catch {
       // the first render will load the page itself
     }
@@ -167,9 +227,15 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   /** Bundle generation each warm page was loaded under. */
   const generations = new WeakMap<Page, number>();
+  const fixtureEvidence = new WeakMap<Page, FixtureProvenance>();
 
-  async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget): Promise<Page> {
-    const page = await browser.newPage({ viewport });
+  async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget, fixtures?: RenderFixtures, storage?: RenderRequest["storage"]): Promise<Page> {
+    guard();
+    const page = await browser.newPage({ viewport, locale: fixtures?.locale, timezoneId: fixtures?.timezoneId, serviceWorkers: "block" });
+    jobs.getStore()?.openPages.add(page);
+    try { guard(); } catch (error) { await page.close(); throw error; }
+    const evidence = await installFixtures(page, server.url, fixtures, storage);
+    if (evidence) fixtureEvidence.set(page, evidence);
     await page.emulateMedia({ colorScheme: target.theme ?? null });
     schemes.set(page, target.theme);
     const errors: string[] = [];
@@ -186,7 +252,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     const where = (url: URL) => (url.host === new URL(server.url).host ? url.pathname + url.search : url.href).slice(0, 200);
     page.on("response", (r) => { const url = new URL(r.url()); if (r.status() >= 400 && !own(url) && failed.length < 20) failed.push(`${r.request().method()} ${where(url)} → ${r.status()}`); });
     page.on("requestfailed", (r) => { const url = new URL(r.url()); if (!own(url) && failed.length < 20) failed.push(`${r.method()} ${where(url)} → ${r.failure()?.errorText ?? "failed"}`); });
-    await load(page, target);
+    try { await load(page, target); } catch (error) { await page.close(); throw error; }
     cdp.set(page, await page.context().newCDPSession(page));
     return page;
   }
@@ -194,9 +260,11 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   /** Navigates a page to `target`; the server bundles the packages it needs before responding. */
   async function load(page: Page, target: PreviewTarget) {
     const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
+    guard();
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready, null, { timeout: 15000 });
-    await page.evaluate(() => (window as any).__CP__.ready);
+    await page.evaluate(() => Promise.race([(window as any).__CP__.ready, new Promise((_, reject) => setTimeout(() => reject(new Error("Component setup did not become ready within 15 s")), 15000))]));
+    guard();
     // Agents get the settled frame: transitions end instantly, animations hold still, no blinking caret.
     await page.addStyleTag({ content: FREEZE_MOTION });
     generations.set(page, generation);
@@ -235,11 +303,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   return {
     server,
+    resources: () => ({ pages: pages.size, captures: captures.size, history: lastResults.size, pngBytes: retainedBytes() }),
     listUsages: async (file, exportName) => { server.assertAccess(path.resolve(options.root, file)); return usages.list(file, exportName ?? (await exportOf(file))); },
     describeProps,
     ready: () => prewarmed,
-    render: (request) => serial(() => renderWithProvider(request)),
-    renderUsages: (request) => serial(async () => {
+    render: (request, control) => serial(() => renderWithProvider(request), control),
+    renderUsages: (request, control) => serial(async () => {
       const { offset = 0, limit = 12, ...target } = request;
       server.assertAccess(path.resolve(options.root, target.file));
       if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 12) throw new Error("Usage page requires offset >= 0 and limit between 1 and 12");
@@ -248,15 +317,15 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const results: Array<RenderResult & { usage: string }> = [];
       for (const usage of all.slice(offset, offset + limit)) results.push({ ...await render({ ...target, usage: usage.id }, usage), usage: usage.id });
       return { results, total: all.length, nextOffset: offset + limit < all.length ? offset + limit : null };
-    }),
+    }, control),
     restoreCapture: remember,
-    diff: (baselineId) => serial(async () => {
+    diff: (baselineId, control) => serial(async () => {
       const before = captures.get(baselineId);
       if (!before) throw new Error(`Unknown or expired baseline "${baselineId}"; render the component again to capture a new baseline.`);
       // Same props, parent box, frame, actions and storage as the baseline. The usage is replayed only for its
       // ancestors (in-context), so a baseline without context still compares after its call site moved.
       const { usage, inContext, ...replay } = structuredClone(before.target);
-      const after = await render({ ...replay, ...(inContext && usage ? { usage, inContext } : {}), viewport: before.viewport });
+      const after = await renderWithProvider({ ...replay, ...(inContext && usage ? { usage, inContext } : {}), viewport: before.viewport });
       after.unresolved = unique([...before.unresolved, ...after.unresolved]);
       after.propsSource = before.propsSource;
       // Replayed sample/runtime inputs retain their provenance; old asset/provider failures can resolve.
@@ -264,13 +333,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       after.warnings = unique([...after.warnings, ...inputWarnings]);
       after.complete &&= !after.unresolved.length && !inputWarnings.length;
       if (after.changes && !after.complete) after.changes.status = "incomplete";
-      if (after.captureId) captures.set(after.captureId, { ...structuredClone(after), png: Buffer.from(after.png) });
+      if (after.captureId && captures.has(after.captureId)) { captures.set(after.captureId, { ...structuredClone(after), png: Buffer.from(after.png) }); trim(); }
       const page = await pages.get(`${frameworkOf(before.target.file)}:${before.viewport.width}x${before.viewport.height}`)!;
       return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
-    }),
+    }, control),
     async close() {
+      closing = true;
       await queue;
-      captures.clear();
+      captures.clear(); lastResults.clear(); pages.clear();
       await browser.close();
       if (!options.server) await server.close();
     },
@@ -292,10 +362,13 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     if (second.errors.length) return first;
     second.warnings.push(`Rendered inside ${needed} from the same file: the component throws without it.`);
     second.complete = false;
+    if (second.captureId && captures.has(second.captureId)) captures.set(second.captureId, { ...structuredClone(second), png: Buffer.from(second.png) });
     return second;
   }
 
-  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
+  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, fixtures, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
+      guard();
+      validateFixtures(fixtures);
       const started = performance.now();
       if (![viewport.width, viewport.height].every((v) => Number.isInteger(v) && v > 0 && v <= 8192)) throw new Error(`Invalid viewport "${viewport.width}x${viewport.height}"`);
       // Disk edits are registered before anything (usage index, route lookup) reads the files and refreshes their mtimes.
@@ -328,10 +401,15 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       }
       const contextApplied = target.context?.flatMap((w) => w.kind === "prelude" ? [] : (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
       const key = `${frameworkOf(rest.file)}:${viewport.width}x${viewport.height}`;
+      if ((fixtures || storage) && pages.has(key)) { const old = pages.get(key)!; pages.delete(key); await old.then((p) => p.close()).catch(() => {}); }
       let warm = pages.get(key);
+      if (warm && replacedRoots.has(await warm)) { pages.delete(key); await (await warm).close(); warm = undefined; }
       const isNew = !warm;
-      if (!warm) pages.set(key, (warm = warmPage(viewport, target)));
-      const page = await warm;
+      warm ??= warmPage(viewport, target, fixtures, storage);
+      jobs.getStore()?.pages.add(warm);
+      const page = await retainPage(key, warm);
+      guard();
+      jobs.getStore()?.openPages.add(page);
       const errors = pageErrors.get(page)!;
       errors.length = 0;
       const logged = pageConsole.get(page)!;
@@ -347,7 +425,6 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         for (const [k, v] of Object.entries(s?.local ?? {})) localStorage.setItem(k, v);
         for (const [k, v] of Object.entries(s?.session ?? {})) sessionStorage.setItem(k, v);
       }, storage ?? null);
-      if (isNew && storage) await page.evaluate((t) => (window as any).__CP__.show(t), target); // mounted before the seed: show again
       if (!isNew) {
         // A warm page may have been used for the other theme; re-emulate only on a change (it is a CDP round trip).
         if (schemes.get(page) !== rest.theme) { await page.emulateMedia({ colorScheme: rest.theme ?? null }); schemes.set(page, rest.theme); }
@@ -379,6 +456,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         }
       }
 
+      guard();
       marks.push(performance.now());
       const actionsApplied = await runActions(page, actions, errors);
 
@@ -479,9 +557,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const allErrors = unique([...inPage, ...errors]);
       if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
+      guard();
+      const evidence = fixtureEvidence.get(page);
+      if (evidence?.network?.blocked.length) warnings.push("Unmatched network requests blocked by fixtures: " + evidence.network.blocked.join("; "));
       const setup = server.setupFor(rest.file);
       const result: RenderResult = {
-        png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        png, snapshot, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
         ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),
@@ -492,12 +573,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({
           file: rest.file, exportName: rest.exportName ?? "default", props,
-          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}),
+          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}),
         }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings: unique(warnings), complete: !allErrors.length && !warnings.length,
       };
-      if (!allErrors.length) result.captureId = remember(result);
-      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme]);
+      if (png.byteLength > limits.pngBytes) {
+        result.warnings.push("PNG retention budget exceeded; save this response to an explicit capture directory or increase the session pngBytes limit before capturing a baseline."); result.complete = false;
+      } else if (!allErrors.length) result.captureId = remember(result);
+      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme, fixtures]);
       const previous = lastResults.get(signature);
       if (previous) {
         const diff = await compareCaptures(page, { ...structuredClone(previous), png: Buffer.from(previous.png) }, result);
@@ -507,9 +590,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           newWarnings: diff.newWarnings, resolvedWarnings: diff.resolvedWarnings,
         };
       }
-      lastResults.set(signature, { ...structuredClone(result), png: Buffer.from(result.png) });
+      guard();
+      lastResults.delete(signature);
+      if (png.byteLength <= limits.pngBytes) lastResults.set(signature, { ...structuredClone(result), png: Buffer.from(result.png) });
+      trim();
       // The page's own React root is gone (a layout rendered <html>/<body>): later renders get a fresh page.
-      if (!rootIntact) { pages.delete(key); void page.close().catch(() => {}); }
+      if (!rootIntact) replacedRoots.add(page);
       return result;
   }
 }

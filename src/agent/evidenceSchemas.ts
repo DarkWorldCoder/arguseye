@@ -45,7 +45,7 @@ export const usageRendersOutputSchema = z.object({ ...common, results: z.array(r
 
 /** Makes whole-project mount coverage distinct from visual fidelity. */
 export const auditOutputSchema = z.object({
-  ...common, root: z.string(), total: z.number(), ok: z.number(), error: z.number(), empty: z.number(), skipped: z.number(),
+  ...common, root: z.string(), available: z.number(), nextCursor: z.string().nullable(), cancelled: z.boolean(), total: z.number(), ok: z.number(), error: z.number(), empty: z.number(), skipped: z.number(),
   entries: z.array(z.object({ file: z.string(), status: z.enum(["ok", "error", "empty", "skipped"]) }).passthrough()),
   topErrors: z.array(z.object({ message: z.string(), count: z.number() })),
 });

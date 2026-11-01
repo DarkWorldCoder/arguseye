@@ -1,5 +1,5 @@
 import { parseViewport } from "./agent/viewports.js";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -27,6 +27,7 @@ const HELP = `arguseye: inspect React and Vue components and verify UI edits, no
 
   arguseye shot FILE [--capture-dir DIR] [--json] [--output image|summary|both]
       Save an immutable baseline and optional PNG; JSON reports metadata without image bytes
+      --fixtures FILE.json replays explicit browser inputs; --timeout-ms N bounds execution
 
   arguseye diff --baseline DIR --out DIR [--json] [--root DIR]
       Compare current source against a saved baseline; writes before/after/diff PNGs and JSON
@@ -37,7 +38,7 @@ const HELP = `arguseye: inspect React and Vue components and verify UI edits, no
   arguseye install <claude|codex|gemini|cursor|windsurf|vscode|antigravity|copilot|print|all> [--project DIR] [--dry-run]
       Write the MCP server entry and the skill where that agent reads them (merges existing config)
 
-  arguseye audit [DIR] [--limit N] [--json] [--out report.json] [--root DIR]
+  arguseye audit [DIR] [--limit N] [--cursor TOKEN] [--json] [--out report.json] [--root DIR]
       Render every component under DIR once with sample props: what renders, what errors, what comes out empty
 
   arguseye serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
@@ -63,6 +64,9 @@ const { positionals, values } = parseArgs({
     "capture-dir": { type: "string" },
     baseline: { type: "string" },
     limit: { type: "string" },
+    cursor: { type: "string" },
+    fixtures: { type: "string" },
+    "timeout-ms": { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -117,7 +121,7 @@ if (values.help || !command) {
   const renderer = await createRenderer({ root });
   try {
     const report = await audit(renderer, root, file ? path.resolve(root, file) : root, {
-      limit: values.limit ? Number(values.limit) : Infinity,
+      limit: values.limit ? Number(values.limit) : 200, cursor: values.cursor,
       onEntry: (e) => { if (!values.json) console.log(`${e.status.padEnd(7)} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}${e.errors ? "\n        " + e.errors[0] : ""}`); },
     });
     if (values.out) await writeFile(values.out, JSON.stringify(report, null, 2));
@@ -139,12 +143,13 @@ if (values.help || !command) {
       const result = await renderer.render({
         theme: values.theme as "light" | "dark" | undefined,
         ...target,
+        fixtures: values.fixtures ? JSON.parse(await readFile(values.fixtures, "utf8")) : undefined,
         usage: values.usage,
         inContext: values["in-context"],
         frame: values.frame ? (([size, background]) => { const [width, height] = size.split("x").map(Number); return { width, height, background }; })(values.frame.split(":")) : undefined,
         props: values.props ? JSON.parse(values.props) : undefined,
         viewport: { width, height },
-      });
+      }, { timeoutMs: values["timeout-ms"] ? Number(values["timeout-ms"]) : undefined });
       if (!["image", "summary", "both"].includes(values.output!)) throw new Error(`Unknown output "${values.output}"`);
       if (values["capture-dir"]) await saveCapture(values["capture-dir"], result);
       const out = values.out ?? `${path.parse(file).name}.png`;
