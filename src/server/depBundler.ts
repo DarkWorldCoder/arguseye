@@ -223,7 +223,7 @@ export class DepBundler {
     if (existsSync(path.join(dir, "manifest.json"))) {
       // Names are paths ("react/jsx-dev-runtime.js"), so the cache folder is read recursively.
       const names = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => f.endsWith(".js"));
-      this.files = new Map(names.map((f) => [f, readFileSync(path.join(dir, f), "utf8")] as const));
+      this.files = new Map(names.map((f) => [f.split(path.sep).join("/"), readFileSync(path.join(dir, f), "utf8")] as const));
       specs.forEach((s) => this.built.add(s));
       this.generation++;
       this.cached = true;
