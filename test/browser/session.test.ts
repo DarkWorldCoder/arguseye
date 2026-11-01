@@ -75,3 +75,18 @@ it("cancels a render in flight, skips cancelled queued work and leaves the next 
     expect((await renderer.render(target)).errors).toEqual([]);
   } finally { await renderer.close(); }
 });
+
+it("keeps engine error timestamps independent from an explicit application clock", async () => {
+  const renderer = await createRenderer({ root });
+  const fixtures = { now: "2026-01-01T00:00:00.000Z" };
+  try {
+    renderer.server.updateBuffer(target.file, 'import "missing-before-repair"; export function ProductCard(){return <p>First</p>}');
+    expect((await renderer.render({ ...target, fixtures })).errors.join()).toContain("missing-before-repair");
+    renderer.server.updateBuffer(target.file, undefined);
+    expect((await renderer.render({ ...target, fixtures })).errors).toEqual([]);
+    renderer.server.updateBuffer(target.file, 'import "missing-after-repair"; export function ProductCard(){return <p>Second</p>}');
+    const failed = await renderer.render({ ...target, fixtures });
+    expect(failed.errors.join()).toContain("missing-after-repair");
+    expect(failed.errors.join()).not.toContain("missing-before-repair");
+  } finally { await renderer.close(); }
+});

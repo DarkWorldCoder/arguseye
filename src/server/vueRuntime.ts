@@ -16,6 +16,7 @@ const revive = (value) => {
 };
 const moduleUrl = (file) => cp.fileUrl(file) + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
 cp.show = async (target, state) => {
+  const since = cp.now();
   if (state) Object.assign(cp, state);
   cp.target = target; cp.errors = []; cp.warnings = []; cp.status = "loading";
   try {
@@ -54,7 +55,7 @@ cp.show = async (target, state) => {
     // Lazy parts, top-level awaits and data requested on mount.
     await cp.quiet(() => pending);
   } catch (error) {
-    const served = await fetch("/@errors?since=" + (Date.now() - 5000)).then((r) => r.json()).catch(() => []);
+    const served = await fetch("/@errors?since=" + since).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));
   }
   cp.status = cp.errors.length ? "error" : "mounted";

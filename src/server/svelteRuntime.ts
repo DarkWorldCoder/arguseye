@@ -30,6 +30,7 @@ const destroy = () => {
   instance = undefined;
 };
 cp.show = async (target, state) => {
+  const since = cp.now();
   if (state) Object.assign(cp, state);
   cp.target = target; cp.errors = []; cp.warnings = []; cp.status = "loading";
   try {
@@ -58,7 +59,7 @@ cp.show = async (target, state) => {
       observer.observe(into, { childList: true, subtree: true, characterData: true });
     });
   } catch (error) {
-    const served = await fetch("/@errors?since=" + (Date.now() - 5000)).then((r) => r.json()).catch(() => []);
+    const served = await fetch("/@errors?since=" + since).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));
   }
   cp.status = cp.errors.length ? "error" : "mounted";

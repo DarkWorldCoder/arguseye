@@ -531,9 +531,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             new Promise((r) => setTimeout(r, 300)),
           ]);
         }
-        return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []);
+        return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0 };
       });
-      if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
+      if (settled.assets.length) warnings.push("Assets did not settle: " + settled.assets.join(", "));
+      if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");
       marks.push(performance.now());
       const { box, inPage, runtimeWarnings, portals, canvases, empty, environment } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and

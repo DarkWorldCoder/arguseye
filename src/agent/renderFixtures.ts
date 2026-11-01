@@ -34,6 +34,7 @@ export function validateFixtures(fixtures?: RenderFixtures): void {
 /** Seeds before any project module executes; timers and cryptographic randomness remain real. */
 export async function installFixtures(page: Page, origin: string, fixtures: RenderFixtures | undefined, storage: { local?: Record<string, string>; session?: Record<string, string> } | undefined): Promise<FixtureProvenance | undefined> {
   await page.addInitScript(({ fixtures, storage }) => {
+    (window as any).__CP_ENGINE_NOW__ = Date.now.bind(Date);
     if (fixtures?.now !== undefined) {
       const Original = Date, now = Original.parse(fixtures.now);
       (window as any).Date = new Proxy(Original, { construct(target, args) { return Reflect.construct(target, args.length ? args : [now]); }, apply() { return new Original(now).toString(); }, get(target, key) { return key === "now" ? () => now : Reflect.get(target, key); } });

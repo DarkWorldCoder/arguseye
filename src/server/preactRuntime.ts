@@ -38,6 +38,7 @@ const box = (target, child) => {
 };
 let mount = 0;
 cp.show = async (target, state) => {
+  const since = cp.now();
   if (state) Object.assign(cp, state);
   cp.target = target; cp.errors = []; cp.warnings = []; cp.status = "loading";
   cp.pathname = target.pathname ?? "/"; cp.params = target.params ?? {};
@@ -54,7 +55,7 @@ cp.show = async (target, state) => {
     const images = [...document.getElementById("root").querySelectorAll("img")].filter((img) => !img.complete);
     await Promise.race([Promise.all([document.fonts.ready, ...images.map((img) => new Promise((done) => { img.onload = img.onerror = done; }))]), new Promise((done) => setTimeout(done, 3000))]);
   } catch (error) {
-    const served = await cp.realFetch("/@errors?since=" + (Date.now() - 5000)).then((r) => r.json()).catch(() => []);
+    const served = await cp.realFetch("/@errors?since=" + since).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));
   }
   cp.status = cp.errors.length ? "error" : "mounted";

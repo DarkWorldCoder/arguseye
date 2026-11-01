@@ -10,6 +10,7 @@ const revive = (value) => {
   return value;
 };
 cp.show = async (target, state) => {
+  const since = cp.now();
   if (state) Object.assign(cp, state);
   cp.target = target; cp.errors = []; cp.warnings = []; cp.status = "loading";
   try {
@@ -62,7 +63,7 @@ cp.show = async (target, state) => {
     if (!settled) cp.warnings.push("Custom element updates did not settle within 500 ms.");
     await cp.quiet();
   } catch (error) {
-    const served = await cp.realFetch("/@errors?since=" + (Date.now() - 5000)).then((r) => r.json()).catch(() => []);
+    const served = await cp.realFetch("/@errors?since=" + since).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));
   }
   cp.status = cp.errors.length ? "error" : "mounted"; return cp.status;

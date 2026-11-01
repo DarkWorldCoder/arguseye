@@ -84,20 +84,23 @@ window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
 window.__CP__.importModule = (url) => import(url);
 window.__CP__.fileUrl = ${browserFileUrl};
+window.__CP__.now = window.__CP_ENGINE_NOW__ ?? Date.now.bind(Date);
 window.process ??= { env: ${envJson} };
 // Finite JavaScript animations (charts drawing in, springs, count-ups) measure progress from requestAnimationFrame
 // timestamps: the capture step moves those forward so they reach their end frame instead of being caught mid-way.
 {
-  const raf = window.requestAnimationFrame.bind(window);
+  const raf = window.requestAnimationFrame.bind(window), cancel = window.cancelAnimationFrame.bind(window);
+  const scheduled = new Set();
   window.__CP__.skew = 0;
   // Frames the app has asked for and not yet received: none pending means no JavaScript animation is running.
   window.__CP__.rafPending = 0;
   window.__CP__.fastForward = (ms) => { window.__CP__.skew += ms; };
   window.__CP__.frame = () => new Promise((done) => raf(done));
   window.requestAnimationFrame = (callback) => {
-    window.__CP__.rafPending++;
-    return raf((time) => { window.__CP__.rafPending--; callback(time + window.__CP__.skew); });
+    const id = raf((time) => { scheduled.delete(id); window.__CP__.rafPending = scheduled.size; callback(time + window.__CP__.skew); });
+    scheduled.add(id); window.__CP__.rafPending = scheduled.size; return id;
   };
+  window.cancelAnimationFrame = (id) => { scheduled.delete(id); window.__CP__.rafPending = scheduled.size; return cancel(id); };
 }
 // fetch() calls a component starts on mount, counted so every runtime can wait for its data before the capture.
 window.__CP__.net = { inFlight: 0, last: 0 };
@@ -287,7 +290,7 @@ cp.show = async (target, state) => {
   cp.errors = [];
   cp.warnings = [];
   cp.status = "loading";
-  const since = Date.now();
+  const since = cp.now();
   // A forced theme: the dark class and color-scheme on <html>; without one, the app's own class stays as it is.
   if (target.theme) { document.documentElement.classList.toggle("dark", target.theme === "dark"); document.documentElement.style.colorScheme = target.theme; }
   try {

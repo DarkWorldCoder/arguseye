@@ -49,3 +49,18 @@ it("runs inline modules through project import resolution and reports undefined 
     expect((await renderer.render({ file })).errors.join()).toContain("Classic scripts");
   } finally { await renderer.close(); }
 });
+
+it("reports pending animation work inside shadow DOM and does not mistake cancelled callbacks for motion", async () => {
+  const renderer = await createRenderer({ root });
+  try {
+    renderer.server.updateBuffer(file, '<script type="module">customElements.define("moving-box",class extends HTMLElement {connectedCallback(){const root=this.attachShadow({mode:"open"});root.innerHTML="<p>Moving shadow</p>";const tick=()=>{root.querySelector("p").style.opacity=String(Math.random());requestAnimationFrame(tick)};requestAnimationFrame(tick)}});</script><moving-box></moving-box>');
+    const moving = await renderer.render({ file });
+    expect(moving.errors).toEqual([]);
+    expect(moving.complete).toBe(false);
+    expect(moving.warnings.join()).toContain("Animation-frame callbacks remain pending");
+    renderer.server.updateBuffer(file, '<script type="module">customElements.define("steady-box",class extends HTMLElement {connectedCallback(){this.attachShadow({mode:"open"}).innerHTML="<p>Steady shadow</p>";const id=requestAnimationFrame(()=>{});cancelAnimationFrame(id)}});</script><steady-box></steady-box>');
+    const steady = await renderer.render({ file });
+    expect(steady.errors).toEqual([]);
+    expect(steady.complete).toBe(true);
+  } finally { await renderer.close(); }
+});
