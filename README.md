@@ -192,9 +192,9 @@ A real Next.js 14 app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered fr
 
 If a preview cannot start, call `inspect_project {}` or run `npx @ayushniroula/arguseye doctor --root . --json`. It reports the selected application directory, installed framework versions and recovery steps without starting Chromium or executing project configuration. The native compiler reads supported Vite settings statically; it does not run arbitrary Vite plugins. A successful isolated render still requires reviewing warnings and unresolved inputs.
 
-Project inspection and explicit setup are currently **unreleased development features**. Use a build of this branch; the published 0.0.12 package does not expose them yet.
+Project inspection and explicit setup require **0.0.13 or later**; older 0.0.12 installations do not expose them.
 
-This branch also adds opt-in project Vite plugins, replayable browser/network fixtures, cancellation and bounded sessions, resumable audits, optional accessibility/source inspection, Svelte context setup, and an independent HTML/Web Components adapter. See the [rendering contracts](docs/rendering.md), [setup guide](docs/setup.md) and [capability/validation matrix](docs/conformance.md). These additions remain unpublished.
+Version 0.0.13 also adds opt-in project Vite plugins, replayable browser/network fixtures, cancellation and bounded sessions, resumable audits, optional accessibility/source inspection, Svelte context setup, and an independent HTML/Web Components adapter. See the [rendering contracts](docs/rendering.md), [setup guide](docs/setup.md) and [capability/validation matrix](docs/conformance.md).
 
 For context that cannot be inferred, supply an [explicit provider or Vue setup](docs/setup.md). Render evidence identifies the setup file; its code uses your project's packages and executes only during previewing.
 

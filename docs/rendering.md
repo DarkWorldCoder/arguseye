@@ -1,4 +1,4 @@
-# Reproducible and bounded verification (unreleased)
+# Reproducible and bounded verification (0.0.13)
 
 ## Project build plugins
 

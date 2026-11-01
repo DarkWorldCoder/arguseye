@@ -725,7 +725,7 @@ const FREEZE_MOTION = `*, *::before, *::after {
   caret-color: transparent !important;
 }`;
 
-/** Avoids Chromium's clipped-view resize; crop actual viewport pixels with the same native codec used for diffs. */
+/** Captures the enclosing device pixels natively without decoding and re-encoding them in the application. */
 async function capture(page: Page, session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
   const viewport = page.viewportSize()!;
   // Text line boxes are usually fractional. Include every covered device pixel without resampling it.
@@ -733,19 +733,11 @@ async function capture(page: Page, session: CDPSession, box: { x: number; y: num
   const within = viewport.width * viewport.height <= 4_194_304 && clip.x >= 0 && clip.y >= 0 && clip.x + clip.width <= viewport.width && clip.y + clip.height <= viewport.height;
   const { data } = await session.send("Page.captureScreenshot", {
     format: "png",
-    ...(!within ? { clip: { ...box, scale: 1 } } : {}),
+    clip: { ...(within ? clip : box), scale: 1 },
     optimizeForSpeed: true,
     captureBeyondViewport: !within,
   });
-  if (!within) return Buffer.from(data, "base64");
-  const cropped = await page.evaluate(async ({ data, box }) => {
-    const image = new Image(); image.src = "data:image/png;base64," + data; await image.decode();
-    const canvas = document.createElement("canvas"); canvas.width = box.width; canvas.height = box.height;
-    const ctx = canvas.getContext("2d")!;
-    ctx.drawImage(image, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
-    return canvas.toDataURL("image/png").split(",")[1];
-  }, { data, box: clip });
-  return Buffer.from(cropped, "base64");
+  return Buffer.from(data, "base64");
 }
 
 /** Playwright's headless shell (a stripped Chromium) when installed: lighter and quicker to start than full Chrome. */

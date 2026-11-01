@@ -91,6 +91,13 @@ describe("headless render (what an agent gets back)", () => {
     }
   });
 
+  it("captures pixels without invoking the application's canvas encoder", async () => {
+    const result = await renderer.render({ file: path.join(root, "components/CaptureProbe.tsx"), props: { color: "red", height: 120, blockCanvasEncoding: true } });
+    expect(result.errors).toEqual([]);
+    expect(result.png.readUInt32BE(16)).toBe(340);
+    expect(result.png.readUInt32BE(20)).toBe(120);
+  });
+
   it("finishes finite native animations and exposes the freeze of an infinite animation", async () => {
     const file = path.join(root, "components/NativeAnimation.tsx");
     const still = await renderer.render({ file, props: { animated: false } });

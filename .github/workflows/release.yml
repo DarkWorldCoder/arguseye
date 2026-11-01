@@ -6,6 +6,7 @@ on:
 jobs:
   vsix:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -22,12 +23,36 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install real fixture packages
+        shell: bash
+        run: for d in test/fixtures/*/; do (cd "$d" && npm ci --no-audit --no-fund); done
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run typecheck
+      - name: Record native timing conditions
+        if: runner.os == 'macOS'
+        run: node scripts/prepareNativeBenchmark.mjs
+      - name: Native framework and MCP contracts
+        if: runner.os != 'Linux'
+        run: npx vitest run test/browser/render.test.ts test/browser/vue.test.ts test/browser/svelte.test.ts test/browser/preact.test.ts test/browser/solid.test.ts test/browser/html.test.ts test/browser/mcp.test.ts test/browser/theme.test.ts test/browser/live.test.ts test/browser/usageContext.test.ts --maxWorkers 1
+      - name: Full test suite on Linux
+        if: runner.os == 'Linux'
+        run: npm test
       - run: npm run build
-      - run: npx @vscode/vsce package --target ${{ matrix.target }} --allow-missing-repository --readme-path README.marketplace.md
+      - name: Package and execute the exact release VSIX on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/nativeConformance.mjs
+      - name: Package and execute the exact release VSIX on Windows and macOS
+        if: runner.os != 'Linux'
+        run: node scripts/nativeConformance.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: vsix-${{ matrix.target }}
-          path: "*.vsix"
+          path: artifacts/native-conformance/*.vsix
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.target }}
+          path: artifacts/native-conformance/*.json
 
   github-release:
     needs: vsix
@@ -40,7 +65,7 @@ jobs:
           path: artifacts
       - uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*.vsix
+          files: artifacts/vsix-*/*.vsix
           generate_release_notes: true
 
   marketplace:
@@ -61,6 +86,7 @@ jobs:
 
   npm:
     # Skipped until the NPM_TOKEN secret exists (or npm trusted publishing is configured).
+    needs: vsix
     runs-on: ubuntu-latest
     env:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}

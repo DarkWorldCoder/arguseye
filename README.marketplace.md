@@ -7,7 +7,7 @@ Preview React, browser-renderable Next.js, Vue 3, and Svelte components (includi
 ## Start in VS Code
 
 1. Install **Arguseye** using the button on this page.
-2. Open your project and a `.tsx`, `.jsx`, `.vue`, or `.svelte` component.
+2. Open your project and a `.tsx`, `.jsx`, `.vue`, `.svelte`, or `.html` component.
 3. Run **Arguseye: Preview Component** from the Command Palette, use the eye icon in the editor title, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
 4. Choose an export, usage, and viewport. Edit your component and inspect the preview beside it.
 
@@ -24,6 +24,8 @@ Release builds target **Windows x64, macOS Apple Silicon, and Linux x64**. Scree
 - **Theme checks.** Choose light or dark; baseline comparisons replay the captured theme.
 - **Dialogs and canvases.** Captures include visible portaled UI and canvas pixels. Canvas content is reported separately from accessibility text; canvas settling can take longer than a simple component render.
 - **Before and after.** Capture a baseline, edit the source, and inspect changed pixels, dimensions, accessibility text, and new or resolved errors.
+- **Explicit project setup.** Supply project providers or Vue/Svelte context when inference is insufficient. Optional Vite compatibility runs your installed project configuration and plugins in a separate process; compatibility edits reload state.
+- **HTML and Web Components.** Preview module-based HTML and custom elements, including Lit and shadow DOM, using your project's packages. Unsupported document behavior remains visible in warnings or errors.
 
 ## Real VS Code screenshots
 
@@ -73,7 +75,7 @@ Ask your agent:
 
 > Render the component I changed, using its real usage props. Capture a baseline, compare after the edit, and show the screenshots, accessibility changes, errors, and incomplete context.
 
-Five MCP tools connect the workflow: `render_component`, `list_usages`, `render_usages`, `describe_props`, and `render_diff`. Outputs include cropped PNGs and structured evidence. Use `output: "summary"` when you only need text.
+MCP tools connect the workflow: `inspect_project`, `render_component`, `list_usages`, `render_usages`, `describe_props`, `render_diff`, and `audit_components`. Outputs include cropped PNGs and versioned structured evidence. Use `output: "summary"` when you only need text. `inspect_project` and CLI `doctor --json` diagnose project setup without launching Chromium. Version 0.0.13 adds explicit replay fixtures, cancellation and bounded sessions, resumable audits, and optional component-scope accessibility/source inspection; unavailable context stays explicit.
 
 ## Know what the preview covers
 

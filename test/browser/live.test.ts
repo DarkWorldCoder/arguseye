@@ -43,12 +43,17 @@ describe("live updates from unsaved edits", () => {
     server.updateBuffer(card, edited);
     const updated = performance.now();
     const cpu = process.cpuUsage(cpuBefore);
-    await page.getByRole("button", { name: "Buy now (3)" }).waitFor({ timeout: 2000 });
+    // Locator retries back off by 20/50/100 ms; sample visible DOM on frames instead of timing that backoff.
+    await page.waitForFunction(() => {
+      const button = document.querySelector("button");
+      return button?.textContent === "Buy now (3)" && button.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+    }, undefined, { polling: "raf", timeout: 2000 });
     const ms = performance.now() - started;
     console.log("React edit-to-pixels", Math.round(ms), "ms; target 50 ms, enforced limit 100 ms");
     console.log("React update phases", JSON.stringify({ buffer: updated - started, bufferCpuMs: (cpu.user + cpu.system) / 1000 }));
 
     expect(ms).toBeLessThan(100);
+    expect(await page.getByRole("button", { name: "Buy now (3)" }).isVisible()).toBe(true);
     server.updateBuffer(card, undefined);
     await page.getByRole("button", { name: "Add to cart (3)" }).waitFor({ timeout: 2000 });
   });

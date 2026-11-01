@@ -1,4 +1,4 @@
-# Adapter and client conformance (unreleased)
+# Adapter and client conformance (0.0.13)
 
 Support means the bounded behaviors below have installed fixtures. It does not mean every package, backend, framework plugin or coding client is certified.
 
@@ -33,5 +33,7 @@ Pixel comparisons use a YIQ color-distance threshold of 0.1 to suppress small re
 VSIX extraction uses a temporary directory outside the checkout. This prevents absent packaged dependencies from resolving through the repository's parent `node_modules`. The result records the isolated path; successful runs clean it up, and failed runs retain it for inspection.
 
 On macOS, the workflow first warms browser executable loading and records three load samples five seconds apart, plus browser versions, in `benchmark-machine.json`. A 75%-of-available-cores reference annotates busy conditions; it never bypasses assertions, retries measured renders or selects a fastest run. Warm-render p95 remains <=100 ms over 20 renders; the existing live-update limit remains <100 ms against a 50 ms target. These are fixture checks on the recorded runners. Busy-run observations are not controlled benchmarks or universal performance guarantees; remeasure performance on a documented quiet machine for release benchmarking.
+
+Live-update timing checks observe the expected visible DOM on browser animation frames. They include buffer processing, compilation, transport and browser application of the edit, without the locator API's 20/50/100 ms retry backoff. State and accessible button labels are still verified. This is frame-sampled DOM latency, not a measurement of the physical display.
 
 Local execution on this workstation proves Linux only. Windows/macOS results must come from their native jobs. The SDK's success does not establish that a particular coding-client version displays all fields correctly. Keep actual client/version/transport checks distinct from installation-format tests and from the VS Code extension. Do not turn unexecuted platform/client checks into release claims.

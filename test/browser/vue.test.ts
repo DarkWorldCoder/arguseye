@@ -68,7 +68,11 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
       renderer.server.updateBuffer(file, edited);
       const updated = performance.now();
       const cpu = process.cpuUsage(cpuBefore);
-      await page.getByRole("button", { name: "Buy (1)" }).waitFor();
+      // Match the visible update on a frame, without adding the locator's retry backoff to the measurement.
+      await page.waitForFunction(() => {
+        const button = document.querySelector("button");
+        return button?.textContent === "Buy (1)" && button.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+      }, undefined, { polling: "raf", timeout: 2000 });
       const ms = performance.now() - start;
       console.log("Vue edit-to-pixels", Math.round(ms), "ms; mutation delivered", Math.round(observed - start), "ms; target 50 ms, enforced limit 100 ms");
       console.log("Vue update phases", JSON.stringify({ buffer: updated - start, bufferCpuMs: (cpu.user + cpu.system) / 1000, resources: await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("Card.vue")).map((e) => ({ duration: e.duration, serverTiming: (e as PerformanceResourceTiming).serverTiming }))) }));
