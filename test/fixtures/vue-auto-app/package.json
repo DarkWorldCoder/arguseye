@@ -1,0 +1,2 @@
+{ "name": "vue-auto-app-fixture", "private": true, "type": "module",
+  "dependencies": { "vue": "^3.5.0", "@vueuse/core": "^13.0.0", "dayjs": "^1.11.13" } }

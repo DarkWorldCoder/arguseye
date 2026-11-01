@@ -20,6 +20,7 @@ import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
 import { nextFontModule } from "./nextFont.js";
 import { vueEntry, vueSetupModule } from "../project/vueSetup.js";
 import { kitEnvModule } from "../project/svelteKit.js";
+import { autoComponentsModule, readAutoComponents } from "../project/autoImports.js";
 import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 import type { Wrapper } from "../project/appContext.js";
@@ -146,6 +147,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return source ? { file: entry.replace(/\.[^.]+$/, ".preview-setup.ts"), source } : undefined;
   };
 
+  /** Components an auto-registration tool declares (unplugin-vue-components, Nuxt), registered on Vue previews. */
+  const autoComponentsFile = path.join(options.root, "preview-components.ts");
+
   /** Where a generated call-site context "lives", so its imports resolve like the usage file's. */
   const contextFile = (usageFile: string) => usageFile.replace(/\.[^.]+$/, ".preview-context.tsx");
 
@@ -183,7 +187,11 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     const app = appContext();
     if (app.entry) await readSource(app.entry);
     if (frameworkOf(file) === "react") await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
-    if (frameworkOf(file) === "vue") { const setup = await vueSetup(); if (setup) await graph.crawlVirtual(setup.file, setup.source, { refresh: false }); }
+    if (frameworkOf(file) === "vue") {
+      const setup = await vueSetup();
+      if (setup) await graph.crawlVirtual(setup.file, setup.source, { refresh: false });
+      await graph.crawlVirtual(autoComponentsFile, autoComponentsModule(readAutoComponents(options.root)), { refresh: false });
+    }
     await deps.ensureBuilt();
     return { generation: deps.generation, cached: deps.cached };
   }
@@ -257,6 +265,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       }
       if (url.pathname === "/@sveltekit-env") {
         return send(res, 200, "text/javascript", kitEnvModule(options.root, url.searchParams.get("m") ?? "", graph.kit.publicPrefix));
+      }
+      if (url.pathname === "/@vue-components") {
+        return send(res, 200, "text/javascript", await graph.loadVirtual(autoComponentsFile, autoComponentsModule(readAutoComponents(options.root)), { refresh: false }));
       }
       if (url.pathname === "/@vue-setup") {
         const setup = await vueSetup();

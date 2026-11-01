@@ -38,6 +38,13 @@ cp.show = async (target, state) => {
       } catch (error) {
         cp.warnings.push("The app setup in src/main could not run, so its plugins are missing: " + (error?.message ?? error));
       }
+      // Components the project uses without importing (unplugin-vue-components, Nuxt), loaded on first use.
+      try {
+        const register = (await import("/@vue-components?e=" + cp.epoch)).default;
+        if (register) register(app);
+      } catch (error) {
+        cp.warnings.push("Auto-registered components could not be loaded: " + (error?.message ?? error));
+      }
       app.mount("#root");
     } else app._instance?.proxy?.$forceUpdate();
     await nextTick();

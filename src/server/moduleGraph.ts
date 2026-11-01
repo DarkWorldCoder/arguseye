@@ -15,6 +15,7 @@ import { createResolver } from "./resolver.js";
 import { applyAlias, readViteConfig, type ViteConfig } from "../project/viteConfig.js";
 import { nextFontUrl } from "./nextFont.js";
 import { readKitConfig, type KitConfig } from "../project/svelteKit.js";
+import { autoImportLines, readAutoImports } from "../project/autoImports.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
@@ -137,7 +138,10 @@ export class ModuleGraph {
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
       // Vite exposes env through import.meta.env; the page holds the values, each module that reads them gets them.
       const env = code.includes("import.meta.env") ? "import.meta.env = window.__CP__.metaEnv;\n" : "";
-      cached = { source, code: env + (sfc ? code : this.withRefresh(file, code)) };
+      // Names an auto-import tool (unplugin-auto-import, Nuxt) provides without an import statement.
+      const auto = file.includes("/node_modules/") ? [] : autoImportLines(file, code, readAutoImports(this.root));
+      const head = env + (auto.length ? auto.join("\n") + "\n" : "");
+      cached = { source, code: head + (sfc ? code : this.withRefresh(file, code)) };
       this.transformed.set(file, cached);
     }
     return this.rewriteImports(file, cached.code);
