@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import path from "node:path";
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync, symlinkSync, mkdirSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import os from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -80,6 +81,30 @@ describe("MCP tools (what a coding agent calls)", () => {
     } finally {
       await inspector?.close(); await mcp?.close(); rmSync(broken, { recursive: true, force: true });
     }
+  });
+
+  it("does not speculatively mount the app or execute its CSS config for static prop inspection", async () => {
+    const isolated = mkdtempSync(path.join(os.tmpdir(), "arguseye-static-effects-"));
+    const canary = path.join(isolated, "config-executed");
+    writeFileSync(path.join(isolated, "package.json"), JSON.stringify({ dependencies: { react: "19.2.0", "react-dom": "19.2.0", postcss: "8.5.0" } }));
+    symlinkSync(path.resolve("test/fixtures/tw3-app/node_modules"), path.join(isolated, "node_modules"), "junction");
+    writeFileSync(path.join(isolated, "Card.tsx"), 'export default function Card({title}: {title: string}) {return <h1>{title}</h1>}');
+    writeFileSync(path.join(isolated, "postcss.config.cjs"), `require("node:fs").writeFileSync(${JSON.stringify(canary)}, "executed"); module.exports={plugins:{}};`);
+    // app/layout is an inferred entry; its global CSS would execute PostCSS on a speculative warm page.
+    mkdirSync(path.join(isolated, "app"));
+    writeFileSync(path.join(isolated, "app/layout.tsx"), 'import "./global.css"; export default function Layout({children}) {return <main>{children}</main>}');
+    writeFileSync(path.join(isolated, "app/global.css"), 'h1 {color: red}');
+    const mcp = await createMcpServer({ root: isolated });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const inspector = new Client({ name: "static-effects-test", version: "0" });
+    try {
+      await mcp.server.connect(b); await inspector.connect(a);
+      expect((await inspector.callTool({ name: "list_usages", arguments: { file: "Card.tsx" } })).isError).toBeFalsy();
+      const result = await inspector.callTool({ name: "describe_props", arguments: { file: "Card.tsx" } });
+      expect((result.structuredContent as any).sample).toEqual({ title: "Title" });
+      await delay(3000);
+      expect(existsSync(canary)).toBe(false);
+    } finally { await inspector.close(); await mcp.close(); rmSync(isolated, { recursive: true, force: true }); }
   });
 
   it("tells a connecting agent when to use it, without being asked", () => {

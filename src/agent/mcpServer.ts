@@ -46,9 +46,9 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   let pendingRenderer: Promise<Renderer> | undefined;
   let previewUrl: string | undefined;
   let closed = false;
-  const getRenderer = () => {
+  const getRenderer = (warmup = options.warmup ?? true) => {
     if (closed) throw new Error("Arguseye session is closed");
-    return pendingRenderer ??= createRenderer({ root, warmup: options.warmup ?? true }).then((renderer) => {
+    return pendingRenderer ??= createRenderer({ root, warmup }).then((renderer) => {
       previewUrl = renderer.server.url;
       return renderer;
     }).catch((error) => { pendingRenderer = undefined; throw error; });
@@ -174,7 +174,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const schema = await (await getRenderer()).describeProps(abs(args.file), args.export);
+        const schema = await (await getRenderer(false)).describeProps(abs(args.file), args.export);
         return { content: [{ type: "text" as const, text: JSON.stringify(schema, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], ...schema } };
       } catch (error) {
         return failure(error);
@@ -192,7 +192,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const usages = await (await getRenderer()).listUsages(abs(args.file), args.export);
+        const usages = await (await getRenderer(false)).listUsages(abs(args.file), args.export);
         return { content: [{ type: "text" as const, text: JSON.stringify(usages, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], usages } };
       } catch (error) {
         return failure(error);

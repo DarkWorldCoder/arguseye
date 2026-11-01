@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Static MCP prop/usage inspection no longer starts speculative application warm-up. A query classified as read-only cannot indirectly mount providers or execute PostCSS configuration before the agent requests a render.
 - Warm stylesheet refresh works in strict pnpm layouts where PostCSS belongs to a configured plugin or declared Next/Vite build tool rather than the application root. It resolves that project's runtime through the shared resolver; no Arguseye-owned PostCSS fallback is substituted. Found by rendering and comparing CSCA.ai's existing hero from a freshly installed package.
 - Virtual-module approximation warnings survive browser import caching and remain scoped to the target and Vue setup dependencies. Statically ignored computed Vite settings appear in render warnings too. Diffs report new/resolved warnings without carrying repaired provider/asset failures into the current render; replayed sampled and unresolved inputs retain their provenance.
 - Prop inspection and generated samples read imported type files through the same bounded, unsaved source reader as rendering. Outside type imports are rejected instead of leaking their enum/sample values; unsaved type edits appear immediately in metadata.
