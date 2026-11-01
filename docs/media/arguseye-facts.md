@@ -14,8 +14,8 @@ Arguseye is an MIT-licensed local preview engine for coding agents and VS Code d
 
 - Maker: Ayush Niroula.
 - License: MIT. Free and open source.
-- npm engine, agent tools and CLI: `@ayushniroula/arguseye@0.0.9`.
-- VS Code Marketplace: `ayushniroula.arguseye@0.0.9`.
+- npm engine, agent tools and CLI: `@ayushniroula/arguseye@0.0.10`.
+- VS Code Marketplace: `ayushniroula.arguseye@0.0.10`.
 - Frameworks: React, browser-renderable Next.js and Vue 3 SFCs.
 - Headless prerequisites: Node.js 22+, installed project dependencies, Chromium or Google Chrome. Vue projects use their own matching runtime and compiler.
 
