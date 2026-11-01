@@ -39,8 +39,16 @@ try {
     const schedulerDelayMs = Math.max(0, elapsedMs - intervalMs);
     const load = os.loadavg()[0];
     const quiet = idleFraction !== null && idleFraction >= minimumIdleFraction && schedulerDelayMs <= maximumSchedulerDelayMs;
-    record.samples.push({ elapsedMs: Math.round(performance.now() - started), load, idleFraction, schedulerDelayMs, minimumIdleFraction, maximumSchedulerDelayMs, quiet });
-    console.log(`Native timing conditions: ${(100 * (idleFraction ?? 0)).toFixed(1)}% idle, scheduler delay ${schedulerDelayMs.toFixed(1)} ms, load ${load.toFixed(2)} (${record.cores} available cores); ${quiet ? "quiet" : "waiting"}`);
+    // When the host is busy, record what is using it, so a failed preflight names its cause instead of a guess.
+    let busiest;
+    if (!quiet && os.platform() !== "win32") {
+      try {
+        const args = os.platform() === "darwin" ? ["-Ao", "pcpu,comm", "-r"] : ["-eo", "pcpu,comm", "--sort=-pcpu"];
+        busiest = execFileSync("ps", args, { encoding: "utf8" }).split("\n").slice(1, 6).map((line) => line.trim()).filter(Boolean);
+      } catch {}
+    }
+    record.samples.push({ elapsedMs: Math.round(performance.now() - started), load, idleFraction, schedulerDelayMs, minimumIdleFraction, maximumSchedulerDelayMs, quiet, ...(busiest ? { busiest } : {}) });
+    console.log(`Native timing conditions: ${(100 * (idleFraction ?? 0)).toFixed(1)}% idle, scheduler delay ${schedulerDelayMs.toFixed(1)} ms, load ${load.toFixed(2)} (${record.cores} available cores); ${quiet ? "quiet" : "waiting"}${busiest ? " — busiest: " + busiest.slice(0, 3).join(", ") : ""}`);
     quietSamples = quiet ? quietSamples + 1 : 0;
     if (quietSamples === 3) break;
   }

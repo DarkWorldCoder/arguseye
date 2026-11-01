@@ -22,6 +22,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Stop Spotlight indexing on macOS
+        # A fresh macOS runner indexes every file the installs below write (tens of thousands in node_modules),
+        # which kept the 3-core VM busy through the whole timing preflight. Indexing is not part of the product.
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          sudo mdutil -a -i off || true
+          sudo mdutil -a -s || true
       - run: npm ci
       - name: Install real fixture packages
         shell: bash
