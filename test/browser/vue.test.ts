@@ -52,19 +52,21 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
         (window as any).__scopedStyle = style;
         (window as any).__scopedText = style.firstChild;
       });
+      const edited = original.replace("Add (", "Buy (");
+      let browserApplied = 0;
       let notify!: (time: number) => void;
       const applied = new Promise<number>((resolve) => { notify = resolve; });
-      await page.exposeFunction("recordEdit", () => notify(performance.now()));
-      await page.evaluate(() => {
+      await page.exposeFunction("recordEdit", (at: number) => { browserApplied = at; notify(performance.now()); });
+      const browserPrepared = await page.evaluate(() => {
         const observer = new MutationObserver(() => {
           const button = document.querySelector("button");
           if (button?.textContent === "Buy (1)" && button.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
-            observer.disconnect(); (window as any).recordEdit();
+            observer.disconnect(); (window as any).recordEdit(performance.now());
           }
         });
         observer.observe(document.getElementById("root")!, { subtree: true, childList: true, characterData: true });
+        return performance.now();
       });
-      const edited = original.replace("Add (", "Buy (");
       const cpuBefore = process.cpuUsage();
       const start = performance.now();
       renderer.server.updateBuffer(file, edited);
@@ -78,7 +80,7 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
       const frameMs = performance.now() - start;
       const ms = (await applied) - start;
       console.log("Vue edit-to-visible-DOM", Math.round(ms), "ms; frame observation", Math.round(frameMs), "ms; target 50 ms, enforced DOM limit 100 ms");
-      console.log("Vue update phases", JSON.stringify({ buffer: updated - start, bufferCpuMs: (cpu.user + cpu.system) / 1000, resources: await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("Card.vue")).map((e) => ({ duration: e.duration, serverTiming: (e as PerformanceResourceTiming).serverTiming }))) }));
+      console.log("Vue update phases", JSON.stringify({ buffer: updated - start, bufferCpuMs: (cpu.user + cpu.system) / 1000, browserPrepared, browserApplied, browserElapsedUpperBound: browserApplied - browserPrepared, resources: await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("Card.vue")).map((e) => ({ start: e.startTime, end: (e as PerformanceResourceTiming).responseEnd, duration: e.duration, serverTiming: (e as PerformanceResourceTiming).serverTiming }))) }));
       expect(await page.evaluate(() => (window as any).__scopedStyle.firstChild === (window as any).__scopedText)).toBe(true);
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy (").replace("rgb(0, 80, 120)", "rgb(255, 0, 0)"));
       await expect.poll(() => page.locator("h2").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 0, 0)");
