@@ -1,3 +1,4 @@
+import { inspectRender, errorLocations, type AccessibilityEvidence, type ElementEvidence, type ErrorLocation } from "./inspectRender.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { installFixtures, validateFixtures, type RenderFixtures, type FixtureProvenance } from "./renderFixtures.js";
 import { randomUUID } from "node:crypto";
@@ -11,7 +12,7 @@ import { createResolver } from "../server/resolver.js";
 import type { Frame, PreviewTarget } from "../server/page.js";
 import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
-import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
+import { propsSchema, sampleProps, componentMetadata, type PropSchema } from "../props/propsSchema.js";
 import { listExports, pickExport } from "../project/pickExport.js";
 import { readFileSync } from "node:fs";
 import { frameworkOf } from "../project/framework.js";
@@ -20,6 +21,8 @@ import { FileAccessError } from "../server/createFileAccess.js";
 export type RenderRequest = PreviewTarget & {
   /** Explicit replay inputs; uses a fresh page so module-level reads are deterministic too. */
   fixtures?: RenderFixtures;
+  /** Optional heavier accessibility and source inspection, outside the default render path. */
+  inspection?: { accessibility?: boolean; sources?: boolean };
   viewport?: { width: number; height: number };
   /** Render with the props of a real usage, by its id from `listUsages` (e.g. `app/page.tsx:9`). */
   usage?: string;
@@ -46,10 +49,14 @@ export type RenderResult = {
   png: Buffer;
   fixtureProvenance?: FixtureProvenance;
   build?: PreviewServer["build"];
+  accessibility?: AccessibilityEvidence;
+  elements?: ElementEvidence[];
+  errorLocations?: ErrorLocation[];
+  environment?: { locale: string; timezoneId: string; clock: "system" | "fixed"; random: "runtime" | "seeded" };
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
-  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures">;
+  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures" | "inspection">;
   viewport: { width: number; height: number };
   sourceRevision: string;
   unresolved: string[];
@@ -82,7 +89,7 @@ export type RenderResult = {
   /** Caller-authored browser setup; overrides inferred providers/plugins, not the full application. */
   setupApplied?: string;
   /** Where the time went, in ms: bundling/crawl, page load or swap, settling (fonts, images), capture. */
-  timings?: { prepare: number; show: number; settle: number; capture: number };
+  timings?: { prepare: number; show: number; settle: number; capture: number; inspection?: number };
 };
 
 export type Changes = {
@@ -117,7 +124,7 @@ export type Renderer = {
   restoreCapture(capture: RenderResult): string;
   listUsages(file: string, exportName?: string): Promise<Usage[]>;
   /** What the component accepts, from its TypeScript type, plus sample props that satisfy the required ones. */
-  describeProps(file: string, exportName?: string): Promise<{ props: PropSchema[]; sample: Record<string, unknown> }>;
+  describeProps(file: string, exportName?: string): Promise<{ props: PropSchema[]; sample: Record<string, unknown>; metadata?: Awaited<ReturnType<typeof componentMetadata>> }>;
   /** Resolves once the project-wide warm-up (if enabled) has finished. */
   ready(): Promise<void>;
   server: PreviewServer;
@@ -274,7 +281,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   async function describeProps(file: string, exportName?: string) {
     server.assertAccess(path.resolve(options.root, file));
     const props = await propsSchema(file, exportName ?? (await exportOf(file)), server.readSource);
-    return { props, sample: sampleProps(props) };
+    return { props, sample: sampleProps(props), metadata: await componentMetadata(file, server.readSource) };
   }
 
   /** Given props win; else a named usage's props; else, with nothing to go on, samples from the type. */
@@ -370,7 +377,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     return second;
   }
 
-  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, fixtures, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
+  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, fixtures, inspection, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
       guard();
       validateFixtures(fixtures);
       const started = performance.now();
@@ -521,7 +528,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       marks.push(performance.now());
-      const { box, inPage, runtimeWarnings, portals, canvases, empty } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings, portals, canvases, empty, environment } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
@@ -543,6 +550,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           right = Math.min(innerWidth, Math.max(right, b.right)); bottom = Math.min(innerHeight, Math.max(bottom, b.bottom));
         }
         return {
+          environment: { locale: navigator.language, timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone },
           box: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) },
           portals: portaled.length,
           // A <canvas> (WebGL, charts) has no accessible content: report it so an agent knows the pixels are the evidence.
@@ -557,9 +565,16 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const rootIntact = await page.evaluate(() => !!document.getElementById("root"));
       const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
 
+      const capturedAt = performance.now();
       warnings.push(...runtimeWarnings);
       if (failedRequests.length) warnings.push(`Requests failed (the preview has no app server or backend; pass data as props or seed storage): ${unique(failedRequests).slice(0, 5).join("; ")}`);
       const allErrors = unique([...inPage, ...errors]);
+      const locations = allErrors.length ? await errorLocations(allErrors, server) : [];
+      let inspectionResult = {};
+      if (inspection) {
+        try { inspectionResult = await inspectRender(page, server, inspection, portals || !rootIntact ? "body" : "#root"); }
+        catch (error) { warnings.push("Requested inspection did not complete: " + String((error as Error).message ?? error)); }
+      }
       if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
       guard();
@@ -567,25 +582,25 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (evidence?.network?.blocked.length) warnings.push("Unmatched network requests blocked by fixtures: " + evidence.network.blocked.join("; "));
       const setup = server.setupFor(rest.file);
       const result: RenderResult = {
-        png, snapshot, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        png, snapshot, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
         ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),
         ...(logged.length ? { console: unique(logged.filter((l) => !allErrors.some((e) => e.includes(l)))).slice(0, 5) } : {}),
         layoutsApplied: server.layoutsFor(target.route),
         setupApplied: setup ? path.relative(options.root, setup) : undefined,
-        timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
+        timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(capturedAt - marks[2]), ...(inspection || locations.length ? { inspection: Math.round(performance.now() - capturedAt) } : {}) },
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({
           file: rest.file, exportName: rest.exportName ?? "default", props,
-          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}),
+          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}), ...(inspection ? { inspection } : {}),
         }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings: unique(warnings), complete: !allErrors.length && !warnings.length,
       };
       if (png.byteLength > limits.pngBytes) {
         result.warnings.push("PNG retention budget exceeded; save this response to an explicit capture directory or increase the session pngBytes limit before capturing a baseline."); result.complete = false;
       } else if (!allErrors.length) result.captureId = remember(result);
-      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme, fixtures]);
+      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme, fixtures, inspection]);
       const previous = lastResults.get(signature);
       if (previous) {
         const diff = await compareCaptures(page, { ...structuredClone(previous), png: Buffer.from(previous.png) }, result);

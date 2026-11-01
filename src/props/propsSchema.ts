@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { parseSync } from "oxc-parser";
 import { createResolver } from "../server/resolver.js";
@@ -27,6 +28,7 @@ type Ctx = { file: string; code: string; program: Program; comments: ReturnType<
 /** Reads what props a component accepts from its TypeScript parameter type, without running the TypeScript compiler. */
 export async function propsSchema(file: string, exportName = "default", readSource: SourceReader = (file) => readFile(file, "utf8")): Promise<PropSchema[]> {
   const ctx = await load(file, 0, readSource);
+  if (file.endsWith(".vue")) return vueProps(ctx);
   const fn = componentFunction(ctx.program, exportName);
   const param = fn?.params?.[0] ?? fn?.params?.items?.[0];
   if (!param) return [];
@@ -81,8 +83,14 @@ function sample(prop: PropSchema): unknown {
 }
 
 async function load(file: string, depth: number, readSource: SourceReader): Promise<Ctx> {
-  const code = await readSource(file);
-  const { program, comments } = parseSync(file, code);
+  let code = await readSource(file);
+  if (file.endsWith(".vue")) {
+    const compiler = createRequire(file)("vue/compiler-sfc");
+    const { descriptor, errors } = compiler.parse(code, { filename: file });
+    if (errors.length) throw new Error(`${file}: ${errors.join("; ")}`);
+    code = [descriptor.script?.content, descriptor.scriptSetup?.content].filter(Boolean).join("\n");
+  }
+  const { program, comments } = parseSync(file.endsWith(".vue") ? file + ".ts" : file, code);
   return { file, code, program, comments, depth, readSource };
 }
 
@@ -288,4 +296,50 @@ function literalKeys(t: any): string[] {
   if (t.type === "TSUnionType") return t.types.flatMap(literalKeys);
   if (t.type === "TSLiteralType" && typeof t.literal?.value === "string") return [t.literal.value];
   return [];
+}
+
+/** Static component metadata; computed declarations stay limitations rather than fabricated events/slots. */
+export async function componentMetadata(file: string, readSource: SourceReader) {
+  const framework = file.endsWith(".vue") ? "vue" : file.endsWith(".svelte") ? "svelte" : "jsx";
+  if (framework !== "vue") return { framework, events: [] as string[], slots: [] as string[], limitations: ["Only TypeScript parameter props and literal defaults are inspected; runtime values are not evaluated."] };
+  const ctx = await load(file, 0, readSource);
+  const names = (macro: string) => {
+    const call = callsNamed(ctx.program, macro)[0], type = call?.typeArguments?.params?.[0];
+    return [...new Set<string>([...(type?.members ?? []).map((m: any) => m.key?.name ?? m.key?.value).filter((n: unknown) => typeof n === "string"), ...(call?.arguments?.[0]?.elements ?? []).filter((e: any) => e.type === "Literal" && typeof e.value === "string").map((e: any) => e.value)])];
+  };
+  return { framework, events: names("defineEmits"), slots: names("defineSlots"), limitations: ["Static Vue macros/runtime prop declarations only; computed declarations, complex conditional types and inherited event/slot types need manual inspection."] };
+}
+
+function callsNamed(node: any, name: string, found: any[] = []): any[] {
+  if (!node || typeof node !== "object") return found;
+  if (node.type === "CallExpression" && node.callee?.type === "Identifier" && node.callee.name === name) found.push(node);
+  for (const [key, value] of Object.entries(node)) if (key !== "parent" && value && typeof value === "object") {
+    if (Array.isArray(value)) value.forEach((child) => callsNamed(child, name, found)); else callsNamed(value, name, found);
+  }
+  return found;
+}
+
+async function vueProps(ctx: Ctx): Promise<PropSchema[]> {
+  const macro = callsNamed(ctx.program, "defineProps")[0];
+  const withDefaults = callsNamed(ctx.program, "withDefaults").find((call) => call.arguments[0] === macro);
+  let props: PropSchema[] = [];
+  if (macro?.typeArguments?.params?.[0]) props = await membersOf(macro.typeArguments.params[0], ctx);
+  else {
+    const component = callsNamed(ctx.program, "defineComponent")[0]?.arguments[0];
+    const definition = macro?.arguments[0] ?? component?.properties?.find((p: any) => (p.key?.name ?? p.key?.value) === "props")?.value;
+    if (definition?.type === "ArrayExpression") props = definition.elements.filter((e: any) => e.type === "Literal" && typeof e.value === "string").map((e: any) => ({ name: e.value, kind: "unknown", required: false }));
+    else if (definition?.type === "ObjectExpression") props = definition.properties.filter((p: any) => p.type === "Property").map((p: any) => {
+      const field = (key: string) => p.value?.properties?.find((v: any) => (v.key?.name ?? v.key?.value) === key)?.value;
+      const type = field("type") ?? p.value;
+      const kind: PropKind = ({ String: "string", Number: "number", Boolean: "boolean", Array: "array", Object: "object", Function: "function", Date: "date" } as Record<string, PropKind>)[type.name] ?? "unknown";
+      let value: unknown; try { value = literal(field("default")); } catch {}
+      return { name: p.key.name ?? p.key.value, kind, required: field("required")?.value === true && !field("default"), ...(value !== undefined ? { default: value } : {}) };
+    });
+  }
+  const defaults = withDefaults?.arguments[1]?.properties ?? [];
+  return props.map((prop) => {
+    const value = defaults.find((p: any) => (p.key?.name ?? p.key?.value) === prop.name)?.value;
+    if (!value) return prop;
+    try { return { ...prop, required: false, default: literal(value) }; } catch { return { ...prop, required: false }; }
+  });
 }

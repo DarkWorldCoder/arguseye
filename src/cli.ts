@@ -67,6 +67,8 @@ const { positionals, values } = parseArgs({
     limit: { type: "string" },
     cursor: { type: "string" },
     fixtures: { type: "string" },
+    accessibility: { type: "boolean" },
+    sources: { type: "boolean" },
     "timeout-ms": { type: "string" },
     help: { type: "boolean", short: "h" },
   },
@@ -146,6 +148,7 @@ if (values.help || !command) {
       const result = await renderer.render({
         theme: values.theme as "light" | "dark" | undefined,
         ...target,
+        inspection: values.accessibility || values.sources ? { accessibility: values.accessibility, sources: values.sources } : undefined,
         fixtures: values.fixtures ? JSON.parse(await readFile(values.fixtures, "utf8")) : undefined,
         usage: values.usage,
         inContext: values["in-context"],

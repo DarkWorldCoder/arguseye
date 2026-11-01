@@ -83,7 +83,11 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
       ? `errors:\n${result.errors.map((e) => `- ${tidy(e)}`).join("\n")}`
       : "errors: none";
     const logged = (result.console ?? []).map((l) => "console.error: " + tidy(l)).join("\n");
-    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}${result.unresolved.length ? "\nunresolved: " + result.unresolved.join("; ") : ""}\n${result.snapshot}`;
+    const inspection = [
+      ...(result.errorLocations ?? []).filter((r) => r.original).slice(0, 5).map((r) => `original source: ${rel(r.original!.file)}:${r.original!.line}:${r.original!.column}`),
+      ...(result.accessibility ? [`${result.accessibility.engine}: ${result.accessibility.violations.length} violations; ${result.accessibility.incomplete.length} checks need review (${result.accessibility.ms} ms)`, ...result.accessibility.violations.slice(0, 10).map((r) => `${r.id}: ${r.help} ${JSON.stringify(r.nodes[0]?.target ?? [])}`)] : []),
+    ].join("\n");
+    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${inspection ? inspection + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}${result.unresolved.length ? "\nunresolved: " + result.unresolved.join("; ") : ""}\n${result.snapshot}`;
   }
 
   /** Short stacks with project-relative paths instead of preview-server URLs. */
@@ -139,6 +143,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
         frame: z.object({ width: z.number(), height: z.number(), background: z.string().optional(), padding: z.number().optional() }).optional().describe("Render inside a stand-in parent box of this size and background"),
         actions: z.array(z.record(z.string(), z.unknown())).optional().describe('Steps before capture, e.g. [{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"},{"hover":{"text":"Save"}},{"press":"Enter"},{"wait":300}]. Targets: role+name, text, label, placeholder, testId, selector.'),
         storage: z.object({ local: z.record(z.string(), z.string()).optional(), session: z.record(z.string(), z.string()).optional() }).optional().describe("localStorage/sessionStorage seeded before mount (auth tokens, flags); cleared after"),
+        inspection: z.object({ accessibility: z.boolean().optional(), sources: z.boolean().optional() }).optional().describe("Optional axe checks and element source references; adds separate analysis cost and does not prove correctness/accessibility conformance"),
         fixtures: fixtureSchema, timeoutMs: deadline,
         props: z.record(z.string(), z.unknown()).optional().describe("Props to render with (merged over the usage's props)"),
         ...look,
@@ -146,7 +151,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
     },
     async (args, extra) => {
       try {
-        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
+        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, inspection: args.inspection, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
         const { result, content } = await renderContent(request, args.output, { signal: extra.signal, timeoutMs: args.timeoutMs });
         return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
       } catch (error) {

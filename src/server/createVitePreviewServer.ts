@@ -92,6 +92,7 @@ export async function createVitePreviewServer(options: PreviewServerOptions): Pr
     context: () => state.context,
     moduleUrl: (file) => `/@fs${file.replaceAll(path.sep, "/")}`,
     pageUrl: (target, { live = true } = {}) => `/?t=${encodeTarget(target)}${live ? "" : "&live=0"}`,
+    sourceLocation: async (file, line, column) => { access.assert(file); return rpc("sourceLocation", file, line, column); },
     syncDisk, errorsSince: (since) => errors.filter((e) => e.at >= since),
     async prepare(...args) { await writes.catch(() => {}); await start(); writes = Promise.resolve(); const value = await rpc("prepare", ...args); return { ...value, generation: value.generation + generation * 100000 }; },
     layoutsFor: () => state.layouts,

@@ -1,3 +1,4 @@
+import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import http from "node:http";
 import path from "node:path";
 import os from "node:os";
@@ -150,6 +151,16 @@ export async function createViteBackend(options: PreviewServerOptions, notify: (
     async prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string) { if (file !== "/@empty") access.assert(file); if (context) access.assert(context.file); if (route) access.assert(route); lastTarget = { file, route }; return { generation, cached: false }; },
     updateBuffer(file: string, text?: string) { access.assert(file); if (text === undefined) overlay.delete(file); else overlay.set(file, text); return changed(file); },
     syncDisk() { for (const [file, seen] of mtimes) if (!overlay.has(file) && statSync(file, { throwIfNoEntry: false })?.mtimeMs !== seen) { mtimes.delete(file); changed(file); } return state(); },
+    async sourceLocation(file: string, line: number, column: number) {
+      access.assert(file);
+      const result = await vite.transformRequest(`/@fs${slash(file)}`);
+      if (!result?.map) return null;
+      const point = originalPositionFor(new TraceMap(result.map as any), { line, column: column - 1 });
+      if (!point.source || point.line === null || point.column === null) return null;
+      const original = path.isAbsolute(point.source) ? point.source : path.resolve(path.dirname(file), point.source);
+      access.assert(original);
+      return { file: original, line: point.line, column: point.column + 1 };
+    },
     async close() { for (const res of listeners) res.end(); server.closeAllConnections(); await Promise.all([new Promise<void>((done) => server.close(() => done())), vite.close()]); rmSync(cacheDir, { recursive: true, force: true }); },
   };
 }

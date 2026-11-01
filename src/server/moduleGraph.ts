@@ -1,3 +1,4 @@
+import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import { createVueCompiler } from "./createVueCompiler.js";
 import { createSvelteCompiler } from "./createSvelteCompiler.js";
 import { readFile } from "node:fs/promises";
@@ -40,11 +41,12 @@ export class ModuleGraph {
   private solid: ReturnType<typeof createSolidCompiler>;
   private vue: ReturnType<typeof createVueCompiler>;
   private svelte: ReturnType<typeof createSvelteCompiler>;
-  private transformed = new Map<string, { source: string; code: string }>();
+  private transformed = new Map<string, { source: string; code: string; map?: any; prefix?: number; revision?: string }>();
   /** Project files each module imports, from its last load; feeds `crawl`. */
   private projectImports = new Map<string, string[]>();
   /** Every import URL a module was served with (project and package), for `reachableUrls`. */
   private importUrls = new Map<string, string[]>();
+  private rewritten = new Map<string, { input: string; output: string; edits: Array<{ start: number; end: number; delta: number; originalStart: number }> }>();
   private approximationWarnings = new Map<string, string[]>();
   /** File → version query it was last crawled at. */
   private crawled = new Map<string, string>();
@@ -56,10 +58,11 @@ export class ModuleGraph {
     private query: (file: string) => string,
     private css: CssPipeline,
     private root: string,
+    sourceFs?: { fileExists(file: string): boolean; readFile(file: string): string },
   ) {
     this.vite = readViteConfig(root);
     this.kit = readKitConfig(root);
-    this.vue = createVueCompiler(root, css);
+    this.vue = createVueCompiler(root, css, sourceFs);
     this.svelte = createSvelteCompiler(root, css);
     this.imagesAsObjects = importsImagesAsObjects(root);
     this.react = Boolean(this.resolver.resolveFileSync(pathJoin(root, "package.json"), "react").path);
@@ -73,6 +76,25 @@ export class ModuleGraph {
     if (seen.has(file)) return [];
     seen.add(file);
     return [file, ...(this.projectImports.get(file) ?? []).flatMap((dep) => this.filesFor(dep, seen))];
+  }
+
+  /** Maps only transforms whose original input is preserved; unavailable compiler chains return null. */
+  sourceLocation(file: string, line: number, column: number): { file: string; line: number; column: number } | null {
+    const cached = this.transformed.get(file), rewritten = this.rewritten.get(file);
+    if (!cached?.map || !rewritten) return null;
+    const lines = rewritten.output.split("\n");
+    if (line < 1 || line > lines.length || column < 1) return null;
+    let offset = lines.slice(0, line - 1).reduce((n, value) => n + value.length + 1, 0) + column - 1;
+    const generatedOffset = offset;
+    for (const edit of rewritten.edits) {
+      if (generatedOffset >= edit.end) offset -= edit.delta;
+      else if (generatedOffset >= edit.start) { offset = edit.originalStart; break; }
+      else break;
+    }
+    const prefix = rewritten.input.slice(0, offset), inputLine = prefix.split("\n").length - (cached.prefix ?? 0);
+    if (inputLine < 1) return null;
+    const location = originalPositionFor(new TraceMap(cached.map), { line: inputLine, column: offset - prefix.lastIndexOf("\n") - 1 });
+    return location.line === null || location.column === null ? null : { file, line: location.line, column: location.column + 1 };
   }
 
   /** Retains unsupported virtual-import evidence across browser module caching and warm renders. */
@@ -146,9 +168,9 @@ export class ModuleGraph {
     const source = await this.readSource(file);
     if (isStylesheet(file)) return cssModule(file, await this.css.process(file, source));
     let cached = this.transformed.get(file);
-    if (!cached || cached.source !== source) {
+    if (!cached || cached.source !== source || file.endsWith(".vue") && cached.revision !== this.query(file)) {
       const vue = file.endsWith(".vue"), svelte = file.endsWith(".svelte"), sfc = vue || svelte;
-      const input = vue ? await this.vue.compile(file, source) : svelte ? await this.svelte.compile(file, source) : source;
+      const input = vue ? await this.vue.compile(file, source, this.query(file)) : svelte ? await this.svelte.compile(file, source) : source;
       const modular = expandImportGlobs(file, sfc ? input : modularizeBarrelImports(file, input, this.resolver), this.root, [...this.vite.aliases, ...this.kit.aliases]);
       const refresh = !sfc && this.react && !/[\\/]shims[\\/](nuxt|sveltekit)[\\/]/.test(file);
       // Solid's JSX compiles to DOM code with its own Babel preset; other files go through oxc as usual.
@@ -156,10 +178,10 @@ export class ModuleGraph {
       // <script lang="tsx"> in a .vue file (and .tsx files in a Vue project) is Vue JSX: Vue's own jsx-runtime renders it.
       const vueJsx = (vue && /<script\b[^>]*\blang=["'](tsx|jsx)["']/.test(source)) || (this.vueProject && /\.[jt]sx$/.test(file) && !this.react);
       const importSource = this.jsx === "preact" ? "preact" : vueJsx ? "vue" : undefined;
-      const { code, errors } = solidJsx ? { code: await this.solid.compile(file, modular), errors: [] } : await transform(vue ? file + (vueJsx ? ".tsx" : ".ts") : svelte ? file + ".js" : file, modular, {
+      const { code, errors, map } = solidJsx ? { map: undefined, code: await this.solid.compile(file, modular), errors: [] } : await transform(vue ? file + (vueJsx ? ".tsx" : ".ts") : svelte ? file + ".js" : file, modular, {
         // JSX in .js files is common (Create React App, older Vite and webpack setups): parse plain JS as JSX.
         ...(/\.(m|c)?js$/.test(file) && !sfc ? { lang: "jsx" as const } : {}),
-        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: refresh && !vueJsx, ...(importSource ? { importSource } : {}) },
+        sourceType: "module", sourcemap: !sfc && modular === source, jsx: { runtime: "automatic", development: true, refresh: refresh && !vueJsx, ...(importSource ? { importSource } : {}) },
       });
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
       // Vite exposes env through import.meta.env; the page holds the values, each module that reads them gets them.
@@ -167,7 +189,7 @@ export class ModuleGraph {
       // Names an auto-import tool (unplugin-auto-import, Nuxt) provides without an import statement.
       const auto = file.includes("/node_modules/") ? [] : autoImportLines(file, code, readAutoImports(this.root));
       const head = env + (auto.length ? auto.join("\n") + "\n" : "");
-      cached = { source, code: head + (refresh ? this.withRefresh(file, code) : code) };
+      cached = { source, map, revision: this.query(file), prefix: head.split("\n").length - 1 + (refresh && code.includes("$RefreshReg$") ? 4 : 0), code: head + (refresh ? this.withRefresh(file, code) : code) };
       this.transformed.set(file, cached);
     }
     return this.rewriteImports(file, cached.code);
@@ -200,6 +222,7 @@ export class ModuleGraph {
     const project: string[] = [];
     const urls: string[] = [];
     const warnings: string[] = [];
+    const edits: Array<{ start: number; end: number; delta: number; originalStart: number }> = [];
     for (const imp of imports) {
       if (imp.type === "import-meta" || imp.specifier === undefined) continue;
       const statement = imp.type === "static" ? code.slice(imp.importStart, imp.importEnd) : "";
@@ -208,13 +231,18 @@ export class ModuleGraph {
       if (url.startsWith("/@virtual?")) warnings.push(`${imp.specifier} comes from a Vite plugin and is empty in a preview.`);
       if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
       // A dynamic import's span includes its quotes; a static import's does not.
-      out += code.slice(last, imp.start) + (imp.type === "dynamic" ? JSON.stringify(url) : url);
+      out += code.slice(last, imp.start);
+      const text = imp.type === "dynamic" ? JSON.stringify(url) : url;
+      edits.push({ start: out.length, end: out.length + text.length, delta: text.length - (imp.end - imp.start), originalStart: imp.start });
+      out += text;
       last = imp.end;
     }
     this.projectImports.set(file, project);
     this.importUrls.set(file, urls);
     this.approximationWarnings.set(file, [...new Set(warnings)]);
-    return out + code.slice(last);
+    const output = out + code.slice(last);
+    this.rewritten.set(file, { input: code, output, edits });
+    return output;
   }
 
   private urlFor(importer: string, specifier: string): string {

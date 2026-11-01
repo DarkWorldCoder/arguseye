@@ -52,6 +52,8 @@ export type PreviewServer = {
   assertAccess(file: string): void;
   /** Fingerprint of the source and styles actually read by this server, including unsaved buffers. */
   sourceRevision(): string;
+  /** Original source position when the compiler has a trustworthy map; never guesses SFC lines. */
+  sourceLocation?(file: string, line: number, column: number): Promise<{ file: string; line: number; column: number } | null>;
   /** Per-file overlay version for incremental static analysis. */
   version(file: string): number;
   /** Context and framework limitations observed while preparing project modules. */
@@ -153,7 +155,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return source;
   };
   let css = new CssPipeline(options.root);
-  let graph = new ModuleGraph(readSource, deps, query, css, options.root);
+  let graph = new ModuleGraph(readSource, deps, query, css, options.root, { fileExists: (file) => { access.assert(file); return overlay.has(file) || existsSync(file); }, readFile: readContextSource });
   const listeners = new Set<http.ServerResponse>();
   const serveErrors: ServeError[] = [];
   const errorsSince = (since: number) => serveErrors.filter((e) => e.at >= since);
@@ -255,7 +257,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       access = createFileAccess(options.root, options.allowedRoots);
       setupFiles = previewSetup(options.root); fonts = createFontContext(options.root, readContextSource);
       deps = new DepBundler(options.root); css = new CssPipeline(options.root);
-      graph = new ModuleGraph(readSource, deps, query, css, options.root);
+      graph = new ModuleGraph(readSource, deps, query, css, options.root, { fileExists: (file) => { access.assert(file); return overlay.has(file) || existsSync(file); }, readFile: readContextSource });
       moduleWarnings.clear(); hashes.clear(); startupWarnings.length = 0;
       broadcast({ kind: "reload", full: true, file: options.root, epoch, versions: { ...versions } });
     }
@@ -433,6 +435,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       const approximations = relevant ? [...relevant].flatMap((source) => graph.warningsFor(source)) : graph.warningsFor();
       return [...new Set([...startupWarnings, ...graph.vite.warnings, ...app.warnings, ...approximations, ...[...moduleWarnings].filter(([source]) => !relevant || relevant.has(source)).flatMap(([, warnings]) => warnings)])];
     },
+    sourceLocation: async (file, line, column) => { access.assert(file); return graph.sourceLocation(file, line, column); },
     version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
     readSource,

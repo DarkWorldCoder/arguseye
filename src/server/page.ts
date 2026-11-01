@@ -293,6 +293,7 @@ cp.show = async (target, state) => {
     const name = target.exportName ?? "default";
     // "Icons.logo" reaches a component inside an exported object, as JSX's <Icons.logo /> does.
     const Component = name.split(".").reduce((value, key) => value?.[key], mod);
+    cp.component = Component;
     if (typeof Component !== "function" && (typeof Component !== "object" || Component === null)) {
       const available = Object.keys(mod).join(", ") || "none";
       throw new Error("No component export " + JSON.stringify(name) + " in " + target.file + " (exports: " + available + ")");
