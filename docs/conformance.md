@@ -28,7 +28,7 @@ Pixel comparisons use a YIQ color-distance threshold of 0.1 to suppress small re
 
 ## Platform and client evidence
 
-`.github/workflows/conformance.yml` builds on native Linux, Windows and macOS runners. It installs real fixture packages, checks framework/MCP contracts, packages the host's native VSIX, extracts it, verifies runtime dependencies, and executes the actual VS Code workflow. Each run uploads a machine/platform result. A configured job is not proof of a successful run: consult the resulting CI artifacts.
+`.github/workflows/conformance.yml` builds on native Linux and Windows runners and a pinned macOS 15 ARM64 runner. The release workflow uses the same macOS baseline; automatic `macos-latest` image migrations cannot silently change it. macOS 26 packaged-extension checks passed on the earlier runner, but no accepted quiet-machine performance baseline was established there. It installs real fixture packages, checks framework/MCP contracts, packages the host's native VSIX, extracts it, verifies runtime dependencies, and executes the actual VS Code workflow. Each run uploads a machine/platform result. A configured job is not proof of a successful run: consult the resulting CI artifacts.
 
 VSIX extraction uses a temporary directory outside the checkout. This prevents absent packaged dependencies from resolving through the repository's parent `node_modules`. The result records the isolated path; successful runs clean it up, and failed runs retain it for inspection.
 
