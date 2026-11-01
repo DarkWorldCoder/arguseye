@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [codex/research-implementation]
+    branches: [main, agent-preview-improvements]
 permissions:
   contents: read
 jobs:
