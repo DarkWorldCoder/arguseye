@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js";
 import { openPreview } from "./openPreview.js";
@@ -53,6 +53,25 @@ const CASES: Array<[string, string | undefined, string]> = [
 ];
 
 describe("edge cases: every kind of component renders", () => {
+  it("keeps virtual-plugin approximations incomplete on warm renders and reports when removed", async () => {
+    const file = at("VirtualImport.tsx");
+    let baseline;
+    for (let i = 0; i < 2; i++) {
+      baseline = await renderer.render({ file });
+      expect(baseline.errors).toEqual([]);
+      expect(baseline.complete).toBe(false);
+      expect(baseline.warnings.join()).toContain("virtual:svg-icons-register");
+    }
+    const source = readFileSync(file, "utf8");
+    try {
+      renderer.server.updateBuffer(file, source.replace('import "virtual:svg-icons-register";', '').replace('import { registerSW } from "virtual:pwa-register";', '').replace('registerSW({ immediate: true });', ''));
+      const diff = await renderer.diff(baseline!.captureId!);
+      expect(diff.status).toBe("incomplete");
+      expect(diff.after.complete).toBe(true);
+      expect(diff.after.warnings.join()).not.toContain("virtual:");
+      expect(diff.resolvedWarnings.join()).toContain("virtual:svg-icons-register");
+    } finally { renderer.server.updateBuffer(file, undefined); }
+  });
   it.each(CASES)("%s", async (file, exportName, text) => {
     const result = await renderer.render({ file: at(file), exportName });
     expect(result.errors).toEqual([]);

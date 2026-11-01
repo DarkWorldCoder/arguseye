@@ -161,15 +161,19 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     entry ? entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
 
   /** The Vue entry's plugin setup as a module living next to it (so its imports resolve), or nothing. */
+  let preparedVueSetupFile: string | undefined;
   const vueSetup = async (): Promise<{ file: string; source: string } | undefined> => {
     if (setupFiles.vue) {
       await readSource(setupFiles.vue);
-      return { file: setupFiles.vue.replace(/\.[^.]+$/, ".preview-setup.ts"), source: `export { default } from ${JSON.stringify(setupFiles.vue)};` };
+      preparedVueSetupFile = setupFiles.vue.replace(/\.[^.]+$/, ".preview-setup.ts");
+      return { file: preparedVueSetupFile, source: `export { default } from ${JSON.stringify(setupFiles.vue)};` };
     }
     const entry = vueEntry(options.root);
     if (!entry) return undefined;
     const source = vueSetupModule(entry, await readSource(entry));
-    return source ? { file: entry.replace(/\.[^.]+$/, ".preview-setup.ts"), source } : undefined;
+    if (!source) return undefined;
+    preparedVueSetupFile = entry.replace(/\.[^.]+$/, ".preview-setup.ts");
+    return { file: preparedVueSetupFile, source };
   };
 
   /** Components an auto-registration tool declares (unplugin-vue-components, Nuxt), registered on Vue previews. */
@@ -409,8 +413,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     context: () => { const app = appContext(); return { globalCssUrls: globalStyles(app), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
     warnings: (file) => {
       const app = appContext();
-      const relevant = file ? new Set([...graph.filesFor(file), ...graph.filesFor(wrapperFile(app.entry)), ...(app.entry ? [app.entry] : [])]) : undefined;
-      return [...startupWarnings, ...app.warnings, ...[...moduleWarnings].filter(([source]) => !relevant || relevant.has(source)).flatMap(([, warnings]) => warnings)];
+      const relevant = file ? new Set([...graph.filesFor(file), ...graph.filesFor(wrapperFile(app.entry)), ...(app.entry ? [app.entry] : []), ...(frameworkOf(file) === "vue" && preparedVueSetupFile ? graph.filesFor(preparedVueSetupFile) : [])]) : undefined;
+      const approximations = relevant ? [...relevant].flatMap((source) => graph.warningsFor(source)) : graph.warningsFor();
+      return [...new Set([...startupWarnings, ...graph.vite.warnings, ...app.warnings, ...approximations, ...[...moduleWarnings].filter(([source]) => !relevant || relevant.has(source)).flatMap(([, warnings]) => warnings)])];
     },
     version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),

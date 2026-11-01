@@ -32,6 +32,19 @@ describe("render evidence and edit verification", () => {
     expect(result.newErrors).toEqual([]);
   });
 
+  it("preserves sampled-input provenance through comparisons and their returned capture handles", async () => {
+    const baseline = await renderer.render({ file: path.join(root, "components/Alert.tsx"), exportName: "Alert" });
+    expect(baseline.propsSource).toBe("sample");
+    const first = await renderer.diff(baseline.captureId!);
+    const second = await renderer.diff(first.after.captureId!);
+    for (const diff of [first, second]) {
+      expect(diff.status).toBe("incomplete");
+      expect(diff.after.propsSource).toBe("sample");
+      expect(diff.after.complete).toBe(false);
+      expect(diff.after.warnings.join()).toContain("Sample props were generated from types");
+    }
+  });
+
   it("compares unsaved text, style and size edits using immutable resolved props", async () => {
     const baseline = await renderer.render(target);
     baseline.target.props.title = "MUTATED";

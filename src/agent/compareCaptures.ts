@@ -15,6 +15,8 @@ export type DiffResult = {
   snapshotChanged: boolean;
   newErrors: string[];
   resolvedErrors: string[];
+  newWarnings: string[];
+  resolvedWarnings: string[];
 };
 
 /** Compares decoded pixels in Chromium, avoiding a second image codec and work on ordinary renders. */
@@ -64,5 +66,7 @@ export async function compareCaptures(page: Page, before: RenderResult, after: R
     status: !before.complete || !after.complete ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
     newErrors: after.errors.filter((e) => !before.errors.includes(e)),
     resolvedErrors: before.errors.filter((e) => !after.errors.includes(e)),
+    newWarnings: after.warnings.filter((w) => !before.warnings.includes(w)),
+    resolvedWarnings: before.warnings.filter((w) => !after.warnings.includes(w)),
   };
 }

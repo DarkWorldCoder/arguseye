@@ -90,6 +90,8 @@ export type Changes = {
   snapshotDiff: string;
   newErrors: string[];
   resolvedErrors: string[];
+  newWarnings: string[];
+  resolvedWarnings: string[];
 };
 
 export type Renderer = {
@@ -255,9 +257,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       // ancestors (in-context), so a baseline without context still compares after its call site moved.
       const { usage, inContext, ...replay } = structuredClone(before.target);
       const after = await render({ ...replay, ...(inContext && usage ? { usage, inContext } : {}), viewport: before.viewport });
-      after.unresolved = [...before.unresolved];
-      after.warnings = unique([...before.warnings, ...after.warnings]);
-      after.complete &&= before.complete;
+      after.unresolved = unique([...before.unresolved, ...after.unresolved]);
+      after.propsSource = before.propsSource;
+      // Replayed sample/runtime inputs retain their provenance; old asset/provider failures can resolve.
+      const inputWarnings = before.warnings.filter((w) => w.startsWith("Runtime usage inputs were not evaluated:") || w.startsWith("Sample props were generated from types;"));
+      after.warnings = unique([...after.warnings, ...inputWarnings]);
+      after.complete &&= !after.unresolved.length && !inputWarnings.length;
+      if (after.changes && !after.complete) after.changes.status = "incomplete";
+      if (after.captureId) captures.set(after.captureId, { ...structuredClone(after), png: Buffer.from(after.png) });
       const page = await pages.get(`${frameworkOf(before.target.file)}:${before.viewport.width}x${before.viewport.height}`)!;
       return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
     }),
@@ -487,7 +494,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           file: rest.file, exportName: rest.exportName ?? "default", props,
           ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}),
         }), viewport: { ...viewport },
-        sourceRevision: server.sourceRevision(), unresolved, warnings, complete: !allErrors.length && !warnings.length,
+        sourceRevision: server.sourceRevision(), unresolved, warnings: unique(warnings), complete: !allErrors.length && !warnings.length,
       };
       if (!allErrors.length) result.captureId = remember(result);
       const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme]);
@@ -497,6 +504,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         result.changes = {
           status: diff.status, changedPercent: diff.changedPercent, changedPixels: diff.changedPixels, changedRegion: diff.changedRegion, snapshotChanged: diff.snapshotChanged,
           snapshotDiff: lineDiff(previous.snapshot, result.snapshot), newErrors: diff.newErrors, resolvedErrors: diff.resolvedErrors,
+          newWarnings: diff.newWarnings, resolvedWarnings: diff.resolvedWarnings,
         };
       }
       lastResults.set(signature, { ...structuredClone(result), png: Buffer.from(result.png) });

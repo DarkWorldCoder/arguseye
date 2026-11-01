@@ -38,6 +38,7 @@ Providers from the root layout or from `src/main.tsx` (React Query, Redux, i18n 
 - `errors[]` are real: a resolve error names the import and the importer; a render error carries the component stack. Fix them before trusting the pixels.
 - Read `warnings[]`, `unresolved[]`, `propsSource` and `complete` before trusting context. Generated samples are not real application data; provider gaps, runtime values or unsettled assets can make a successful render incomplete.
 - `changes` and explicit diffs report `unchanged`, `changed` or `incomplete`, with pixel, accessibility and error evidence. None of these establishes that the intended behavior is correct.
+- `newWarnings` and `resolvedWarnings` distinguish current context from repaired failures. A comparison stays incomplete if its baseline was incomplete even when `after.complete` becomes true; capture a new baseline. Replayed generated/sample inputs retain their original provenance. Virtual plugin stand-ins remain warnings across warm renders; they do not become real plugin output after caching.
 - `timings` (prepare, show, settle, capture) tell you whether a slow render is loading, rendering or waiting for images.
 - `layoutsApplied` and `contextApplied` list the layouts/templates and the call-site ancestors the component was wrapped in.
 - `sourceRevision` fingerprints files read by this preview session, not the whole application's external state or a Git commit.

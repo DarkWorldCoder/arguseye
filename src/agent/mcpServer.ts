@@ -157,7 +157,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       const result = await (await getRenderer()).diff(args.baselineId);
       const content = [
         ...(args.output === "summary" ? [] : [result.before.png, result.after.png, result.diffPng].map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }))),
-        ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\n${result.after.warnings.join("\n")}\n${result.newErrors.join("\n")}` }]),
+        ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\ncontext: before ${result.before.complete ? "complete" : "incomplete"}, after ${result.after.complete ? "complete" : "incomplete"}\n${result.after.warnings.join("\n")}\n${result.resolvedWarnings.map((w) => "resolved warning: " + w).join("\n")}\n${result.newErrors.join("\n")}` }]),
       ];
       return { isError: result.after.errors.length > 0, content, structuredContent: diffEvidence(result) };
     } catch (error) { return failure(error); }

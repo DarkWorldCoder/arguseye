@@ -45,6 +45,7 @@ export class ModuleGraph {
   private projectImports = new Map<string, string[]>();
   /** Every import URL a module was served with (project and package), for `reachableUrls`. */
   private importUrls = new Map<string, string[]>();
+  private approximationWarnings = new Map<string, string[]>();
   /** File → version query it was last crawled at. */
   private crawled = new Map<string, string>();
 
@@ -72,6 +73,11 @@ export class ModuleGraph {
     if (seen.has(file)) return [];
     seen.add(file);
     return [file, ...(this.projectImports.get(file) ?? []).flatMap((dep) => this.filesFor(dep, seen))];
+  }
+
+  /** Retains unsupported virtual-import evidence across browser module caching and warm renders. */
+  warningsFor(file?: string): string[] {
+    return file ? this.approximationWarnings.get(file) ?? [] : [...this.approximationWarnings.values()].flat();
   }
 
   /** Module URLs reachable from `file` (project files and the package entries they import), for modulepreload. */
@@ -193,11 +199,13 @@ export class ModuleGraph {
     let last = 0;
     const project: string[] = [];
     const urls: string[] = [];
+    const warnings: string[] = [];
     for (const imp of imports) {
       if (imp.type === "import-meta" || imp.specifier === undefined) continue;
       const statement = imp.type === "static" ? code.slice(imp.importStart, imp.importEnd) : "";
       const url = nextFontUrl(imp.specifier, file, statement) ?? virtualUrl(imp.specifier, statement) ?? this.urlFor(file, imp.specifier);
       urls.push(url);
+      if (url.startsWith("/@virtual?")) warnings.push(`${imp.specifier} comes from a Vite plugin and is empty in a preview.`);
       if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
       // A dynamic import's span includes its quotes; a static import's does not.
       out += code.slice(last, imp.start) + (imp.type === "dynamic" ? JSON.stringify(url) : url);
@@ -205,6 +213,7 @@ export class ModuleGraph {
     }
     this.projectImports.set(file, project);
     this.importUrls.set(file, urls);
+    this.approximationWarnings.set(file, [...new Set(warnings)]);
     return out + code.slice(last);
   }
 

@@ -31,7 +31,7 @@ export const renderOutputSchema = z.object({
 export const diffOutputSchema = z.object({
   ...common, status: z.enum(["unchanged", "changed", "incomplete"]), before: renderOutputSchema, after: renderOutputSchema,
   changedPixels: z.number(), changedPercent: z.number(), changedRegion: region.nullable(), snapshotChanged: z.boolean(),
-  dimensions: z.object({ before: viewport, after: viewport }), newErrors: z.array(z.string()), resolvedErrors: z.array(z.string()),
+  dimensions: z.object({ before: viewport, after: viewport }), newErrors: z.array(z.string()), resolvedErrors: z.array(z.string()), newWarnings: z.array(z.string()), resolvedWarnings: z.array(z.string()),
 }).passthrough();
 
 /** Gives static prop inspection a machine-readable counterpart to its existing text. */

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Virtual-module approximation warnings survive browser import caching and remain scoped to the target and Vue setup dependencies. Statically ignored computed Vite settings appear in render warnings too. Diffs report new/resolved warnings without carrying repaired provider/asset failures into the current render; replayed sampled and unresolved inputs retain their provenance.
 - Prop inspection and generated samples read imported type files through the same bounded, unsaved source reader as rendering. Outside type imports are rejected instead of leaking their enum/sample values; unsaved type edits appear immediately in metadata.
 - Optional `arguseye.setup.tsx` provider wrappers and `arguseye.setup.vue.ts` app setup replace inferred browser context using project packages. Existing setup files support unsaved updates and appear as `setupApplied` in evidence. Vue verification recreates plugin state; live template/style edits retain state, and setup failures remain explicit.
 - `inspect_project` and CLI `doctor --json` report the selected application directory, actual installed framework packages and actionable missing-package/config diagnostics without launching Chromium or executing project configuration. MCP initializes before rendering so inspection remains available when browser setup is broken.
