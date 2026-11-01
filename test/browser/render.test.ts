@@ -24,6 +24,25 @@ describe("headless render (what an agent gets back)", () => {
       await expect(renderer.render({ file })).rejects.toThrow(file);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
+  it("bounds imported prop types too and inspects unsaved type edits", async () => {
+    const inspector = await createRenderer({ root });
+    const outside = mkdtempSync(path.join(os.tmpdir(), "cp-private-types-"));
+    const inside = mkdtempSync(path.join(root, ".cp-type-boundary-"));
+    const secret = path.join(outside, "Private.ts");
+    const file = path.join(inside, "Card.tsx");
+    const local = path.join(inside, "Props.ts");
+    writeFileSync(secret, 'export type Props = { title: "private-canary-never-return" };');
+    writeFileSync(file, `import type { Props } from ${JSON.stringify(secret)}; export default function Card({ title }: Props) { return <h1>{title}</h1> }`);
+    try {
+      await expect(inspector.describeProps(file)).rejects.toThrow(secret);
+      await expect(inspector.render({ file })).rejects.toThrow(secret);
+      writeFileSync(local, 'export type Props = { title: string };');
+      writeFileSync(file, 'import type { Props } from "./Props"; export default function Card({ title }: Props) { return <h1>{title}</h1> }');
+      expect((await inspector.describeProps(file)).props[0].kind).toBe("string");
+      inspector.server.updateBuffer(local, 'export type Props = { title: "first" | "second" };');
+      expect((await inspector.describeProps(file)).props[0].options).toEqual(["first", "second"]);
+    } finally { await inspector.close(); rmSync(inside, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+  });
   it("renders a component with given props to a PNG and a text snapshot", async () => {
     const result = await renderer.render({
       file: card,

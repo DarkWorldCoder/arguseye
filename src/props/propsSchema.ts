@@ -21,11 +21,12 @@ export type PropSchema = {
 const NODE_TYPES = new Set(["ReactNode", "ReactElement", "JSX.Element", "React.ReactNode", "React.ReactElement", "Element"]);
 
 type Program = ReturnType<typeof parseSync>["program"];
-type Ctx = { file: string; code: string; program: Program; comments: ReturnType<typeof parseSync>["comments"]; depth: number };
+type SourceReader = (file: string) => Promise<string>;
+type Ctx = { file: string; code: string; program: Program; comments: ReturnType<typeof parseSync>["comments"]; depth: number; readSource: SourceReader };
 
 /** Reads what props a component accepts from its TypeScript parameter type, without running the TypeScript compiler. */
-export async function propsSchema(file: string, exportName = "default"): Promise<PropSchema[]> {
-  const ctx = await load(file, 0);
+export async function propsSchema(file: string, exportName = "default", readSource: SourceReader = (file) => readFile(file, "utf8")): Promise<PropSchema[]> {
+  const ctx = await load(file, 0, readSource);
   const fn = componentFunction(ctx.program, exportName);
   const param = fn?.params?.[0] ?? fn?.params?.items?.[0];
   if (!param) return [];
@@ -79,10 +80,10 @@ function sample(prop: PropSchema): unknown {
   }
 }
 
-async function load(file: string, depth: number): Promise<Ctx> {
-  const code = await readFile(file, "utf8");
+async function load(file: string, depth: number, readSource: SourceReader): Promise<Ctx> {
+  const code = await readSource(file);
   const { program, comments } = parseSync(file, code);
-  return { file, code, program, comments, depth };
+  return { file, code, program, comments, depth, readSource };
 }
 
 /** The function node behind an export: `export function X`, `export const X = () =>`, `export default …`, `export { X }`. */
@@ -267,7 +268,7 @@ async function resolveTypeName(name: string, ctx: Ctx): Promise<{ node: any; ctx
     const imported = spec.type === "ImportSpecifier" ? spec.imported.name ?? spec.imported.value : "default";
     const target = createResolver().resolveFileSync(ctx.file, node.source.value).path;
     if (!target || target.includes("/node_modules/")) return undefined;
-    const next = await load(target, ctx.depth + 1);
+    const next = await load(target, ctx.depth + 1, ctx.readSource);
     return resolveTypeName(imported, next);
   }
   return undefined;

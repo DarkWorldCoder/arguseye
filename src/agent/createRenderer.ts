@@ -13,6 +13,7 @@ import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.
 import { listExports, pickExport } from "../project/pickExport.js";
 import { readFileSync } from "node:fs";
 import { frameworkOf } from "../project/framework.js";
+import { FileAccessError } from "../server/createFileAccess.js";
 
 export type RenderRequest = PreviewTarget & {
   viewport?: { width: number; height: number };
@@ -201,7 +202,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   async function describeProps(file: string, exportName?: string) {
     server.assertAccess(path.resolve(options.root, file));
-    const props = await propsSchema(file, exportName ?? (await exportOf(file)));
+    const props = await propsSchema(file, exportName ?? (await exportOf(file)), server.readSource);
     return { props, sample: sampleProps(props) };
   }
 
@@ -216,7 +217,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       return { props: { ...found.props, ...target.props }, propsSource: "usage", unresolved: found.unresolved };
     }
     if (target.props && Object.keys(target.props).length) return { props: target.props, propsSource: "given", unresolved: [] };
-    const sample = sampleProps(await propsSchema(target.file, target.exportName).catch(() => []));
+    const sample = sampleProps(await propsSchema(target.file, target.exportName, server.readSource).catch((error) => {
+      if (error instanceof FileAccessError) throw error;
+      return [];
+    }));
     return Object.keys(sample).length ? { props: sample, propsSource: "sample", unresolved: [] } : { props: {}, propsSource: "none", unresolved: [] };
   }
 
