@@ -74,6 +74,26 @@ window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
 window.__CP__.importModule = (url) => import(url);
 window.process ??= { env: ${envJson} };
+// fetch() calls a component starts on mount, counted so every runtime can wait for its data before the capture.
+window.__CP__.net = { inFlight: 0, last: 0 };
+window.__CP__.realFetch = window.fetch.bind(window);
+{
+  const realFetch = window.fetch, net = window.__CP__.net;
+  window.fetch = function (...args) {
+    net.inFlight++;
+    return realFetch.apply(this, args).finally(() => { net.inFlight--; net.last = performance.now(); });
+  };
+}
+/** Waits (up to 3 s) while requests are in flight or busy() says a part is still loading; false if the cap was hit. */
+window.__CP__.quiet = async (busy = () => false) => {
+  const net = window.__CP__.net, until = performance.now() + 3000;
+  const frame = () => new Promise((done) => requestAnimationFrame(done));
+  await new Promise((done) => setTimeout(done, 0));
+  while (performance.now() < until && (net.inFlight > 0 || busy() || performance.now() - net.last < 32)) await frame();
+  if (performance.now() < until) return true;
+  window.__CP__.warnings = [...(window.__CP__.warnings ?? []), net.inFlight ? "Requests were still pending after 3 s; the capture shows the loading state." : "Part of the component was still loading after 3 s (a lazy or async part)."];
+  return false;
+};
 window.__CP__.metaEnv = ${JSON.stringify(metaEnv).replace(/</g, "\\u003c")};
 // vite.config \`define\` values: globals the app's build would have inlined.
 for (const [key, source] of Object.entries(${JSON.stringify(define).replace(/</g, "\\u003c")})) {
@@ -156,13 +176,7 @@ const explain = async (error, since) => {
   return [String(error?.stack ?? error)];
 };
 
-/** fetch() calls the component started and has not seen answered yet (data loading on mount). */
-let inFlight = 0, lastNetwork = 0;
-const realFetch = window.fetch;
-window.fetch = function (...args) {
-  inFlight++;
-  return realFetch.apply(this, args).finally(() => { inFlight--; lastNetwork = performance.now(); });
-};
+const realFetch = cp.realFetch;
 
 /** A Suspense boundary in a committed tree that still shows its fallback (React.lazy, use(), suspending data). */
 const suspended = () => {
@@ -184,11 +198,7 @@ const suspended = () => {
  */
 const settled = async () => {
   const until = performance.now() + 3000;
-  const frame = () => new Promise((done) => requestAnimationFrame(done));
-  // A macrotask lets effects fire their requests; then wait while anything is loading, plus two frames to commit.
-  await new Promise((done) => setTimeout(done, 0));
-  while (performance.now() < until && (inFlight > 0 || suspended() || performance.now() - lastNetwork < 32)) await frame();
-  if (performance.now() >= until) cp.warnings = [...(cp.warnings ?? []), inFlight ? "Requests were still pending after 3 s; the capture shows the loading state." : "A Suspense boundary still showed its fallback after 3 s."];
+  await cp.quiet(suspended);
   // Lazy images below the fold would never load in a headless viewport (and the wait would hit the cap every time).
   for (const img of document.getElementById("root").querySelectorAll("img[loading=lazy]")) img.loading = "eager";
   const images = [...document.getElementById("root").querySelectorAll("img")].filter((img) => !img.complete);

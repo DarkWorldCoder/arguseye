@@ -18,6 +18,7 @@ import { detectAppContext, wrapperModule } from "../project/appContext.js";
 import { routerPackage } from "../project/routerPackage.js";
 import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
 import { nextFontModule } from "./nextFont.js";
+import { vueEntry, vueSetupModule } from "../project/vueSetup.js";
 import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 import type { Wrapper } from "../project/appContext.js";
@@ -136,6 +137,14 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const wrapperFile = (entry: string | undefined) =>
     entry ? entry.replace(/\.[^.]+$/, ".preview-wrapper.tsx") : path.join(options.root, "preview-wrapper.tsx");
 
+  /** The Vue entry's plugin setup as a module living next to it (so its imports resolve), or nothing. */
+  const vueSetup = async (): Promise<{ file: string; source: string } | undefined> => {
+    const entry = vueEntry(options.root);
+    if (!entry) return undefined;
+    const source = vueSetupModule(entry, await readSource(entry));
+    return source ? { file: entry.replace(/\.[^.]+$/, ".preview-setup.ts"), source } : undefined;
+  };
+
   /** Where a generated call-site context "lives", so its imports resolve like the usage file's. */
   const contextFile = (usageFile: string) => usageFile.replace(/\.[^.]+$/, ".preview-context.tsx");
 
@@ -173,6 +182,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     const app = appContext();
     if (app.entry) await readSource(app.entry);
     if (frameworkOf(file) === "react") await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
+    if (frameworkOf(file) === "vue") { const setup = await vueSetup(); if (setup) await graph.crawlVirtual(setup.file, setup.source, { refresh: false }); }
     await deps.ensureBuilt();
     return { generation: deps.generation, cached: deps.cached };
   }
@@ -243,6 +253,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (url.pathname === "/@next-fonts") return send(res, 200, "text/javascript", `let style = document.getElementById("cp-next-fonts"); if (!style) { style = document.createElement("style"); style.id = "cp-next-fonts"; document.head.append(style); } style.textContent = ${JSON.stringify(fonts.stylesheet())};`);
       if (url.pathname === "/@next-font") {
         return send(res, 200, "text/javascript", nextFontModule(url.searchParams.get("kind") ?? "google", url.searchParams.get("from") ?? options.root, (url.searchParams.get("names") ?? "").split(",").filter(Boolean)));
+      }
+      if (url.pathname === "/@vue-setup") {
+        const setup = await vueSetup();
+        return send(res, 200, "text/javascript", setup ? await graph.loadVirtual(setup.file, setup.source, { refresh: false }) : "export default null;");
       }
       if (url.pathname === "/@wrapper") {
         const route = url.searchParams.get("route") ?? undefined;

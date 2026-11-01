@@ -97,9 +97,9 @@ export class ModuleGraph {
   }
 
   /** Loads a generated module's project imports, so the packages behind them are known before the first paint. */
-  async crawlVirtual(asFile: string, source: string): Promise<void> {
+  async crawlVirtual(asFile: string, source: string, options?: { refresh?: boolean }): Promise<void> {
     try {
-      await this.loadVirtual(asFile, source);
+      await this.loadVirtual(asFile, source, options);
     } catch {
       return;
     }
@@ -108,10 +108,10 @@ export class ModuleGraph {
   }
 
   /** A generated module that resolves its imports as if it lived at `asFile` (e.g. next to the root layout). */
-  async loadVirtual(asFile: string, source: string): Promise<string> {
-    const { code, errors } = await transform(asFile, source, { sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: true } });
+  async loadVirtual(asFile: string, source: string, { refresh = true } = {}): Promise<string> {
+    const { code, errors } = await transform(asFile, source, { sourceType: "module", jsx: { runtime: "automatic", development: true, refresh } });
     if (errors.length) throw new Error(errors.map((e) => e.message).join("\n"));
-    return this.rewriteImports(asFile, this.withRefresh(asFile, code));
+    return this.rewriteImports(asFile, refresh ? this.withRefresh(asFile, code) : code);
   }
 
   async load(file: string): Promise<string> {

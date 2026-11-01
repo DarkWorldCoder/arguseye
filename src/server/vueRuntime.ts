@@ -1,9 +1,9 @@
 /** Vue's warm page runtime: template/style HMR preserves state; script changes explicitly reset it. */
-export const vueRuntime = `import { createApp, h, shallowRef, nextTick } from "/@deps/vue.js";
+export const vueRuntime = `import { createApp, h, shallowRef, nextTick, Suspense } from "/@deps/vue.js";
 const cp = window.__CP__;
 cp.warnings = [];
 const component = shallowRef(null);
-let props = {}, key = 0, app;
+let props = {}, key = 0, app, pending = false;
 /** Function ({ "$fn": src }) and date ({ "$date": iso }) props arrive as JSON, as in the React runtime. */
 const revive = (value) => {
   if (Array.isArray(value)) return value.map(revive);
@@ -25,12 +25,24 @@ cp.show = async (target, state) => {
     if (target.fresh) key++;
     props = revive(target.props ?? {}); component.value = mod[name];
     if (!app) {
-      app = createApp({ render: () => component.value ? h(component.value, { ...props, key }) : null });
+      // Inside <Suspense>, as apps render pages: components with a top-level await and async components resolve.
+      app = createApp({
+        render: () => component.value ? h(Suspense, { onPending: () => (pending = true), onResolve: () => (pending = false) }, { default: () => h(component.value, { ...props, key }) }) : null,
+      });
       app.config.errorHandler = (error) => { cp.errors.push(String(error?.stack ?? error)); cp.status = "error"; };
       app.config.warnHandler = (warning) => cp.warnings.push(warning);
+      // The plugins, global components, directives and provides src/main installs on the app (Pinia, router, i18n, UI kits).
+      try {
+        const setup = (await import("/@vue-setup?e=" + cp.epoch)).default;
+        if (setup) await setup(app);
+      } catch (error) {
+        cp.warnings.push("The app setup in src/main could not run, so its plugins are missing: " + (error?.message ?? error));
+      }
       app.mount("#root");
     } else app._instance?.proxy?.$forceUpdate();
     await nextTick();
+    // Lazy parts, top-level awaits and data requested on mount.
+    await cp.quiet(() => pending);
   } catch (error) {
     const served = await fetch("/@errors?since=" + (Date.now() - 5000)).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));
