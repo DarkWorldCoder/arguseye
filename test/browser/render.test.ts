@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import path from "node:path";
 import os from "node:os";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js";
 
 const root = path.resolve("test/fixtures/react-app");
@@ -73,6 +73,7 @@ describe("headless render (what an agent gets back)", () => {
     for (const price of Array.from({ length: 20 }, (_, i) => i + 1)) {
       last = await renderer.render({ file: card, exportName: "ProductCard", props: { title: "Lamp", price } });
       timings.push(last.ms);
+      if (last.ms > 100) console.log("warm render over budget", JSON.stringify(last.timings));
     }
 
     expect(last!.snapshot).toContain("$20.00");
@@ -153,4 +154,18 @@ describe("headless render (what an agent gets back)", () => {
     expect(result.errors).toEqual([]);
     expect(result.snapshot).toContain("cached 7");
   });
+});
+
+
+it("discovers and renders the same usages through a canonical project-root alias", async () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "cp-root-alias-")), alias = path.join(directory, "project");
+  symlinkSync(root, alias, "junction");
+  const aliased = await createRenderer({ root: alias });
+  try {
+    const file = path.join(alias, "components/ProductCard.tsx");
+    expect((await aliased.listUsages(file, "ProductCard")).some((u) => u.id === "app/page.tsx:9")).toBe(true);
+    const result = await aliased.render({ file, exportName: "ProductCard", usage: "app/page.tsx:9" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Wireless Headphones");
+  } finally { await aliased.close(); rmSync(directory, {recursive:true,force:true}); }
 });

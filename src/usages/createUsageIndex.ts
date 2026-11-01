@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -16,6 +17,12 @@ const SOURCE = /\.(?:[jt]sx?|vue|svelte)$/;
 /** An incremental source index shared across usage queries and renders; only edited modules are parsed again. */
 export function createUsageIndex(root: string, options: { readSource?: (file: string) => Promise<string>; version?: (file: string) => number } = {}) {
   const resolver = createResolver();
+  let physicalRoot = path.resolve(root);
+  try { physicalRoot = realpathSync.native(root); } catch { /* Missing roots fail through normal source inspection. */ }
+  const sourcePath = (file: string) => {
+    const relative = path.relative(physicalRoot, file);
+    return relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative) ? path.join(root, relative) : file;
+  };
   const modules = new Map<string, { key: string; parsed: Parsed }>();
   const dirs = new Map<string, { mtime: number; files: string[]; dirs: string[] }>();
   async function files(dir: string): Promise<string[]> {
@@ -40,7 +47,7 @@ export function createUsageIndex(root: string, options: { readSource?: (file: st
       modules.set(file, { key, parsed: parseModule(file, code, root) });
     }));
   }
-  const resolve = (file: string, spec: string) => resolver.resolveFileSync(file, spec).path;
+  const resolve = (file: string, spec: string) => { const resolved = resolver.resolveFileSync(file, spec).path; return resolved ? sourcePath(resolved) : undefined; };
   function pointsTo(file: string, name: string, target: string, exportName: string, seen = new Set<string>()): boolean {
     if (file === target && name === exportName) return true;
     const key = `${file}#${name}`;
@@ -64,6 +71,7 @@ export function createUsageIndex(root: string, options: { readSource?: (file: st
   return {
     async list(file: string, exportName = "default"): Promise<Usage[]> {
       await refresh();
+      try { file = sourcePath(realpathSync.native(file)); } catch {}
       const result: Array<Usage & { file: string; line: number; column: number }> = [];
       for (const [caller, { parsed }] of modules) {
         if (caller === file) continue;
@@ -76,7 +84,7 @@ export function createUsageIndex(root: string, options: { readSource?: (file: st
           const prefix = parsed.code.slice(0, call.offset);
           const line = prefix.split("\n").length;
           const column = call.offset - prefix.lastIndexOf("\n");
-          result.push({ id: `${path.relative(root, caller)}:${line}`, file: caller, line, column, props: call.props, unresolved: call.unresolved, context: call.context });
+          result.push({ id: `${path.relative(root, caller).split(path.sep).join("/")}:${line}`, file: caller, line, column, props: call.props, unresolved: call.unresolved, context: call.context });
         }
       }
       const counts = new Map<string, number>();

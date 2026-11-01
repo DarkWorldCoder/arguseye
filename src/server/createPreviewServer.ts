@@ -126,7 +126,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     servedMtimes.set(file, now);
   };
   const readContextSource = (file: string) => {
-    access.assert(file);
+    access.assert(file); file = path.normalize(file);
     const source = overlay.get(file) ?? readFileSync(file, "utf8");
     if (!overlay.has(file)) noteDiskRead(file);
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
@@ -145,7 +145,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     ...(fonts.stylesheet() ? ["/@next-fonts?v=" + createHash("sha256").update(fonts.stylesheet()).digest("hex").slice(0, 12)] : []),
   ];
   const readSource = async (file: string) => {
-    access.assert(file);
+    access.assert(file); file = path.normalize(file);
     const buffered = overlay.get(file);
     if (buffered === undefined) noteDiskRead(file);
     const source = buffered ?? await readFromDisk(file);
@@ -157,7 +157,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return source;
   };
   let css = new CssPipeline(options.root);
-  let graph = new ModuleGraph(readSource, deps, query, css, options.root, { fileExists: (file) => { access.assert(file); return overlay.has(file) || existsSync(file); }, readFile: readContextSource });
+  let graph = new ModuleGraph(readSource, deps, query, css, options.root, { fileExists: (file) => { access.assert(file); return overlay.has(path.normalize(file)) || existsSync(file); }, readFile: readContextSource });
   const listeners = new Set<http.ServerResponse>();
   const serveErrors: ServeError[] = [];
   const errorsSince = (since: number) => serveErrors.filter((e) => e.at >= since);
@@ -241,7 +241,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
 
   function updateBuffer(file: string, text: string | undefined): Update {
-    access.assert(file);
+    access.assert(file); file = path.normalize(file);
     if (text === undefined) overlay.delete(file);
     else overlay.set(file, text);
     if (!isStylesheet(file)) {
@@ -260,7 +260,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       access = createFileAccess(options.root, options.allowedRoots);
       setupFiles = previewSetup(options.root); fonts = createFontContext(options.root, readContextSource);
       deps = new DepBundler(options.root); css = new CssPipeline(options.root);
-      graph = new ModuleGraph(readSource, deps, query, css, options.root, { fileExists: (file) => { access.assert(file); return overlay.has(file) || existsSync(file); }, readFile: readContextSource });
+      graph = new ModuleGraph(readSource, deps, query, css, options.root, { fileExists: (file) => { access.assert(file); return overlay.has(path.normalize(file)) || existsSync(file); }, readFile: readContextSource });
       moduleWarnings.clear(); hashes.clear(); startupWarnings.length = 0;
       broadcast({ kind: "reload", full: true, file: options.root, epoch, versions: { ...versions } });
     }

@@ -276,7 +276,7 @@ async function resolveTypeName(name: string, ctx: Ctx): Promise<{ node: any; ctx
     if (!spec) continue;
     const imported = spec.type === "ImportSpecifier" ? spec.imported.name ?? spec.imported.value : "default";
     const target = createResolver().resolveFileSync(ctx.file, node.source.value).path;
-    if (!target || target.includes("/node_modules/")) return undefined;
+    if (!target || /[\\/]node_modules[\\/]/.test(target)) return undefined;
     const next = await load(target, ctx.depth + 1, ctx.readSource);
     return resolveTypeName(imported, next);
   }

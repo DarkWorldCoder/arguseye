@@ -201,7 +201,7 @@ export class ModuleGraph {
       const modular = expandImportGlobs(file, sfc ? input : modularizeBarrelImports(file, input, this.resolver), this.root, [...this.vite.aliases, ...this.kit.aliases]);
       const refresh = !sfc && this.react && !/[\\/]shims[\\/](nuxt|sveltekit)[\\/]/.test(file);
       // Solid's JSX compiles to DOM code with its own Babel preset; other files go through oxc as usual.
-      const solidJsx = this.jsx === "solid" && /\.[jt]sx$/.test(file) && !file.includes("/node_modules/");
+      const solidJsx = this.jsx === "solid" && /\.[jt]sx$/.test(file) && !/[\\/]node_modules[\\/]/.test(file);
       // <script lang="tsx"> in a .vue file (and .tsx files in a Vue project) is Vue JSX: Vue's own jsx-runtime renders it.
       const vueJsx = (vue && /<script\b[^>]*\blang=["'](tsx|jsx)["']/.test(source)) || (this.vueProject && /\.[jt]sx$/.test(file) && !this.react);
       const importSource = this.jsx === "preact" ? "preact" : vueJsx ? "vue" : undefined;
@@ -214,7 +214,7 @@ export class ModuleGraph {
       // Vite exposes env through import.meta.env; the page holds the values, each module that reads them gets them.
       const env = code.includes("import.meta.env") ? "import.meta.env = window.__CP__.metaEnv;\n" : "";
       // Names an auto-import tool (unplugin-auto-import, Nuxt) provides without an import statement.
-      const auto = file.includes("/node_modules/") ? [] : autoImportLines(file, code, readAutoImports(this.root));
+      const auto = /[\\/]node_modules[\\/]/.test(file) ? [] : autoImportLines(file, code, readAutoImports(this.root));
       const head = env + (auto.length ? auto.join("\n") + "\n" : "");
       cached = { source, map, revision: this.query(file), prefix: head.split("\n").length - 1 + (refresh && code.includes("$RefreshReg$") ? 4 : 0), code: head + (refresh ? this.withRefresh(file, code) : code) };
       this.transformed.set(file, cached);
@@ -288,7 +288,7 @@ export class ModuleGraph {
     const aliased = isShim(importer) ? undefined : applyAlias(this.vite.aliases, specifier) ?? applyAlias(this.kit.aliases, specifier);
     const { path, error } = this.resolver.resolveFileSync(from, aliased ?? specifier);
     if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer}: ${error}`);
-    if (path.includes("/node_modules/") && !isStylesheet(path)) {
+    if (/[\\/]node_modules[\\/]/.test(path) && !isStylesheet(path)) {
       this.deps.add(specifier);
       return `/@deps/${specifier}.js`;
     }
