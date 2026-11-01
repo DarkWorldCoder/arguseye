@@ -2,7 +2,7 @@
 
 ## 0.0.12
 
-Preact and Solid join React, Vue and Svelte, and real Vite apps render as they are built: `import.meta.glob`, plugin `virtual:` modules, Sass `additionalData`, aliases in Sass and CSS `url()`, and Vue JSX. As before, previews run in the browser: missing data and context remain warnings or errors, and captured changes require review.
+Preact and Solid join React, Vue and Svelte. Vite project support expands to `import.meta.glob`, supported Sass `additionalData` and aliases, CSS asset aliases, and Vue JSX. Plugin `virtual:` modules use empty stand-ins with warnings; this does not execute the actual plugin pipeline. Previews run in the browser: missing data and context remain warnings or errors, and captured changes require review.
 
 - Preact projects (preact without react): JSX compiles against Preact and components render with Preact's own `render`, inside the providers `src/main.tsx` wraps the app in, with an error boundary, global CSS, signals and actions. Edits re-render (state resets). `test/fixtures/preact-app` covers it.
 - Solid projects: JSX compiles with the project's own `babel-preset-solid` (from vite-plugin-solid) after oxc strips TypeScript, and components render with Solid's `render` inside an `ErrorBoundary` and the providers `render(() => <App />)` wraps the app in, created lazily so context reaches them. Signals, `Show`, `For`, resources and actions work; edits remount. `test/fixtures/solid-app` covers it.
@@ -11,8 +11,8 @@ Preact and Solid join React, Vue and Svelte, and real Vite apps render as they a
 - Sass: `css.preprocessorOptions.scss.additionalData` from vite.config is prepended as Vite does, and vite.config aliases resolve in `@use`/`@import`; CSS `url("@/assets/...")` resolves through the aliases too.
 - `<script lang="tsx">` in Vue files, and `.tsx` in Vue projects, compile as Vue JSX with Vue's own jsx-runtime.
 - The preview server no longer crashes when a request fails after its response has started.
-- Audited on Geeker-Admin (Vue 3, Element Plus, Pinia, 121 components, MIT): 3 rendered before these changes, 114 render now; the rest call a backend the preview does not have (reported as failed requests) or need real chart data.
-- The capture waits for animation frames only when the app has requested one, so still components keep the warm-render budget (about 50 ms; MUI and Radix dialogs, which request frames after mounting, take one frame more).
+- The local Geeker-Admin audit artifact (Vue 3, Element Plus, Pinia, 121 components) records 114 successful mounts, 6 errors and 1 empty result, versus 3 successful mounts in 0.0.11. This is mount coverage, not independently verified full-application visual fidelity; backend requests, data and plugin approximations remain explicit limitations.
+- The capture waits for animation frames only when the app has requested one. Still components avoid that extra wait; components that request frames after mounting can take an additional frame. Timing remains subject to the documented warm-render gate.
 
 ## 0.0.11
 
