@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import path from "node:path";
+import os from "node:os";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js";
 
 const root = path.resolve("test/fixtures/react-app");
@@ -11,6 +13,17 @@ beforeAll(async () => { renderer = await createRenderer({ root }); });
 afterAll(async () => renderer?.close());
 
 describe("headless render (what an agent gets back)", () => {
+  it("rejects outside targets consistently for rendering, prop inspection and usage discovery", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "cp-outside-target-"));
+    const file = path.join(dir, "Outside.tsx");
+    writeFileSync(file, 'export default function Outside({ title }: { title: string }) { return <h1>{title}</h1> }');
+    try {
+      await expect(renderer.describeProps(file, "default")).rejects.toThrow(file);
+      await expect(renderer.listUsages(file, "default")).rejects.toThrow(file);
+      await expect(renderer.renderUsages({ file, exportName: "default" })).rejects.toThrow(file);
+      await expect(renderer.render({ file })).rejects.toThrow(file);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
   it("renders a component with given props to a PNG and a text snapshot", async () => {
     const result = await renderer.render({
       file: card,

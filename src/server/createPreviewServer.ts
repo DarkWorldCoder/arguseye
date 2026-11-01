@@ -27,9 +27,12 @@ import { autoComponentsModule, readAutoComponents } from "../project/autoImports
 import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 import type { Wrapper } from "../project/appContext.js";
+import { createFileAccess, FileAccessError } from "./createFileAccess.js";
 
 export type PreviewServerOptions = {
   root: string;
+  /** Extra source roots explicitly approved by the caller; never taken from HTTP parameters. */
+  allowedRoots?: string[];
   /** Bundle every package the project's sources import at start, so later renders never rebuild or reload. */
   warmup?: boolean;
   /** Watch the project on disk and push changes to open pages (hot reload without an editor). */
@@ -40,6 +43,8 @@ export type PreviewServerOptions = {
 
 export type PreviewServer = {
   url: string;
+  /** Applies the same file boundary before headless/editor code reads target metadata. */
+  assertAccess(file: string): void;
   /** Fingerprint of the source and styles actually read by this server, including unsaved buffers. */
   sourceRevision(): string;
   /** Per-file overlay version for incremental static analysis. */
@@ -86,6 +91,7 @@ export type ServeError = { url: string; message: string; at: number };
 const MAX_SERVE_ERRORS = 50;
 
 export async function createPreviewServer(options: PreviewServerOptions): Promise<PreviewServer> {
+  const access = createFileAccess(options.root, options.allowedRoots);
   const overlay = new Map<string, string>();
   const versions: Record<string, number> = {};
   let epoch = 0;
@@ -107,18 +113,20 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     servedMtimes.set(file, now);
   };
   const readContextSource = (file: string) => {
+    access.assert(file);
     const source = overlay.get(file) ?? readFileSync(file, "utf8");
     if (!overlay.has(file)) noteDiskRead(file);
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
     return source;
   };
   const fonts = createFontContext(options.root, readContextSource);
-  const appContext = (route?: string) => detectAppContext(options.root, readContextSource, route, fonts.resolveClass);
+  const appContext = (route?: string) => { if (route) access.assert(route); return detectAppContext(options.root, readContextSource, route, fonts.resolveClass); };
   const globalStyles = (app: ReturnType<typeof appContext>) => [
     ...app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`),
     ...(fonts.stylesheet() ? ["/@next-fonts?v=" + createHash("sha256").update(fonts.stylesheet()).digest("hex").slice(0, 12)] : []),
   ];
   const readSource = async (file: string) => {
+    access.assert(file);
     const buffered = overlay.get(file);
     if (buffered === undefined) noteDiskRead(file);
     const source = buffered ?? await readFromDisk(file);
@@ -177,6 +185,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const startupWarnings: string[] = [];
 
   async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }> {
+    if (file !== "/@empty") access.assert(file);
+    if (context) access.assert(context.file);
+    if (route) access.assert(route);
     await warming;
     if (route) {
       const routed = appContext(route);
@@ -201,6 +212,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
 
   function updateBuffer(file: string, text: string | undefined): Update {
+    access.assert(file);
     if (text === undefined) overlay.delete(file);
     else overlay.set(file, text);
     if (!isStylesheet(file)) {
@@ -251,6 +263,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     try {
+      const host = new URL(`http://${req.headers.host ?? ""}`);
+      if (!["127.0.0.1", "localhost", "[::1]"].includes(host.hostname)) return send(res, 403, "text/plain", "Unexpected preview host");
+      if (req.headers.origin && req.headers.origin !== host.origin) return send(res, 403, "text/plain", "Unexpected preview origin");
+      if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "Preview requests must use GET or HEAD");
       if (url.pathname === "/") {
         const target = decodeTarget(url.searchParams.get("t") ?? "");
         await prepare(target.file);
@@ -261,10 +277,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       }
       if (url.pathname === "/@context") {
         const { file, wrappers } = decodeContext(url.searchParams.get("c") ?? "");
+        access.assert(file);
         return send(res, 200, "text/javascript", await graph.loadVirtual(contextFile(file), wrapperModule(wrappers, { markInnermost: true, jsx: graph.jsx })));
       }
       if (url.pathname === "/@next-fonts") return send(res, 200, "text/javascript", `let style = document.getElementById("cp-next-fonts"); if (!style) { style = document.createElement("style"); style.id = "cp-next-fonts"; document.head.append(style); } style.textContent = ${JSON.stringify(fonts.stylesheet())};`);
       if (url.pathname === "/@next-font") {
+        access.assert(url.searchParams.get("from") ?? options.root);
         return send(res, 200, "text/javascript", nextFontModule(url.searchParams.get("kind") ?? "google", url.searchParams.get("from") ?? options.root, (url.searchParams.get("names") ?? "").split(",").filter(Boolean)));
       }
       if (url.pathname === "/@virtual") {
@@ -295,6 +313,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         // Everything a target will import, so the page can preload it in one parallel batch instead of a waterfall.
         const file = url.searchParams.get("file") ?? "";
         const route = url.searchParams.get("route") ?? undefined;
+        if (file && file !== "/@empty") access.assert(file);
+        if (route) access.assert(route);
         const urls = new Set<string>(file && file !== "/@empty" ? graph.reachableUrls(file) : []);
         const app = appContext(route);
         for (const u of graph.reachableUrls(wrapperFile(app.entry))) urls.add(u);
@@ -327,10 +347,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       }
       if (url.pathname.startsWith("/@fs/") && url.searchParams.has("raw")) {
         const file = decodeURIComponent(url.pathname.slice("/@fs".length));
+        access.assert(file);
         return sendFile(res, file);
       }
       if (url.pathname.startsWith("/@fs/")) {
         const file = decodeURIComponent(url.pathname.slice("/@fs".length));
+        access.assert(file);
         return send(res, 200, "text/javascript", await graph.load(file));
       }
       if (url.pathname.startsWith("/@deps/")) {
@@ -339,13 +361,13 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       }
       // Anything else is a public/ asset referenced by absolute path, as the app's server would serve it.
       const publicFile = path.join(options.root, "public", path.normalize(decodeURIComponent(url.pathname)));
-      if (publicFile.startsWith(path.join(options.root, "public")) && existsSync(publicFile)) return sendFile(res, publicFile);
+      if (existsSync(publicFile)) { access.assert(publicFile, true); return sendFile(res, publicFile); }
       send(res, 404, "text/plain", "not found");
     } catch (err) {
       const message = (err as Error).message ?? String(err);
       serveErrors.push({ url: req.url ?? "", message, at: Date.now() });
       if (serveErrors.length > MAX_SERVE_ERRORS) serveErrors.shift();
-      send(res, 500, "text/plain", message);
+      send(res, err instanceof FileAccessError ? 403 : err instanceof URIError ? 400 : 500, "text/plain", message);
     }
   });
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(options.port ?? 0, "127.0.0.1", () => { server.off("error", reject); resolve(); }); });
@@ -368,6 +390,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
 
   return {
+    assertAccess: access.assert,
     url: `http://127.0.0.1:${port}`,
     context: () => { const app = appContext(); return { globalCssUrls: globalStyles(app), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
     warnings: (file) => {

@@ -198,6 +198,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   }
 
   async function describeProps(file: string, exportName?: string) {
+    server.assertAccess(path.resolve(options.root, file));
     const props = await propsSchema(file, exportName ?? (await exportOf(file)));
     return { props, sample: sampleProps(props) };
   }
@@ -226,12 +227,13 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   return {
     server,
-    listUsages: async (file, exportName) => usages.list(file, exportName ?? (await exportOf(file))),
+    listUsages: async (file, exportName) => { server.assertAccess(path.resolve(options.root, file)); return usages.list(file, exportName ?? (await exportOf(file))); },
     describeProps,
     ready: () => prewarmed,
     render: (request) => serial(() => renderWithProvider(request)),
     renderUsages: (request) => serial(async () => {
       const { offset = 0, limit = 12, ...target } = request;
+      server.assertAccess(path.resolve(options.root, target.file));
       if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 12) throw new Error("Usage page requires offset >= 0 and limit between 1 and 12");
       target.exportName ??= await exportOf(target.file);
       const all = await usages.list(path.resolve(options.root, target.file), target.exportName);
@@ -286,6 +288,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       // Disk edits are registered before anything (usage index, route lookup) reads the files and refreshes their mtimes.
       server.syncDisk();
       rest.file = path.resolve(options.root, rest.file);
+      server.assertAccess(rest.file);
       rest.exportName ??= await exportOf(rest.file);
       const { props, propsSource, unresolved } = await resolveProps(rest, usage, resolved);
       const target: PreviewTarget = { fresh: true, ...rest, props, frame };

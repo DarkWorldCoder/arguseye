@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Preview HTTP and headless target reads are bounded to canonical project paths, declared package roots, runtime shims and caller-approved extra roots. Outside and retargeted symlink requests are rejected; unexpected HTTP hosts and origins cannot read preview content.
 - Agent installation updates JSONC and TOML with parser-based edits, preserving comments, other servers and custom settings. Repeated Codex installs remain valid; all selected configurations are validated before any are written, and each config is replaced atomically.
 
 ## 0.0.12
