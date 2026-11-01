@@ -20,6 +20,7 @@ import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
 import { nextFontModule } from "./nextFont.js";
 import { isShim } from "./shims.js";
 import { preactRuntime } from "./preactRuntime.js";
+import { solidRuntime } from "./solidRuntime.js";
 import { vueEntry, vueSetupModule } from "../project/vueSetup.js";
 import { kitEnvModule } from "../project/svelteKit.js";
 import { autoComponentsModule, readAutoComponents } from "../project/autoImports.js";
@@ -182,7 +183,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss, router, jsx: graph.jsx }));
     }
     if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true, jsx: graph.jsx }));
-    const runtimeDeps = graph.jsx === "preact" ? ["preact", "preact/hooks", "preact/jsx-runtime", "preact/jsx-dev-runtime"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"];
+    const runtimeDeps = graph.jsx === "preact" ? ["preact", "preact/hooks", "preact/jsx-runtime", "preact/jsx-dev-runtime"] : graph.jsx === "solid" ? ["solid-js", "solid-js/web"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"];
     ({ vue: ["vue"], svelte: ["svelte"], react: runtimeDeps })[frameworkOf(file)].forEach((spec) => deps.add(spec));
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
@@ -311,6 +312,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return send(res, 200, "text/javascript", refreshSetup);
       }
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "preact") return send(res, 200, "text/javascript", preactRuntime);
+      if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "solid") return send(res, 200, "text/javascript", solidRuntime);
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "vue") return send(res, 200, "text/javascript", vueRuntime);
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "svelte") { deps.add("svelte"); return send(res, 200, "text/javascript", svelteRuntime); }
       if (url.pathname === "/@runtime") {

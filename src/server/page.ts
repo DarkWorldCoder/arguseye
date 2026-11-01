@@ -50,7 +50,7 @@ export type PageContext = {
   /** `import.meta.env` for Vite projects: mode flags and variables with an exposed prefix. */
   metaEnv?: Record<string, string | boolean>;
   /** The project's JSX runtime: Preact projects render .jsx/.tsx with Preact. */
-  jsx?: "react" | "preact";
+  jsx?: "react" | "preact" | "solid";
   /** vite.config `define` entries: global name → JS source of the value. */
   define?: Record<string, string>;
   htmlClass?: string;
@@ -70,7 +70,7 @@ export function themedClass(htmlClass: string | undefined, theme: PreviewTarget[
 }
 
 export function previewHtml(target: PreviewTarget, { state, env, metaEnv = {}, define = {}, htmlClass, bodyClass, globalCssUrls, jsx = "react" }: PageContext): string {
-  const runtime = frameworkOf(target.file) === "react" && jsx === "preact" ? "preact" : frameworkOf(target.file);
+  const runtime = frameworkOf(target.file) === "react" && jsx !== "react" ? jsx : frameworkOf(target.file);
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
   const envJson = JSON.stringify({ NODE_ENV: "development", ...env }).replace(/</g, "\\u003c");

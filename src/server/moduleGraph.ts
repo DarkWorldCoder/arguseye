@@ -17,6 +17,7 @@ import { nextFontUrl } from "./nextFont.js";
 import { readKitConfig, type KitConfig } from "../project/svelteKit.js";
 import { autoImportLines, readAutoImports } from "../project/autoImports.js";
 import { jsxRuntimeOf } from "../project/framework.js";
+import { createSolidCompiler } from "./createSolidCompiler.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
@@ -32,7 +33,8 @@ export class ModuleGraph {
   /** React Fast Refresh only where React is: in a Vue or Svelte project, a `useX` composable is not a hook. */
   private react: boolean;
   /** "preact" when the project renders JSX with Preact. */
-  readonly jsx: "react" | "preact";
+  readonly jsx: "react" | "preact" | "solid";
+  private solid: ReturnType<typeof createSolidCompiler>;
   private vue: ReturnType<typeof createVueCompiler>;
   private svelte: ReturnType<typeof createSvelteCompiler>;
   private transformed = new Map<string, { source: string; code: string }>();
@@ -58,6 +60,7 @@ export class ModuleGraph {
     this.imagesAsObjects = importsImagesAsObjects(root);
     this.react = Boolean(this.resolver.resolveFileSync(pathJoin(root, "package.json"), "react").path);
     this.jsx = jsxRuntimeOf(root);
+    this.solid = createSolidCompiler(root);
   }
 
   /** Project dependencies reachable from a target's last transform, for scoped provenance and diagnostics. */
@@ -138,7 +141,9 @@ export class ModuleGraph {
       const input = vue ? await this.vue.compile(file, source) : svelte ? await this.svelte.compile(file, source) : source;
       const modular = sfc ? input : modularizeBarrelImports(file, input, this.resolver);
       const refresh = !sfc && this.react && !/[\\/]shims[\\/](nuxt|sveltekit)[\\/]/.test(file);
-      const { code, errors } = await transform(vue ? file + ".ts" : svelte ? file + ".js" : file, modular, {
+      // Solid's JSX compiles to DOM code with its own Babel preset; other files go through oxc as usual.
+      const solidJsx = this.jsx === "solid" && /\.[jt]sx$/.test(file) && !file.includes("/node_modules/");
+      const { code, errors } = solidJsx ? { code: await this.solid.compile(file, modular), errors: [] } : await transform(vue ? file + ".ts" : svelte ? file + ".js" : file, modular, {
         // JSX in .js files is common (Create React App, older Vite and webpack setups): parse plain JS as JSX.
         ...(/\.(m|c)?js$/.test(file) && !sfc ? { lang: "jsx" as const } : {}),
         sourceType: "module", jsx: { runtime: "automatic", development: true, refresh, ...(this.jsx === "preact" ? { importSource: "preact" } : {}) },

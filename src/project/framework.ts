@@ -13,10 +13,11 @@ export const isSingleFileComponent = (file: string) => /\.(vue|svelte)$/.test(fi
  * The JSX runtime a project renders .jsx/.tsx with: Preact when it depends on preact and not on react
  * (preact/compat projects that alias react keep the React path).
  */
-export function jsxRuntimeOf(root: string): "react" | "preact" {
+export function jsxRuntimeOf(root: string): "react" | "preact" | "solid" {
   try {
     const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    if (deps["solid-js"] && !deps.react && !deps.preact) return "solid";
     return deps.preact && !deps.react ? "preact" : "react";
   } catch {
     return "react";

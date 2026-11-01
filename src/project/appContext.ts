@@ -282,7 +282,9 @@ function renderedChain(program: any): any[] | undefined {
       if (rendered) return;
       const name = node.callee.type === "MemberExpression" ? node.callee.property.name : node.callee.name;
       const arg = name === "render" ? node.arguments[0] : name === "hydrateRoot" || name === "hydrate" ? node.arguments[1] ?? node.arguments[0] : undefined;
-      const jsx = arg?.type === "ParenthesizedExpression" ? arg.expression : arg;
+      // Solid renders a thunk: render(() => <App />, el).
+      const body = arg?.type === "ArrowFunctionExpression" && arg.expression ? arg.body : arg;
+      const jsx = body?.type === "ParenthesizedExpression" ? body.expression : body;
       if (jsx?.type === "JSXElement") rendered = jsx;
     },
   }).visit(program);
@@ -320,7 +322,7 @@ function memberRoot(n: any): string | undefined {
  * Source of a module whose default export nests `children` inside `wrappers`. With `markInnermost`, the innermost
  * element gets `data-cp-box`, which the capture uses as the box the component sits in.
  */
-export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css = [] as string[], router = undefined as string | undefined, jsx = "react" as "react" | "preact" } = {}): string {
+export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css = [] as string[], router = undefined as string | undefined, jsx = "react" as "react" | "preact" | "solid" } = {}): string {
   const imports: string[] = css.map((file) => `import ${JSON.stringify(file)};`);
   const exprs: string[] = [];
   const importOf = (local: string, importName: string, source: string) =>
@@ -361,6 +363,29 @@ export default function AppWrapper({ children }) {
   router ??= createMemoryRouter([{ path: "*", element: h(Current) }], { initialEntries: ["/"] });
   return h(Slot.Provider, { value: ${tree} }, h(RouterProvider, { router }));
 }
+`;
+  }
+  if (jsx === "solid") {
+    // Solid creates children inside their parent's scope (or useContext misses the provider): each level is a thunk.
+    const solidTree = exprs.length ? exprs.map((e) => e + ", () => ").join("") + "props.children" + ")".repeat(exprs.length) : "props.children";
+    return `import { createComponent } from "solid-js";
+import { insert } from "solid-js/web";
+${imports.join("\n")}
+${declarations.join("\n")}
+const h = (type, props, child) => {
+  if (typeof type === "string") {
+    const el = document.createElement(type);
+    for (const [k, v] of Object.entries(props ?? {})) {
+      if (k === "className" || k === "class") el.className = v;
+      else if (k === "style" && v && typeof v === "object") Object.assign(el.style, v);
+      else el.setAttribute(k, v === true ? "" : String(v));
+    }
+    insert(el, child);
+    return el;
+  }
+  return createComponent(type, { ...props, get children() { return child(); } });
+};
+export default function AppWrapper(props) { return ${solidTree}; }
 `;
   }
   return `import { createElement as h } from ${JSON.stringify(jsx)};
