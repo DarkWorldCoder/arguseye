@@ -725,18 +725,37 @@ const FREEZE_MOTION = `*, *::before, *::after {
   caret-color: transparent !important;
 }`;
 
-/** Captures the enclosing device pixels natively without decoding and re-encoding them in the application. */
+/** Captures enclosing device pixels without letting application canvas overrides influence verification. */
 async function capture(page: Page, session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
   const viewport = page.viewportSize()!;
   // Text line boxes are usually fractional. Include every covered device pixel without resampling it.
   const clip = { x: Math.floor(box.x), y: Math.floor(box.y), width: Math.ceil(box.x + box.width) - Math.floor(box.x), height: Math.ceil(box.y + box.height) - Math.floor(box.y) };
   const within = viewport.width * viewport.height <= 4_194_304 && clip.x >= 0 && clip.y >= 0 && clip.x + clip.width <= viewport.width && clip.y + clip.height <= viewport.height;
+  // macOS Chromium still stalls on clipped surfaces; keep its viewport surface and crop in an isolated realm.
+  const viewportCrop = within && process.platform === "darwin";
   const { data } = await session.send("Page.captureScreenshot", {
     format: "png",
-    clip: { ...(within ? clip : box), scale: 1 },
+    ...(!viewportCrop ? { clip: { ...(within ? clip : box), scale: 1 } } : {}),
     optimizeForSpeed: true,
     captureBeyondViewport: !within,
   });
+  if (viewportCrop) {
+    const { frameTree } = await session.send("Page.getFrameTree");
+    const { executionContextId } = await session.send("Page.createIsolatedWorld", { frameId: frameTree.frame.id, worldName: "arguseye-png-crop" });
+    // App overrides of Image/canvas APIs must not change or break verification pixels.
+    const result = await session.send("Runtime.callFunctionOn", {
+      executionContextId, awaitPromise: true, returnByValue: true,
+      functionDeclaration: `async function(data, box) {
+        const image = new Image(); image.src = "data:image/png;base64," + data; await image.decode();
+        const canvas = document.createElement("canvas"); canvas.width = box.width; canvas.height = box.height;
+        canvas.getContext("2d").drawImage(image, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
+        return canvas.toDataURL("image/png").split(",")[1];
+      }`,
+      arguments: [{ value: data }, { value: clip }],
+    });
+    if (result.exceptionDetails) throw new Error("Screenshot crop failed: " + (result.exceptionDetails.exception?.description ?? result.exceptionDetails.text));
+    return Buffer.from(result.result.value, "base64");
+  }
   return Buffer.from(data, "base64");
 }
 

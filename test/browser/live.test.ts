@@ -16,7 +16,7 @@ let page: Page;
 
 beforeAll(async () => {
   server = await createPreviewServer({ root });
-  browser = await chromium.launch({ channel: "chrome" });
+  browser = await chromium.launch({ channel: "chrome", args: ["--disable-frame-rate-limit"] });
 });
 afterEach(() => {
   for (const file of [card, cardCss, format]) server.updateBuffer(file, undefined);

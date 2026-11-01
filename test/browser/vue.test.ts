@@ -7,7 +7,7 @@ const root = path.resolve("test/fixtures/vue-app");
 const file = path.join(root, "src/components/Card.vue");
 let renderer: Renderer;
 let browser: Browser;
-beforeAll(async () => { renderer = await createRenderer({ root }); browser = await chromium.launch({ channel: "chrome" }); });
+beforeAll(async () => { renderer = await createRenderer({ root }); browser = await chromium.launch({ channel: "chrome", args: ["--disable-frame-rate-limit"] }); });
 afterAll(async () => { await browser?.close(); await renderer?.close(); });
 describe("Vue using the project's own runtime and SFC compiler", () => {
   it("renders a Vue-only project after package warm-up", async () => {

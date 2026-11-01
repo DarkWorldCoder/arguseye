@@ -2,7 +2,7 @@
 
 ## 0.0.13 — 2026-11-01
 
-- In-viewport verification crops use Chromium's native PNG capture without a full-image round trip through application canvas APIs. Exact offset/fractional pixels and offscreen captures remain covered. Live-edit timing samples visible DOM on animation frames instead of counting Playwright's locator retry backoff; the 100 ms limits are unchanged.
+- In-viewport verification uses Chromium's native PNG crops on Linux/Windows. macOS retains the faster viewport surface and crops in an isolated browser realm, outside application canvas overrides. Exact offset/fractional pixels and offscreen captures remain covered. Live-edit timing samples visible DOM on animation frames using the renderer's compositor setting instead of counting Playwright's locator retry backoff; the 100 ms limits are unchanged.
 - Native Vue template edits retain unchanged scoped stylesheets instead of reparsing identical CSS and recreating font faces. Style changes still update CSS; script edits retain their explicit state-reset behavior.
 - Explicit Vite compatibility uses the project's installed Vite, configuration and plugins in a separate process, with unsaved buffers and build-input invalidation. Native compilation stays the default. Compatibility edits reload state; generated virtual modules can now come from actual plugins rather than native stand-ins.
 - Verification accepts explicit clock, seeded random, locale/timezone and bounded network fixtures, reports their provenance and blocked requests, and supports cancellation and execution deadlines. Sessions bound pages, capture count, history and retained PNG bytes; audit cursors continue bounded batches.
