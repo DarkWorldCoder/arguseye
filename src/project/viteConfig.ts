@@ -11,6 +11,8 @@ export interface ViteConfig {
   define: Record<string, string>;
   /** `envPrefix`: env variables with these prefixes reach `import.meta.env`. */
   envPrefix: string[];
+  /** `css.preprocessorOptions.scss.additionalData` (or `sass`): source Vite prepends to every Sass file. */
+  sassAdditionalData?: string;
   /** Settings that need the config to run (computed aliases, defines), so they were left out. */
   warnings: string[];
 }
@@ -63,6 +65,15 @@ export function readViteConfig(root: string): ViteConfig {
       if (key !== undefined && value !== undefined) config.define[key] = value;
       else if (key !== undefined) config.warnings.push(`vite.config define "${key}" is computed at runtime and was not applied.`);
     }
+  }
+
+  const preprocessors = prop(prop(object, "css"), "preprocessorOptions");
+  for (const lang of ["scss", "sass"]) {
+    const data = prop(prop(preprocessors, lang), "additionalData");
+    if (!data) continue;
+    const value = staticValue(data);
+    if (typeof value === "string") { config.sassAdditionalData = value; break; }
+    config.warnings.push(`vite.config css.preprocessorOptions.${lang}.additionalData is computed at runtime and was not applied.`);
   }
 
   const envPrefix = prop(object, "envPrefix");

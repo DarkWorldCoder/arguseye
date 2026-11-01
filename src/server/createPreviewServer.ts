@@ -267,6 +267,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (url.pathname === "/@next-font") {
         return send(res, 200, "text/javascript", nextFontModule(url.searchParams.get("kind") ?? "google", url.searchParams.get("from") ?? options.root, (url.searchParams.get("names") ?? "").split(",").filter(Boolean)));
       }
+      if (url.pathname === "/@virtual") {
+        const id = url.searchParams.get("id") ?? "";
+        const names = (url.searchParams.get("names") ?? "").split(",").filter(Boolean);
+        const note = JSON.stringify(`${id} comes from a Vite plugin and is empty in a preview.`);
+        return send(res, 200, "text/javascript", [`(window.__CP__.warnings ??= []).push(${note});`, ...names.map((n) => `export const ${n} = () => {};`), "export default {};"].join("\n"));
+      }
       if (url.pathname === "/@sveltekit-env") {
         return send(res, 200, "text/javascript", kitEnvModule(options.root, url.searchParams.get("m") ?? "", graph.kit.publicPrefix));
       }
@@ -385,6 +391,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 }
 
 function sendFile(res: http.ServerResponse, file: string) {
+  if (res.headersSent) return;
   res.writeHead(200, { "content-type": contentType(file), "cache-control": "no-cache" });
   res.end(readFileSync(file));
 }
@@ -394,6 +401,8 @@ const debugLog = process.env.CP_DEBUG_LOG;
 
 function send(res: http.ServerResponse, status: number, type: string, body: string) {
   if (debugLog) appendFileSync(debugLog, `${status} ${(res.req as http.IncomingMessage).url}\n`);
+  // A failure after the response started (a closed connection, a late error) is logged, not a crash of the server.
+  if (res.headersSent) { if (!res.writableEnded) res.end(); return; }
   res.writeHead(status, { "content-type": `${type}; charset=utf-8`, "cache-control": "no-cache" });
   res.end(body);
 }

@@ -18,6 +18,7 @@ import { readKitConfig, type KitConfig } from "../project/svelteKit.js";
 import { autoImportLines, readAutoImports } from "../project/autoImports.js";
 import { jsxRuntimeOf } from "../project/framework.js";
 import { createSolidCompiler } from "./createSolidCompiler.js";
+import { expandImportGlobs } from "./importGlob.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
@@ -34,6 +35,8 @@ export class ModuleGraph {
   private react: boolean;
   /** "preact" when the project renders JSX with Preact. */
   readonly jsx: "react" | "preact" | "solid";
+  /** The project depends on vue: its .tsx files are Vue JSX unless React is installed too. */
+  private vueProject: boolean;
   private solid: ReturnType<typeof createSolidCompiler>;
   private vue: ReturnType<typeof createVueCompiler>;
   private svelte: ReturnType<typeof createSvelteCompiler>;
@@ -60,6 +63,7 @@ export class ModuleGraph {
     this.imagesAsObjects = importsImagesAsObjects(root);
     this.react = Boolean(this.resolver.resolveFileSync(pathJoin(root, "package.json"), "react").path);
     this.jsx = jsxRuntimeOf(root);
+    this.vueProject = Boolean(this.resolver.resolveFileSync(pathJoin(root, "package.json"), "vue").path);
     this.solid = createSolidCompiler(root);
   }
 
@@ -139,14 +143,17 @@ export class ModuleGraph {
     if (!cached || cached.source !== source) {
       const vue = file.endsWith(".vue"), svelte = file.endsWith(".svelte"), sfc = vue || svelte;
       const input = vue ? await this.vue.compile(file, source) : svelte ? await this.svelte.compile(file, source) : source;
-      const modular = sfc ? input : modularizeBarrelImports(file, input, this.resolver);
+      const modular = expandImportGlobs(file, sfc ? input : modularizeBarrelImports(file, input, this.resolver), this.root, [...this.vite.aliases, ...this.kit.aliases]);
       const refresh = !sfc && this.react && !/[\\/]shims[\\/](nuxt|sveltekit)[\\/]/.test(file);
       // Solid's JSX compiles to DOM code with its own Babel preset; other files go through oxc as usual.
       const solidJsx = this.jsx === "solid" && /\.[jt]sx$/.test(file) && !file.includes("/node_modules/");
-      const { code, errors } = solidJsx ? { code: await this.solid.compile(file, modular), errors: [] } : await transform(vue ? file + ".ts" : svelte ? file + ".js" : file, modular, {
+      // <script lang="tsx"> in a .vue file (and .tsx files in a Vue project) is Vue JSX: Vue's own jsx-runtime renders it.
+      const vueJsx = (vue && /<script\b[^>]*\blang=["'](tsx|jsx)["']/.test(source)) || (this.vueProject && /\.[jt]sx$/.test(file) && !this.react);
+      const importSource = this.jsx === "preact" ? "preact" : vueJsx ? "vue" : undefined;
+      const { code, errors } = solidJsx ? { code: await this.solid.compile(file, modular), errors: [] } : await transform(vue ? file + (vueJsx ? ".tsx" : ".ts") : svelte ? file + ".js" : file, modular, {
         // JSX in .js files is common (Create React App, older Vite and webpack setups): parse plain JS as JSX.
         ...(/\.(m|c)?js$/.test(file) && !sfc ? { lang: "jsx" as const } : {}),
-        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh, ...(this.jsx === "preact" ? { importSource: "preact" } : {}) },
+        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: refresh && !vueJsx, ...(importSource ? { importSource } : {}) },
       });
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
       // Vite exposes env through import.meta.env; the page holds the values, each module that reads them gets them.
@@ -188,7 +195,8 @@ export class ModuleGraph {
     const urls: string[] = [];
     for (const imp of imports) {
       if (imp.type === "import-meta" || imp.specifier === undefined) continue;
-      const url = nextFontUrl(imp.specifier, file, imp.type === "static" ? code.slice(imp.importStart, imp.importEnd) : "") ?? this.urlFor(file, imp.specifier);
+      const statement = imp.type === "static" ? code.slice(imp.importStart, imp.importEnd) : "";
+      const url = nextFontUrl(imp.specifier, file, statement) ?? virtualUrl(imp.specifier, statement) ?? this.urlFor(file, imp.specifier);
       urls.push(url);
       if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
       // A dynamic import's span includes its quotes; a static import's does not.
@@ -223,6 +231,17 @@ export class ModuleGraph {
     const query = this.query(path);
     return SCRIPT_EXT.test(path) ? `/@fs${path}${query}` : `/@fs${path}?import&${query.slice(1)}`;
   }
+}
+
+/**
+ * A Vite plugin's virtual module (`virtual:svg-icons-register`, `virtual:pwa-register`) exists only inside that
+ * plugin: the preview serves an empty stand-in with the names the import asks for, so one plugin import does not
+ * stop the whole file (or the app setup in main.ts) from loading.
+ */
+function virtualUrl(specifier: string, statement: string): string | undefined {
+  if (!specifier.startsWith("virtual:") && !specifier.startsWith("\0")) return undefined;
+  const names = (statement.match(/\{([^}]*)\}/)?.[1] ?? "").split(",").map((s) => s.trim().split(/\s+as\s+/)[0].trim()).filter((n) => /^[A-Za-z_$][\w$]*$/.test(n));
+  return `/@virtual?${new URLSearchParams({ id: specifier, names: names.join(",") })}`;
 }
 
 /** A JSON import as bundlers serve it: the parsed value as the default export, top-level keys as named exports. */

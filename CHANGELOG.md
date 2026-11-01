@@ -4,6 +4,12 @@
 
 - Preact projects (preact without react): JSX compiles against Preact and components render with Preact's own `render`, inside the providers `src/main.tsx` wraps the app in, with an error boundary, global CSS, signals and actions. Edits re-render (state resets). `test/fixtures/preact-app` covers it.
 - Solid projects: JSX compiles with the project's own `babel-preset-solid` (from vite-plugin-solid) after oxc strips TypeScript, and components render with Solid's `render` inside an `ErrorBoundary` and the providers `render(() => <App />)` wraps the app in, created lazily so context reaches them. Signals, `Show`, `For`, resources and actions work; edits remount. `test/fixtures/solid-app` covers it.
+- Vite's `import.meta.glob` (eager or lazy, `import:` option, negative patterns, aliases) expands into the object Vite produces, so routers and i18n loaders built on it load.
+- `virtual:` modules from Vite plugins (`virtual:svg-icons-register`, `virtual:pwa-register`) are empty stand-ins with the imported names and a warning, instead of failing the file and the app setup that imports them.
+- Sass: `css.preprocessorOptions.scss.additionalData` from vite.config is prepended as Vite does, and vite.config aliases resolve in `@use`/`@import`; CSS `url("@/assets/...")` resolves through the aliases too.
+- `<script lang="tsx">` in Vue files, and `.tsx` in Vue projects, compile as Vue JSX with Vue's own jsx-runtime.
+- The preview server no longer crashes when a request fails after its response has started.
+- Audited on Geeker-Admin (Vue 3, Element Plus, Pinia, 121 components, MIT): 3 rendered before these changes, 114 render now; the rest call a backend the preview does not have (reported as failed requests) or need real chart data.
 - The capture waits for animation frames only when the app has requested one, so still components keep the warm-render budget (about 50 ms; MUI and Radix dialogs, which request frames after mounting, take one frame more).
 
 ## 0.0.11

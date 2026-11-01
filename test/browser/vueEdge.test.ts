@@ -26,6 +26,7 @@ const CASES: Array<[string, string]> = [
   ["EnvBadge.vue", "API https://api.example.test (development)"],
   ["MouseInfo.vue", "Window measured"],
   ["ScssBox.vue", "SCSS scoped box"],
+  ["JsxBadge.vue", "JSX label 3"],
 ];
 
 describe("Vue edge cases: plugins from main.ts and the rest", () => {

@@ -7,4 +7,6 @@ export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@": path.resolve(__dirname, "src"), "~ui": path.resolve(__dirname, "src/components/ui") } },
   define: { __APP_VERSION__: JSON.stringify("2.4.1") },
+  // Shared Sass variables injected into every stylesheet, through the "@" alias.
+  css: { preprocessorOptions: { scss: { additionalData: `@use "@/styles/tokens" as *;` } } },
 });

@@ -60,9 +60,13 @@ function imageSize(file: string): { width: number; height: number } {
 }
 
 /** Points relative `url()`s in a stylesheet at served files, as the app's bundler would. */
-export function rewriteCssUrls(css: string, cssFile: string): string {
+export function rewriteCssUrls(css: string, cssFile: string, alias?: (ref: string) => string | undefined): string {
   return css.replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/g, (match, _quote, ref: string) => {
-    if (/^(data:|https?:|\/\/|#|\/)/.test(ref)) return match;
+    if (/^(data:|https?:|\/\/|#)/.test(ref)) return match;
+    // url("@/assets/bg.svg") through a vite.config alias, as Vite resolves it.
+    const aliased = alias?.(ref.split(/[?#]/)[0]);
+    if (aliased) return `url("${rawUrl(aliased)}")`;
+    if (ref.startsWith("/")) return match;
     const file = path.resolve(path.dirname(cssFile), ref.split(/[?#]/)[0]);
     return `url("${rawUrl(file)}")`;
   });

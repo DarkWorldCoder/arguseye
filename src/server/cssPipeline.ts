@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { applyAlias, readViteConfig, type ViteConfig } from "../project/viteConfig.js";
 import { pathToFileURL } from "node:url";
 import { transform as transformCss } from "lightningcss";
 import { rewriteCssUrls } from "./assets.js";
@@ -43,7 +44,8 @@ export class CssPipeline {
 
   async process(file: string, source: string): Promise<{ css: string; classes?: Record<string, string> }> {
     const { css, classes } = await this.compile(file, source);
-    return { css: rewriteCssUrls(css, file), classes };
+    const vite = (this.viteConfig ??= readViteConfig(this.root));
+    return { css: rewriteCssUrls(css, file, (ref) => applyAlias(vite.aliases, ref)), classes };
   }
 
   /** Same order as the app's bundler: Sass → Tailwind v4 or the project's PostCSS → CSS modules. */
@@ -65,15 +67,26 @@ export class CssPipeline {
     return { css };
   }
 
+  private viteConfig: ViteConfig | undefined;
+
   /** Compiles with the project's own `sass` / `sass-embedded`. */
   private async sass(file: string, source: string): Promise<string> {
     const loaded = await this.importFromProject("sass").catch(() => this.importFromProject("sass-embedded"));
     // Node exposes a CommonJS build's exports as `default`; the ESM build has them at the top level.
     const sass = loaded.compileStringAsync ? loaded : loaded.default;
-    const result = await sass.compileStringAsync(source, {
+    // As Vite does: vite.config's additionalData first (shared variables and mixins), and its aliases in @use/@import.
+    const vite = (this.viteConfig ??= readViteConfig(this.root));
+    const prefix = vite.sassAdditionalData ? vite.sassAdditionalData + "\n" : "";
+    const result = await sass.compileStringAsync(prefix + source, {
       url: pathToFileURL(file),
       syntax: file.endsWith(".sass") ? "indented" : "scss",
       loadPaths: [path.dirname(file), path.join(this.root, "node_modules")],
+      importers: [{
+        findFileUrl: (url: string) => {
+          const aliased = applyAlias(vite.aliases, url) ?? (url.startsWith("~") ? path.join(this.root, "node_modules", url.slice(1)) : undefined);
+          return aliased ? pathToFileURL(aliased) : null;
+        },
+      }],
     });
     return result.css;
   }

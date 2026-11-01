@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vites
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js";
+import { openPreview } from "./openPreview.js";
 
 /**
  * Every kind of component an agent is likely to point Arguseye at, in one Vite + React app with real libraries:
@@ -47,6 +48,8 @@ const CASES: Array<[string, string | undefined, string]> = [
   ["SvgLogo.tsx", undefined, "Edge logo"],
   ["DynamicImport.tsx", undefined, "Free / Pro / Team"],
   ["FontAwait.tsx", undefined, "Serif headline"],
+  ["GlobPages.tsx", undefined, "./glob/One.tsx ./glob/Two.tsx"],
+  ["VirtualImport.tsx", undefined, "Rendered despite Vite plugin modules"],
 ];
 
 describe("edge cases: every kind of component renders", () => {
@@ -121,5 +124,14 @@ describe("edge cases: every kind of component renders", () => {
     // Animations started on mount (Recharts bars drawing in) are fast-forwarded to their end frame.
     await renderer.render({ file: at(file) });
     for (let i = 0; i < 2; i++) expect((await renderer.render({ file: at(file) })).changes?.status).toBe("unchanged");
+  });
+
+  it("Sass gets vite.config additionalData and aliases (in @use and url())", async () => {
+    const preview = await openPreview(root, { file: at("SassTokens.tsx") });
+    try {
+      expect(preview.errors).toEqual([]);
+      expect(await preview.style("span", "color")).toBe("rgb(124, 58, 237)");
+      expect(await preview.style("span", "background-image")).toContain("assets/logo.svg");
+    } finally { await preview.close(); }
   });
 });
