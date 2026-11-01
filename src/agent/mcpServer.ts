@@ -46,18 +46,20 @@ const look = {
 };
 
 /** Exposes the headless renderer as MCP tools so a coding agent can see what it built in one call. */
-export async function createMcpServer(options: { root: string; warmup?: boolean }) {
+export async function createMcpServer(options: { root: string; warmup?: boolean; buildMode?: "native" | "vite" }) {
   const root = path.resolve(options.root);
   let pendingRenderer: Promise<Renderer> | undefined;
+  let staticRenderer: Promise<Renderer> | undefined;
   let previewUrl: string | undefined;
   let closed = false;
   const getRenderer = (warmup = options.warmup ?? true) => {
     if (closed) throw new Error("Arguseye session is closed");
-    return pendingRenderer ??= createRenderer({ root, warmup }).then((renderer) => {
+    return pendingRenderer ??= createRenderer({ root, warmup, buildMode: options.buildMode }).then((renderer) => {
       previewUrl = renderer.server.url;
       return renderer;
     }).catch((error) => { pendingRenderer = undefined; throw error; });
   };
+  const getStaticRenderer = () => options.buildMode === "vite" ? staticRenderer ??= createRenderer({ root, warmup: false }) : getRenderer(false);
   const server = new McpServer({ name: "arguseye", version: packageVersion }, { instructions: INSTRUCTIONS });
   const abs = (file: string) => path.resolve(root, file);
   const rel = (file: string) => path.relative(root, file);
@@ -118,7 +120,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     inputSchema: {},
   }, async () => {
     try {
-      const report = inspectProject(root);
+      const report = inspectProject(root, options.buildMode);
       return { isError: report.errors.length > 0, structuredContent: report, content: [{ type: "text" as const, text: `${report.root}\n${report.packages.map((p) => `${p.name}: ${p.installed ?? "not installed"}`).join("\n")}\n${report.diagnostics.map((d) => `${d.code}: ${d.message} ${d.recovery}`).join("\n")}` }] };
     } catch (error) { return failure(error); }
   });
@@ -180,7 +182,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const schema = await (await getRenderer(false)).describeProps(abs(args.file), args.export);
+        const schema = await (await getStaticRenderer()).describeProps(abs(args.file), args.export);
         return { content: [{ type: "text" as const, text: JSON.stringify(schema, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], ...schema } };
       } catch (error) {
         return failure(error);
@@ -198,7 +200,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const usages = await (await getRenderer(false)).listUsages(abs(args.file), args.export);
+        const usages = await (await getStaticRenderer()).listUsages(abs(args.file), args.export);
         return { content: [{ type: "text" as const, text: JSON.stringify(usages, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], usages } };
       } catch (error) {
         return failure(error);
@@ -257,6 +259,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     async close() {
       closed = true;
       await server.close();
+      await staticRenderer?.then((renderer) => renderer.close(), () => {});
       await pendingRenderer?.then((renderer) => renderer.close(), () => {});
     },
   };

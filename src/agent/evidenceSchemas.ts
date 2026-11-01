@@ -9,7 +9,7 @@ const region = z.object({ x: z.number(), y: z.number(), width: z.number(), heigh
 export const projectOutputSchema = z.object({
   ...common, root: z.string(), packages: z.array(z.object({ name: z.string(), installed: z.string().nullable(), declared: z.string().nullable(), root: z.string().nullable() })),
   diagnostics: z.array(z.object({ code: z.string(), severity: z.enum(["error", "warning", "info"]), message: z.string(), recovery: z.string() })),
-  build: z.object({ mode: z.literal("native"), executesVitePlugins: z.literal(false) }).passthrough(),
+  build: z.object({ mode: z.enum(["native", "vite"]), executesVitePlugins: z.boolean() }).passthrough(),
   browser: z.object({ probed: z.literal(false), note: z.string() }),
 }).passthrough();
 

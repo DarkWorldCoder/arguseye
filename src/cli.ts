@@ -15,7 +15,7 @@ import { inspectProject } from "./project/inspectProject.js";
 
 const HELP = `arguseye: inspect React and Vue components and verify UI edits, no dev server
 
-  arguseye mcp [--root DIR]
+  arguseye mcp [--root DIR] [--build-mode native|vite]
       MCP server on stdio for coding agents (render_component, list_usages, render_usages)
 
   arguseye doctor [--root DIR] [--json]
@@ -25,7 +25,7 @@ const HELP = `arguseye: inspect React and Vue components and verify UI edits, no
       Render once: writes a PNG and prints the accessibility snapshot and errors
       --in-context renders inside the usage's parent elements; --frame WxH[:background] inside a stand-in box
 
-  arguseye shot FILE [--capture-dir DIR] [--json] [--output image|summary|both]
+  arguseye shot FILE [--build-mode native|vite] [--capture-dir DIR] [--json] [--output image|summary|both]
       Save an immutable baseline and optional PNG; JSON reports metadata without image bytes
       --fixtures FILE.json replays explicit browser inputs; --timeout-ms N bounds execution
 
@@ -47,6 +47,7 @@ const HELP = `arguseye: inspect React and Vue components and verify UI edits, no
 const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
+    "build-mode": { type: "string", default: "native" },
     root: { type: "string", default: process.cwd() },
     export: { type: "string" },
     usage: { type: "string" },
@@ -72,15 +73,17 @@ const { positionals, values } = parseArgs({
 });
 const [command, file] = positionals;
 const root = path.resolve(values.root!);
+const buildMode = values["build-mode"] as "native" | "vite";
+if (!["native", "vite"].includes(buildMode)) throw new Error(`Unknown build mode "${buildMode}"`);
 
 if (values.help || !command) {
   console.log(HELP);
 } else if (command === "doctor") {
-  const report = inspectProject(root);
+  const report = inspectProject(root, buildMode);
   console.log(values.json ? JSON.stringify(report) : `${report.root}\n${report.packages.map((p) => `${p.name}: ${p.installed ?? "not installed"}`).join("\n")}\n${report.diagnostics.map((d) => `${d.code}: ${d.message}\n  ${d.recovery}`).join("\n")}`);
   process.exitCode = report.errors.length ? 1 : 0;
 } else if (command === "mcp") {
-  const mcp = await createMcpServer({ root });
+  const mcp = await createMcpServer({ root, buildMode });
   await mcp.server.connect(new StdioServerTransport());
   const stop = async () => { await mcp.close(); process.exit(0); };
   process.stdin.on("close", stop);
@@ -99,7 +102,7 @@ if (values.help || !command) {
     }
   }
 } else if (command === "serve" && file) {
-  const server = await createPreviewServer({ root, port: values.port ? Number(values.port) : undefined, watch: true, warmup: true });
+  const server = await createPreviewServer({ root, buildMode, port: values.port ? Number(values.port) : undefined, watch: true, warmup: true });
   const target = { file: path.resolve(root, file), exportName: values.export };
   let props = values.props ? JSON.parse(values.props) : undefined;
   if (values.usage) props = { ...(await findUsages(root, target.file, target.exportName)).find((u) => u.id === values.usage)?.props, ...props };
@@ -110,7 +113,7 @@ if (values.help || !command) {
   process.on("SIGTERM", stop);
 } else if (command === "diff" && values.baseline && values.out) {
   const baseline = await loadCapture(values.baseline);
-  const renderer = await createRenderer({ root });
+  const renderer = await createRenderer({ root, buildMode: baseline.build?.mode ?? buildMode });
   try {
     const result = await renderer.diff(renderer.restoreCapture(baseline));
     await saveDiff(values.out, result);
@@ -118,7 +121,7 @@ if (values.help || !command) {
     process.exitCode = result.status === "incomplete" ? 1 : 0;
   } finally { await renderer.close(); }
 } else if (command === "audit") {
-  const renderer = await createRenderer({ root });
+  const renderer = await createRenderer({ root, buildMode });
   try {
     const report = await audit(renderer, root, file ? path.resolve(root, file) : root, {
       limit: values.limit ? Number(values.limit) : 200, cursor: values.cursor,
@@ -132,7 +135,7 @@ if (values.help || !command) {
     await renderer.close();
   }
 } else if ((command === "shot" || command === "usages") && file) {
-  const renderer = await createRenderer({ root });
+  const renderer = await createRenderer({ root, buildMode });
   try {
     const target = { file: path.resolve(root, file), exportName: values.export };
     if (command === "usages") {

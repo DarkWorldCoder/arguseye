@@ -1,3 +1,4 @@
+import { buildInputs } from "../project/buildInputs.js";
 import { vueRuntime } from "./vueRuntime.js";
 import { svelteRuntime } from "./svelteRuntime.js";
 import { frameworkOf } from "../project/framework.js";
@@ -32,6 +33,8 @@ import { createFileAccess, FileAccessError } from "./createFileAccess.js";
 
 export type PreviewServerOptions = {
   root: string;
+  /** Explicit compatibility executes the project-owned Vite pipeline in an isolated process. */
+  buildMode?: "native" | "vite";
   /** Extra source roots explicitly approved by the caller; never taken from HTTP parameters. */
   allowedRoots?: string[];
   /** Bundle every package the project's sources import at start, so later renders never rebuild or reload. */
@@ -44,6 +47,7 @@ export type PreviewServerOptions = {
 
 export type PreviewServer = {
   url: string;
+  build?: { mode: "native" | "vite"; executesVitePlugins: boolean; startupMs?: number };
   /** Applies the same file boundary before headless/editor code reads target metadata. */
   assertAccess(file: string): void;
   /** Fingerprint of the source and styles actually read by this server, including unsaved buffers. */
@@ -94,13 +98,14 @@ export type ServeError = { url: string; message: string; at: number };
 const MAX_SERVE_ERRORS = 50;
 
 export async function createPreviewServer(options: PreviewServerOptions): Promise<PreviewServer> {
-  const access = createFileAccess(options.root, options.allowedRoots);
-  const setupFiles = previewSetup(options.root);
+  if (options.buildMode === "vite") return (await import("./createVitePreviewServer.js")).createVitePreviewServer(options);
+  let access = createFileAccess(options.root, options.allowedRoots);
+  let setupFiles = previewSetup(options.root);
   const overlay = new Map<string, string>();
   const versions: Record<string, number> = {};
   let epoch = 0;
   const query = (file: string) => `?e=${epoch}${versions[file] ? `&v=${versions[file]}` : ""}`;
-  const deps = new DepBundler(options.root);
+  let deps = new DepBundler(options.root);
   /** mtime of each file as last served from disk, to spot edits made outside the editor. */
   const servedMtimes = new Map<string, number>();
   const hashes = new Map<string, string>();
@@ -123,7 +128,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
     return source;
   };
-  const fonts = createFontContext(options.root, readContextSource);
+  let fonts = createFontContext(options.root, readContextSource);
   const appContext = (route?: string) => {
     if (route) access.assert(route);
     const context = detectAppContext(options.root, readContextSource, route, fonts.resolveClass);
@@ -147,8 +152,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
     return source;
   };
-  const css = new CssPipeline(options.root);
-  const graph = new ModuleGraph(readSource, deps, query, css, options.root);
+  let css = new CssPipeline(options.root);
+  let graph = new ModuleGraph(readSource, deps, query, css, options.root);
   const listeners = new Set<http.ServerResponse>();
   const serveErrors: ServeError[] = [];
   const errorsSince = (since: number) => serveErrors.filter((e) => e.at >= since);
@@ -201,6 +206,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     }
   }
   const startupWarnings: string[] = [];
+  let inputs = buildInputs(options.root), buildGeneration = 0;
 
   async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }> {
     if (file !== "/@empty") access.assert(file);
@@ -226,7 +232,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       await graph.crawlVirtual(autoComponentsFile, autoComponentsModule(readAutoComponents(options.root)), { refresh: false });
     }
     await deps.ensureBuilt();
-    return { generation: deps.generation, cached: deps.cached };
+    return { generation: buildGeneration + deps.generation, cached: deps.cached };
   }
 
   function updateBuffer(file: string, text: string | undefined): Update {
@@ -243,6 +249,16 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
 
   function syncDisk(): VersionState {
+    const current = buildInputs(options.root);
+    if (current !== inputs) {
+      inputs = current; buildGeneration += 100000; epoch++;
+      access = createFileAccess(options.root, options.allowedRoots);
+      setupFiles = previewSetup(options.root); fonts = createFontContext(options.root, readContextSource);
+      deps = new DepBundler(options.root); css = new CssPipeline(options.root);
+      graph = new ModuleGraph(readSource, deps, query, css, options.root);
+      moduleWarnings.clear(); hashes.clear(); startupWarnings.length = 0;
+      broadcast({ kind: "reload", full: true, file: options.root, epoch, versions: { ...versions } });
+    }
     for (const [file, mtime] of servedMtimes) {
       if (overlay.has(file)) continue;
       const now = statSync(file, { throwIfNoEntry: false })?.mtimeMs;
@@ -279,8 +295,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
 
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", "http://x");
     try {
+      const url = new URL(req.url ?? "/", "http://x");
       const host = new URL(`http://${req.headers.host ?? ""}`);
       if (!["127.0.0.1", "localhost", "[::1]"].includes(host.hostname)) return send(res, 403, "text/plain", "Unexpected preview host");
       if (req.headers.origin && req.headers.origin !== host.origin) return send(res, 403, "text/plain", "Unexpected preview origin");
@@ -408,7 +424,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
 
   return {
-    assertAccess: access.assert,
+    assertAccess: (file) => access.assert(file),
     url: `http://127.0.0.1:${port}`,
     context: () => { const app = appContext(); return { globalCssUrls: globalStyles(app), htmlClass: app.htmlClass, bodyClass: app.bodyClass }; },
     warnings: (file) => {

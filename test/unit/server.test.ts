@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import path from "node:path";
+import os from "node:os";
+import { mkdtempSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
 import { createPreviewServer, type PreviewServer } from "../../src/server/createPreviewServer.js";
 
 const root = path.resolve("test/fixtures/react-app");
@@ -11,6 +13,30 @@ async function get(url: string) {
   const res = await fetch(new URL(url, server!.url));
   return { status: res.status, type: res.headers.get("content-type"), body: await res.text() };
 }
+
+it("invalidates native aliases and dependency generations when build inputs change", async () => {
+  const project = mkdtempSync(path.join(os.tmpdir(), "cp-native-config-"));
+  writeFileSync(path.join(project, "package.json"), '{"type":"module","dependencies":{"react":"*","react-dom":"*"}}');
+  symlinkSync(path.join(root, "node_modules"), path.join(project, "node_modules"), "dir");
+  for (const name of ["one", "two"]) writeFileSync(path.join(project, name + ".ts"), `export default ${JSON.stringify(name)};`);
+  const config = (name: string) => `export default {resolve:{alias:{"@value":${JSON.stringify(path.join(project, name + ".ts"))}}}};`;
+  writeFileSync(path.join(project, "vite.config.ts"), config("one"));
+  const file = path.join(project, "Card.tsx");
+  writeFileSync(file, 'import value from "@value"; export default function Card(){return <p>{value}</p>}');
+  try {
+    server = await createPreviewServer({ root: project });
+    const generation = (await server.prepare(file)).generation;
+    expect((await get(server.moduleUrl(file))).body).toContain("one.ts");
+    writeFileSync(path.join(project, "vite.config.ts"), config("two"));
+    server.syncDisk();
+    expect((await get(server.moduleUrl(file))).body).toContain("two.ts");
+    expect((await server.prepare(file)).generation).not.toBe(generation);
+    const afterConfig = (await server.prepare(file)).generation;
+    writeFileSync(path.join(project, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    server.syncDisk();
+    expect((await server.prepare(file)).generation).not.toBe(afterConfig);
+  } finally { await server?.close(); server = undefined; rmSync(project, { recursive: true, force: true }); }
+});
 
 describe("preview server HTTP", () => {
   it("serves a component as browser ESM with types stripped and imports rewritten", async () => {

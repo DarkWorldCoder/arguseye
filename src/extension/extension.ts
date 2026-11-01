@@ -170,7 +170,7 @@ class PreviewPanel implements vscode.Disposable {
     target.route = await routeFor(root, file, target.exportName, undefined, (f: string, x?: string) => findUsages(root, f, x));
     target.theme = this.forcedTheme();
     const usages = await index.list(file, target.exportName);
-    const schema = await propsSchema(file, target.exportName).catch(() => []);
+    const schema = await propsSchema(file, target.exportName, server.readSource).catch(() => []);
     if (sequence !== this.showSequence || !this.panel) return;
     this.baseline = undefined;
     this.state = {
@@ -224,7 +224,7 @@ class PreviewPanel implements vscode.Disposable {
       const usage = (await this.indexes.get(root)!.list(file, exportName)).find((u) => Object.keys(u.props).length);
       if (usage) return { file, exportName, props: usage.props, propsSource: "usage" };
     }
-    const sample = sampleProps(await propsSchema(file, preferred).catch(() => []));
+    const sample = sampleProps(await propsSchema(file, preferred, (await this.server(root)).readSource).catch(() => []));
     if (Object.keys(sample).length) return { file, exportName: preferred, props: sample, propsSource: "sample" };
     return { file, exportName: preferred, propsSource: "none" };
   }
@@ -330,7 +330,7 @@ class PreviewPanel implements vscode.Disposable {
   private server(root: string): Promise<PreviewServer> {
     let server = this.servers.get(root);
     if (!server) {
-      server = import("../server/createPreviewServer.js").then((m) => m.createPreviewServer({ root }));
+      server = import("../server/createPreviewServer.js").then((m) => m.createPreviewServer({ root, buildMode: vscode.workspace.getConfiguration("arguseye").get<"native" | "vite">("buildMode", "native") }));
       this.servers.set(root, server);
     }
     return server;

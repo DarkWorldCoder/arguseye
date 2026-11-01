@@ -108,7 +108,21 @@
         "mac": "cmd+alt+p",
         "when": "editorTextFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Arguseye",
+      "properties": {
+        "arguseye.buildMode": {
+          "type": "string",
+          "enum": [
+            "native",
+            "vite"
+          ],
+          "default": "native",
+          "markdownDescription": "Native keeps the fast per-file compiler. Vite explicitly executes the project's installed Vite config/plugins in a separate process. Compatibility edits reload the preview and reset state. Reload the VS Code window after changing this setting."
+        }
+      }
+    }
   },
   "repository": {
     "type": "git",

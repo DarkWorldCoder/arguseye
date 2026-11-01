@@ -1,0 +1,1 @@
+{"name":"vite-plugin-fixture","private":true,"type":"module","dependencies":{"vue":"3.5.44"},"devDependencies":{"vite":"6.4.5","@vitejs/plugin-vue":"5.2.4"}}

@@ -1,5 +1,19 @@
 # Reproducible and bounded verification (unreleased)
 
+## Project build plugins
+
+Native mode remains the default. It uses the fast per-file compiler, supported literal config, and explicit warnings for virtual stand-ins. For code that needs actual project plugins, use `--build-mode vite` with `mcp`, `shot`, `serve` or `audit`. The JS server/renderer factories accept `buildMode: "vite"`. VS Code exposes `arguseye.buildMode`; reload the window after changing it.
+
+Compatibility mode requires the project's own installed Vite and plugins. It runs that real pipeline in a separate local process, with the application package as its working directory. It does not start the application's entry point, backend or configured API proxies. The isolated preview still executes trusted config, plugin and component code. Vite can write its compiler cache, and plugins can have their own effects. See [Vite's integration API](https://vite.dev/guide/api-javascript).
+
+Both runtime and component imports use Vite's dependency graph, so React/Vue copies are not mixed with the native dependency bundle. Virtual SVGs, macros, aliases and styles are handled by installed project plugins, rather than converted to empty exports. Missing plugins fail explicitly. Framework-specific server behavior still needs the full application.
+
+Render evidence identifies the build mode, whether plugins execute and startup cost. Native and compatibility timings are measured separately. Compatibility edits reload the preview and reset interactive state. Save build config changes to disk; unsaved component and style buffers are forwarded. Manifest, lockfile, config, environment and setup changes invalidate native caches or restart compatibility compilation; Vite's reported config dependencies are watched too. Adding native config imports that cannot be read statically remains unsupported and must stay visible in warnings.
+
+CLI comparisons automatically select the saved baseline's build mode. The JS API rejects a restored baseline made with a different build mode. Never present a comparison between different compilers as a same-input verification.
+
+## Browser fixtures
+
 Ordinary verification keeps the browser and modules warm and remounts the component. Module globals can persist. Use explicit fixtures when module-initialization time, randomness, browser locale or network data must repeat.
 
 ```json

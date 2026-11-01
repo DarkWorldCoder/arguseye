@@ -45,6 +45,7 @@ export type RenderResult = {
   /** PNG cropped to the rendered component. */
   png: Buffer;
   fixtureProvenance?: FixtureProvenance;
+  build?: PreviewServer["build"];
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
@@ -124,10 +125,10 @@ export type Renderer = {
 };
 
 /** Renders components headlessly so an agent can see them without running the app or a browser. */
-export async function createRenderer(options: { root: string; server?: PreviewServer; warmup?: boolean; limits?: Partial<SessionLimits> }): Promise<Renderer> {
+export async function createRenderer(options: { root: string; server?: PreviewServer; warmup?: boolean; buildMode?: "native" | "vite"; limits?: Partial<SessionLimits> }): Promise<Renderer> {
   const limits = { pages: 4, captures: 64, history: 16, pngBytes: 64 * 1024 * 1024, ...options.limits };
   for (const [key, value] of Object.entries(limits)) if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Invalid session limit ${key}: ${value}`);
-  const server = options.server ?? await createPreviewServer({ root: options.root, warmup: options.warmup });
+  const server = options.server ?? await createPreviewServer({ root: options.root, warmup: options.warmup, buildMode: options.buildMode });
   const usages = createUsageIndex(options.root, { readSource: server.readSource, version: server.version });
   let browser: Browser;
   try { browser = await launchChrome(); } catch (error) { if (!options.server) await server.close(); throw error; }
@@ -318,7 +319,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       for (const usage of all.slice(offset, offset + limit)) results.push({ ...await render({ ...target, usage: usage.id }, usage), usage: usage.id });
       return { results, total: all.length, nextOffset: offset + limit < all.length ? offset + limit : null };
     }, control),
-    restoreCapture: remember,
+    restoreCapture: (capture) => {
+      if ((capture.build?.mode ?? "native") !== (server.build?.mode ?? "native")) throw new Error(`Baseline uses ${capture.build?.mode ?? "native"} compilation; create a renderer with the same buildMode before comparing.`);
+      return remember(capture);
+    },
     diff: (baselineId, control) => serial(async () => {
       const before = captures.get(baselineId);
       if (!before) throw new Error(`Unknown or expired baseline "${baselineId}"; render the component again to capture a new baseline.`);
@@ -400,6 +404,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target.props = { children: typeof props.children === "string" ? props.children : "Page content" };
       }
       const contextApplied = target.context?.flatMap((w) => w.kind === "prelude" ? [] : (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
+      if (server.build?.mode === "vite") await server.prepare(target.file, prepareContext(target), target.route);
       const key = `${frameworkOf(rest.file)}:${viewport.width}x${viewport.height}`;
       if ((fixtures || storage) && pages.has(key)) { const old = pages.get(key)!; pages.delete(key); await old.then((p) => p.close()).catch(() => {}); }
       let warm = pages.get(key);
@@ -562,7 +567,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (evidence?.network?.blocked.length) warnings.push("Unmatched network requests blocked by fixtures: " + evidence.network.blocked.join("; "));
       const setup = server.setupFor(rest.file);
       const result: RenderResult = {
-        png, snapshot, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        png, snapshot, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
         ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),

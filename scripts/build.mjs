@@ -16,7 +16,7 @@ await cli.write({ dir: "dist", format: "esm", entryFileNames: "[name].mjs", bann
 await cli.close();
 
 // The dependency bundle worker: a separate process so Rolldown's memory is released after each large build.
-const worker = await rolldown({ input: { "bundle-worker": "src/server/bundleWorker.ts" }, platform: "node", external });
+const worker = await rolldown({ input: { "bundle-worker": "src/server/bundleWorker.ts", "vite-compatibility-worker": "src/server/viteCompatibilityWorker.ts" }, platform: "node", external });
 await worker.write({ dir: "dist", format: "esm", entryFileNames: "[name].mjs" });
 await worker.close();
 

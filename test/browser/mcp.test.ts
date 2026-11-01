@@ -98,7 +98,7 @@ describe("MCP tools (what a coding agent calls)", () => {
     }
   });
 
-  it("does not speculatively mount the app or execute its CSS config for static prop inspection", async () => {
+  it.each(["native", "vite"] as const)("does not speculatively mount the app or execute its CSS config for static prop inspection in %s mode", async (buildMode) => {
     const isolated = mkdtempSync(path.join(os.tmpdir(), "arguseye-static-effects-"));
     const canary = path.join(isolated, "config-executed");
     writeFileSync(path.join(isolated, "package.json"), JSON.stringify({ dependencies: { react: "19.2.0", "react-dom": "19.2.0", postcss: "8.5.0" } }));
@@ -109,7 +109,7 @@ describe("MCP tools (what a coding agent calls)", () => {
     mkdirSync(path.join(isolated, "app"));
     writeFileSync(path.join(isolated, "app/layout.tsx"), 'import "./global.css"; export default function Layout({children}) {return <main>{children}</main>}');
     writeFileSync(path.join(isolated, "app/global.css"), 'h1 {color: red}');
-    const mcp = await createMcpServer({ root: isolated });
+    const mcp = await createMcpServer({ root: isolated, buildMode });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const inspector = new Client({ name: "static-effects-test", version: "0" });
     try {
