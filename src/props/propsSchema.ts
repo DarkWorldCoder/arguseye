@@ -3,7 +3,7 @@ import { parseSync } from "oxc-parser";
 import { createResolver } from "../server/resolver.js";
 import { literal } from "../usages/findUsages.js";
 
-export type PropKind = "string" | "number" | "boolean" | "enum" | "array" | "object" | "function" | "node" | "unknown";
+export type PropKind = "string" | "number" | "boolean" | "enum" | "array" | "object" | "function" | "node" | "date" | "unknown";
 
 export type PropSchema = {
   name: string;
@@ -52,7 +52,11 @@ export function sampleProps(schema: PropSchema[]): Record<string, unknown> {
  */
 export const SAMPLE_FUNCTION = { $fn: '(...a) => (typeof a[0] === "number" || typeof a[0] === "string" ? String(a[0]) : undefined)' };
 
+/** A fixed date the page revives into a real Date (`{ "$date": iso }`), so `createdAt.toDateString()` works. */
+export const SAMPLE_DATE = { $date: "2026-01-15T10:30:00.000Z" };
+
 function sample(prop: PropSchema): unknown {
+  if (prop.kind === "date" || (prop.kind === "unknown" && /(^date$|^time$|[a-z](At|Date|On)$)/.test(prop.name))) return SAMPLE_DATE;
   const label = prop.name.charAt(0).toUpperCase() + prop.name.slice(1).replace(/([a-z])([A-Z])/g, "$1 $2");
   switch (prop.kind) {
     case "string":
@@ -207,12 +211,20 @@ async function kindOf(t: any, ctx: Ctx): Promise<Partial<PropSchema>> {
     case "TSTypeReference": {
       const name = typeName(t.typeName);
       if (NODE_TYPES.has(name)) return { kind: "node" };
+      if (name === "Date") return { kind: "date" };
       if (name === "Array" || name === "ReadonlyArray") return { kind: "array" };
       if (name === "Record" || name === "Partial" || name === "Readonly" || name === "Pick" || name === "Omit") {
-        return name === "Record" ? { kind: "object" } : kindOf(t.typeArguments?.params?.[0] ?? t, ctx);
+        if (name === "Record") return { kind: "object" };
+        const base = await kindOf(t.typeArguments?.params?.[0] ?? t, ctx);
+        // Pick<Model, "id" | "title"> of a type from a package (Prisma, an API client): the picked keys still name the fields.
+        const keys = name === "Pick" ? literalKeys(t.typeArguments?.params?.[1]) : [];
+        if (keys.length && (base.kind !== "object" || !base.fields?.length)) return { kind: "object", fields: keys.map((key) => ({ name: key, kind: "unknown" as const, required: true })) };
+        if (name === "Pick" && base.kind === "object" && keys.length) return { ...base, fields: base.fields!.filter((f) => keys.includes(f.name)) };
+        return base;
       }
       const resolved = await resolveTypeName(name, ctx);
-      if (!resolved) return { kind: "unknown" };
+      // A named type the project does not define (from a package or generated code) is almost always an object.
+      if (!resolved) return /^[A-Z]/.test(name) ? { kind: "object" } : { kind: "unknown" };
       const inner = await kindOf(resolved.node, resolved.ctx);
       return inner.kind === "unknown" && resolved.node.type === "TSInterfaceBody" ? { kind: "object", fields: await membersOf(resolved.node, resolved.ctx) } : inner;
     }
@@ -267,4 +279,12 @@ function docComment(node: any, ctx: Ctx): string | undefined {
   const last = before[before.length - 1];
   if (!last || /\S/.test(ctx.code.slice(last.end, node.start))) return undefined;
   return last.value.replace(/^\*+/, "").split("\n").map((l) => l.replace(/^\s*\*\s?/, "").trim()).filter(Boolean).join(" ") || undefined;
+}
+
+/** The string literal members of a key union such as `"id" | "title"`. */
+function literalKeys(t: any): string[] {
+  if (!t) return [];
+  if (t.type === "TSUnionType") return t.types.flatMap(literalKeys);
+  if (t.type === "TSLiteralType" && typeof t.literal?.value === "string") return [t.literal.value];
+  return [];
 }

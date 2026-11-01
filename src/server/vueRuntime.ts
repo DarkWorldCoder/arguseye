@@ -4,6 +4,16 @@ const cp = window.__CP__;
 cp.warnings = [];
 const component = shallowRef(null);
 let props = {}, key = 0, app;
+/** Function ({ "$fn": src }) and date ({ "$date": iso }) props arrive as JSON, as in the React runtime. */
+const revive = (value) => {
+  if (Array.isArray(value)) return value.map(revive);
+  if (value && typeof value === "object") {
+    if (typeof value.$fn === "string" && Object.keys(value).length === 1) return new Function("return (" + value.$fn + ")")();
+    if (typeof value.$date === "string" && Object.keys(value).length === 1) return new Date(value.$date);
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, revive(v)]));
+  }
+  return value;
+};
 const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
 cp.show = async (target, state) => {
   if (state) Object.assign(cp, state);
@@ -13,7 +23,7 @@ cp.show = async (target, state) => {
     const name = target.exportName ?? "default";
     if (!mod[name]) throw new Error("No component export " + JSON.stringify(name) + " in " + target.file);
     if (target.fresh) key++;
-    props = target.props ?? {}; component.value = mod[name];
+    props = revive(target.props ?? {}); component.value = mod[name];
     if (!app) {
       app = createApp({ render: () => component.value ? h(component.value, { ...props, key }) : null });
       app.config.errorHandler = (error) => { cp.errors.push(String(error?.stack ?? error)); cp.status = "error"; };

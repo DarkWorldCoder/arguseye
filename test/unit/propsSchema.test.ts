@@ -44,4 +44,14 @@ describe("props inferred from the component's TypeScript type", () => {
     expect(fnSample.format).toEqual({ $fn: expect.stringContaining("=>") });
     expect(new Function("return " + (fnSample.format as any).$fn)()(12)).toBe("12");
   });
+
+  it("samples a model type from a package as an object, keeping the keys a Pick names", async () => {
+    const file = path.resolve("test/fixtures/edge-app/src/components/edge/PostRow.tsx");
+    const schema = await propsSchema(file, "PostRow");
+    expect(schema.map((p) => [p.name, p.kind, p.fields?.map((f) => f.name)])).toEqual([
+      ["post", "object", ["id", "title", "published", "createdAt"]],
+      ["author", "object", undefined],
+    ]);
+    expect(sampleProps(schema)).toEqual({ post: { id: "Id", title: "Title", published: "Published", createdAt: { $date: "2026-01-15T10:30:00.000Z" } }, author: {} });
+  });
 });

@@ -10,7 +10,8 @@ import type { Frame, PreviewTarget } from "../server/page.js";
 import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
 import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
-import { pickExport } from "../project/pickExport.js";
+import { listExports, pickExport } from "../project/pickExport.js";
+import { readFileSync } from "node:fs";
 import { frameworkOf } from "../project/framework.js";
 
 export type RenderRequest = PreviewTarget & {
@@ -216,7 +217,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     listUsages: async (file, exportName) => usages.list(file, exportName ?? (await exportOf(file))),
     describeProps,
     ready: () => prewarmed,
-    render: (request) => serial(() => render(request)),
+    render: (request) => serial(() => renderWithProvider(request)),
     renderUsages: (request) => serial(async () => {
       const { offset = 0, limit = 12, ...target } = request;
       if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 12) throw new Error("Usage page requires offset >= 0 and limit between 1 and 12");
@@ -248,7 +249,26 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     },
   };
 
-  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, ...rest }: RenderRequest, resolved?: Usage): Promise<RenderResult> {
+  /**
+   * Compound components (Radix, shadcn) throw "`Tooltip` must be used within `TooltipProvider`" when rendered alone.
+   * When the same file exports that provider, render once more inside it, as every real use of the part would be.
+   */
+  async function renderWithProvider(request: RenderRequest): Promise<RenderResult> {
+    const first = await render(request);
+    const needed = first.errors.join("\n").match(/must be used within\s+[`'"<]*([A-Z]\w*)/)?.[1];
+    if (!needed || request.inContext || request.frame) return first;
+    const file = path.resolve(options.root, request.file);
+    let exported: string[] = [];
+    try { exported = listExports(file, readFileSync(file, "utf8")); } catch {}
+    if (!exported.includes(needed)) return first;
+    const second = await render(request, undefined, needed);
+    if (second.errors.length) return first;
+    second.warnings.push(`Rendered inside ${needed} from the same file: the component throws without it.`);
+    second.complete = false;
+    return second;
+  }
+
+  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
       const started = performance.now();
       if (![viewport.width, viewport.height].every((v) => Number.isInteger(v) && v > 0 && v <= 8192)) throw new Error(`Invalid viewport "${viewport.width}x${viewport.height}"`);
       // Disk edits are registered before anything (usage index, route lookup) reads the files and refreshes their mtimes.
@@ -264,7 +284,19 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           target.contextFile = path.resolve(options.root, found.id.split(":")[0]);
         }
       }
+      if (provider) {
+        target.context = [{ kind: "component", source: "./" + path.basename(rest.file), importName: provider, props: {} }];
+        target.contextFile = rest.file;
+      }
       target.route = resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
+      // A Next layout renders <html>/<body>, which cannot mount inside a preview. It is every preview's wrapper
+      // already, so render its chain (providers, elements, html/body classes) down to this layout around its children.
+      const layout = isLayoutFile(options.root, rest.file) && (rest.exportName ?? "default") === "default";
+      if (layout) {
+        target.file = "/@empty";
+        target.route = rest.file;
+        target.props = { children: typeof props.children === "string" ? props.children : "Page content" };
+      }
       const contextApplied = target.context?.flatMap((w) => w.kind === "prelude" ? [] : (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
       const key = `${frameworkOf(rest.file)}:${viewport.width}x${viewport.height}`;
       let warm = pages.get(key);
@@ -321,7 +353,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
       const warnings: string[] = server.warnings(rest.file);
       if (unresolved.length) warnings.push("Runtime usage inputs were not evaluated: " + unresolved.join(", "));
-      if (propsSource === "sample") warnings.push("Sample props were generated from types; these are not real application data.");
+      if (propsSource === "sample" && !layout) warnings.push("Sample props were generated from types; these are not real application data.");
+      if (layout) warnings.push(`Rendered as the app uses it: the layout chain down to ${path.relative(options.root, rest.file)} (providers, elements, <html>/<body> classes) around ${JSON.stringify(target.props!.children)}.`);
 
       const settled = await page.evaluate(async () => {
         // ResizeObserver clients can debounce their first measurement, so the default 300×150 canvas can
@@ -358,7 +391,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
-        const root = document.getElementById("root")!;
+        // A root layout renders <html>/<body>, which React 19 takes over, replacing #root: capture the body then.
+        const root = document.getElementById("root") ?? document.body;
         const r = (framed ?? root).getBoundingClientRect();
         let [left, right, top, bottom] = [r.left, r.right, r.top, r.bottom];
         if (!framed) {
@@ -386,7 +420,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         };
       });
       // With portaled content the snapshot is the whole body, so an open dialog's text and buttons are in it.
-      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals ? "body" : "#root").ariaSnapshot()]);
+      const rootIntact = await page.evaluate(() => !!document.getElementById("root"));
+      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
+
       warnings.push(...runtimeWarnings);
       const allErrors = unique([...inPage, ...errors]);
       if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
@@ -416,6 +452,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         };
       }
       lastResults.set(signature, { ...structuredClone(result), png: Buffer.from(result.png) });
+      // The page's own React root is gone (a layout rendered <html>/<body>): later renders get a fresh page.
+      if (!rootIntact) { pages.delete(key); void page.close().catch(() => {}); }
       return result;
   }
 }
@@ -519,3 +557,8 @@ async function launchChrome(): Promise<Browser> {
 }
 
 const unique = (xs: string[]) => [...new Set(xs)];
+
+/** Next App Router layouts and templates, which render the document around every page below them. */
+function isLayoutFile(root: string, file: string): boolean {
+  return /^(src\/)?app\/(.+\/)?(layout|template)\.[jt]sx?$/.test(path.relative(root, file).split(path.sep).join("/"));
+}

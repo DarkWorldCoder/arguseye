@@ -262,7 +262,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return send(res, 200, "application/json", JSON.stringify([...urls]));
       }
       if (url.pathname === "/@fs/@empty") {
-        return send(res, 200, "text/javascript", "export default function Empty() { return null; }");
+        return send(res, 200, "text/javascript", "export default function Empty({ children }) { return children ?? null; }");
       }
       if (url.pathname === "/@errors") {
         return send(res, 200, "application/json", JSON.stringify(errorsSince(Number(url.searchParams.get("since") ?? 0))));

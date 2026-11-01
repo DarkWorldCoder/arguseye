@@ -8,6 +8,7 @@ const reviveProps = (value) => {
   if (Array.isArray(value)) return value.map(reviveProps);
   if (value && typeof value === "object") {
     if (typeof value.$fn === "string" && Object.keys(value).length === 1) return new Function("return (" + value.$fn + ")")();
+    if (typeof value.$date === "string" && Object.keys(value).length === 1) return new Date(value.$date);
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, reviveProps(v)]));
   }
   return value;

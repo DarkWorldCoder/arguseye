@@ -24,7 +24,7 @@ Render component source in Chromium with the project's packages, styles, assets 
 | `audit_components {dir?, limit?}` | Render every component under `dir` once with sample props; reports ok, error (first line) and empty per file. |
 | `render_diff {baselineId, output?}` | Compare current code with a successful render's `captureId`, reusing resolved props and viewport. Returns before/after/highlighted images and change evidence. |
 
-Function props are passed as `{ "$fn": "(x) => ..." }`. Paths are relative to the project root the server was started with.
+Function props are passed as `{ "$fn": "(x) => ..." }`, dates as `{ "$date": "2026-01-15T10:30:00Z" }`. Paths are relative to the project root the server was started with.
 
 For render tools, `output` is `"image"`, `"summary"` or `"both"` (default). Use summary for a compact text response, image for visual inspection, or both when needed. Structured evidence remains available separately from image bytes.
 

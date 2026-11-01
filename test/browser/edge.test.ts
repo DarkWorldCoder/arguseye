@@ -96,4 +96,17 @@ describe("edge cases: every kind of component renders", () => {
     expect(result.errors).toEqual([]);
     expect(result.console).toEqual(["Missing VITE_API_URL: falling back to /api"]);
   });
+
+  it("a compound part that needs its provider renders inside the provider its own file exports", async () => {
+    const result = await renderer.render({ file: at("Tip.tsx"), exportName: "Tip" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Copy link (after 300 ms)");
+    expect(result.warnings.join("\n")).toContain("Rendered inside TipProvider from the same file");
+  });
+
+  it("sample props give model types objects and dates real Date values", async () => {
+    const result = await renderer.render({ file: at("PostRow.tsx"), exportName: "PostRow" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Title by an author on Thu Jan 15 2026");
+  });
 });

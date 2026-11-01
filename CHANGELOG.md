@@ -11,6 +11,10 @@
 - `next/font/google` and `next/font/local` work in any component (fonts defined in `lib/fonts.ts`, a layout rendered on its own), not only in the root layout: loaders return `className`, `variable` and `style` like Next's, and local font files load for real.
 - An exported object of components (`export const Icons = {...}`) gets an error that says so and names a member to render; `export: "Icons.logo"` renders it. The audit counts such exports as skipped.
 - `console.error` output during a render comes back as `console` in the result and in the MCP text, where apps often say why they failed (for example which env variable is missing).
+- A Next layout file renders the way the app uses it: the layout chain down to it (providers, elements, `<html>`/`<body>` classes) around its children. Before, React took over the page's `<html>`/`<body>` and the next renders on that page failed.
+- A compound part that throws "must be used within `XProvider`" (Radix, shadcn) is rendered inside `XProvider` when its own file exports it, with a warning that says so.
+- Sample props: a model type from a package or generated code (Prisma, API clients) becomes an object, `Pick<Model, "a" | "b">` keeps its keys, and `Date` props and fields named like `createdAt` get a real `Date` (`{ "$date": iso }`, also accepted in `props`). Vue previews revive `$fn` and `$date` props too.
+- Audited on shadcn's Taxonomy app (67 components, MIT): 3 rendered before these changes, 40 render now; the rest are compound roots that are empty on their own, one icon map, and one import of a package the copy does not install.
 - `arguseye audit [DIR]` and the `audit_components` MCP tool render every component once with sample props and report what renders, what throws and what comes out empty.
 - The MCP server sends instructions to connecting agents on when to use it, so they reach for it after UI edits without being told.
 - `test/fixtures/edge-app`: 35 kinds of component in one Vite app with real libraries (React Query, Redux Toolkit, Zustand, i18next, Recharts, Framer Motion, react-window, lodash, Sass), all rendering in `test/browser/edge.test.ts`.
