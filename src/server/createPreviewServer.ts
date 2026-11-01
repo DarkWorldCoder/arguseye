@@ -22,6 +22,7 @@ import { isShim } from "./shims.js";
 import { preactRuntime } from "./preactRuntime.js";
 import { solidRuntime } from "./solidRuntime.js";
 import { vueEntry, vueSetupModule } from "../project/vueSetup.js";
+import { previewSetup } from "../project/previewSetup.js";
 import { kitEnvModule } from "../project/svelteKit.js";
 import { autoComponentsModule, readAutoComponents } from "../project/autoImports.js";
 import { sourceFiles } from "../project/sourceFiles.js";
@@ -69,6 +70,8 @@ export type PreviewServer = {
   prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }>;
   /** Layout and template files that wrap a render for `route` (root first, project-relative). */
   layoutsFor(route?: string): string[];
+  /** Explicit browser setup selected for this component's framework, if present at startup. */
+  setupFor(file: string): string | undefined;
   /** Resolves when the start-up warm-up (if any) is done; `prepare` waits for it too. */
   ready(): Promise<void>;
   /** Sets a file's unsaved contents (`undefined` = back to disk) and pushes the change to open pages. */
@@ -92,6 +95,7 @@ const MAX_SERVE_ERRORS = 50;
 
 export async function createPreviewServer(options: PreviewServerOptions): Promise<PreviewServer> {
   const access = createFileAccess(options.root, options.allowedRoots);
+  const setupFiles = previewSetup(options.root);
   const overlay = new Map<string, string>();
   const versions: Record<string, number> = {};
   let epoch = 0;
@@ -120,7 +124,13 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return source;
   };
   const fonts = createFontContext(options.root, readContextSource);
-  const appContext = (route?: string) => { if (route) access.assert(route); return detectAppContext(options.root, readContextSource, route, fonts.resolveClass); };
+  const appContext = (route?: string) => {
+    if (route) access.assert(route);
+    const context = detectAppContext(options.root, readContextSource, route, fonts.resolveClass);
+    if (!setupFiles.jsx) return context;
+    readContextSource(setupFiles.jsx);
+    return { ...context, entry: setupFiles.jsx, wrappers: [{ kind: "component" as const, source: setupFiles.jsx, importName: "default", props: {} }], layouts: [path.relative(options.root, setupFiles.jsx)] };
+  };
   const globalStyles = (app: ReturnType<typeof appContext>) => [
     ...app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`),
     ...(fonts.stylesheet() ? ["/@next-fonts?v=" + createHash("sha256").update(fonts.stylesheet()).digest("hex").slice(0, 12)] : []),
@@ -152,6 +162,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   /** The Vue entry's plugin setup as a module living next to it (so its imports resolve), or nothing. */
   const vueSetup = async (): Promise<{ file: string; source: string } | undefined> => {
+    if (setupFiles.vue) {
+      await readSource(setupFiles.vue);
+      return { file: setupFiles.vue.replace(/\.[^.]+$/, ".preview-setup.ts"), source: `export { default } from ${JSON.stringify(setupFiles.vue)};` };
+    }
     const entry = vueEntry(options.root);
     if (!entry) return undefined;
     const source = vueSetupModule(entry, await readSource(entry));
@@ -409,6 +423,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     prepare,
     ready: () => warming,
     layoutsFor: (route) => appContext(route).layouts,
+    setupFor: (file) => frameworkOf(file) === "vue" ? setupFiles.vue : frameworkOf(file) === "react" ? setupFiles.jsx : undefined,
     close: () => new Promise((r) => { watcher?.close(); server.closeAllConnections(); server.close(() => r()); }),
   };
 }

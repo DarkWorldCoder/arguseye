@@ -3,6 +3,7 @@ import path from "node:path";
 import { createResolver } from "../server/resolver.js";
 import { jsxRuntimeOf } from "./framework.js";
 import { readViteConfig } from "./viteConfig.js";
+import { previewSetup } from "./previewSetup.js";
 
 type Diagnostic = { code: string; severity: "error" | "warning" | "info"; message: string; recovery: string };
 const RUNTIMES = ["react", "react-dom", "next", "preact", "solid-js", "vue", "svelte", "nuxt", "@sveltejs/kit", "vite", "sass", "babel-preset-solid"];
@@ -55,6 +56,7 @@ export function inspectProject(directory: string) {
     schemaVersion: 1 as const, root, name: typeof manifest.name === "string" ? manifest.name : null,
     node: { version: process.versions.node, supported: Number(process.versions.node.split(".")[0]) >= 22 },
     packages, jsxRuntime: jsx,
+    setup: { ...Object.fromEntries(Object.entries(previewSetup(root)).map(([kind, file]) => [kind, file ?? null])), policy: "JSX setup replaces inferred providers; Vue setup replaces inferred app installation. Global CSS and root classes remain inferred. Setup runs trusted project code during rendering, never during inspection." },
     build: { mode: "native" as const, executesVitePlugins: false, configFile: vite.file ?? null, aliases: vite.aliases, defines: Object.keys(vite.define) },
     browser: { probed: false, note: "Inspection does not launch a browser. Rendering tries Playwright's headless shell, installed Chrome, then Playwright Chromium; a successful render is required to verify execution." },
     diagnostics, errors: diagnostics.filter((d) => d.severity === "error").map((d) => d.message),

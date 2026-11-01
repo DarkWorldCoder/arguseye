@@ -3,7 +3,7 @@ export const vueRuntime = `import { createApp, h, shallowRef, nextTick, Suspense
 const cp = window.__CP__;
 cp.warnings = [];
 const component = shallowRef(null);
-let props = {}, key = 0, app, pending = false;
+let props = {}, key = 0, app, pending = false, setupWarnings = [];
 /** Function ({ "$fn": src }) and date ({ "$date": iso }) props arrive as JSON, as in the React runtime. */
 const revive = (value) => {
   if (Array.isArray(value)) return value.map(revive);
@@ -22,9 +22,11 @@ cp.show = async (target, state) => {
     const mod = await import(moduleUrl(target.file));
     const name = target.exportName ?? "default";
     if (!mod[name]) throw new Error("No component export " + JSON.stringify(name) + " in " + target.file);
-    if (target.fresh) key++;
+    // Verification must recreate plugin/provide state too; live template/style edits keep their app.
+    if (target.fresh) { key++; if (app) { app.unmount(); app = undefined; } }
     props = revive(target.props ?? {}); component.value = mod[name];
     if (!app) {
+      setupWarnings = [];
       // Inside <Suspense>, as apps render pages: components with a top-level await and async components resolve.
       app = createApp({
         render: () => component.value ? h(Suspense, { onPending: () => (pending = true), onResolve: () => (pending = false) }, { default: () => h(component.value, { ...props, key }) }) : null,
@@ -36,17 +38,18 @@ cp.show = async (target, state) => {
         const setup = (await import("/@vue-setup?e=" + cp.epoch)).default;
         if (setup) await setup(app);
       } catch (error) {
-        cp.warnings.push("The app setup in src/main could not run, so its plugins are missing: " + (error?.message ?? error));
+        setupWarnings.push("Vue app setup could not run, so its plugins are missing: " + (error?.message ?? error));
       }
       // Components the project uses without importing (unplugin-vue-components, Nuxt), loaded on first use.
       try {
         const register = (await import("/@vue-components?e=" + cp.epoch)).default;
         if (register) register(app);
       } catch (error) {
-        cp.warnings.push("Auto-registered components could not be loaded: " + (error?.message ?? error));
+        setupWarnings.push("Auto-registered components could not be loaded: " + (error?.message ?? error));
       }
       app.mount("#root");
     } else app._instance?.proxy?.$forceUpdate();
+    cp.warnings.push(...setupWarnings);
     await nextTick();
     // Lazy parts, top-level awaits and data requested on mount.
     await cp.quiet(() => pending);

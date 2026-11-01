@@ -72,6 +72,8 @@ export type RenderResult = {
   changes?: Changes;
   /** Layout and template files the component was rendered inside, root first (project-relative). */
   layoutsApplied?: string[];
+  /** Caller-authored browser setup; overrides inferred providers/plugins, not the full application. */
+  setupApplied?: string;
   /** Where the time went, in ms: bundling/crawl, page load or swap, settling (fonts, images), capture. */
   timings?: { prepare: number; show: number; settle: number; capture: number };
 };
@@ -466,6 +468,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const allErrors = unique([...inPage, ...errors]);
       if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
+      const setup = server.setupFor(rest.file);
       const result: RenderResult = {
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
@@ -473,6 +476,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),
         ...(logged.length ? { console: unique(logged.filter((l) => !allErrors.some((e) => e.includes(l)))).slice(0, 5) } : {}),
         layoutsApplied: server.layoutsFor(target.route),
+        setupApplied: setup ? path.relative(options.root, setup) : undefined,
         timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({
