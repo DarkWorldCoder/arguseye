@@ -3,7 +3,7 @@ export const solidRuntime = `import { createComponent, ErrorBoundary } from "/@d
 import { render, insert } from "/@deps/solid-js/web.js";
 const cp = window.__CP__;
 cp.warnings = [];
-const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
+const moduleUrl = (file) => cp.fileUrl(file) + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
 const reviveProps = (value) => {
   if (Array.isArray(value)) return value.map(reviveProps);
   if (value && typeof value === "object") {

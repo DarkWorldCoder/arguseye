@@ -14,7 +14,7 @@ const revive = (value) => {
   }
   return value;
 };
-const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
+const moduleUrl = (file) => cp.fileUrl(file) + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
 cp.show = async (target, state) => {
   if (state) Object.assign(cp, state);
   cp.target = target; cp.errors = []; cp.warnings = []; cp.status = "loading";

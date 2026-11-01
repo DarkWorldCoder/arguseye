@@ -7,5 +7,6 @@ export function previewSetup(root: string) {
   return {
     jsx: find(["arguseye.setup.tsx", "arguseye.setup.jsx", "arguseye.setup.ts", "arguseye.setup.js"]),
     vue: find(["arguseye.setup.vue.ts", "arguseye.setup.vue.js"]),
+    svelte: find(["arguseye.setup.svelte.ts", "arguseye.setup.svelte.js"]),
   };
 }

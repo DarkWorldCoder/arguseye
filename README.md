@@ -194,6 +194,8 @@ If a preview cannot start, call `inspect_project {}` or run `npx @ayushniroula/a
 
 Project inspection and explicit setup are currently **unreleased development features**. Use a build of this branch; the published 0.0.12 package does not expose them yet.
 
+This branch also adds opt-in project Vite plugins, replayable browser/network fixtures, cancellation and bounded sessions, resumable audits, optional accessibility/source inspection, Svelte context setup, and an independent HTML/Web Components adapter. See the [rendering contracts](docs/rendering.md), [setup guide](docs/setup.md) and [capability/validation matrix](docs/conformance.md). These additions remain unpublished.
+
 For context that cannot be inferred, supply an [explicit provider or Vue setup](docs/setup.md). Render evidence identifies the setup file; its code uses your project's packages and executes only during previewing.
 
 | Tool | What the agent gets back |

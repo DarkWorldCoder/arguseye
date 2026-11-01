@@ -23,7 +23,7 @@ export async function componentFiles(dir: string): Promise<string[]> {
   const files = await sourceFiles(dir);
   return files.filter((f) => {
     const rel = "/" + path.relative(dir, f);
-    return /\.(vue|svelte|[jt]sx)$/.test(f) && !/\/(vite|vitest|next|tailwind|postcss|eslint|playwright)\.config\./.test(rel) && !/\/(__tests__|__mocks__|e2e|fixtures?)\//.test(rel);
+    return /\.(vue|svelte|html|[jt]sx)$/.test(f) && !/\/(vite|vitest|next|tailwind|postcss|eslint|playwright)\.config\./.test(rel) && !/\/(__tests__|__mocks__|e2e|fixtures?)\//.test(rel);
   }).sort();
 }
 
@@ -50,7 +50,7 @@ export async function audit(renderer: Renderer, root: string, dir = root, { limi
   for (const file of files.slice(offset, offset + limit)) {
     if (signal?.aborted) { cancelled = true; break; }
     const rel = path.relative(root, file);
-    const exportName = /\.(vue|svelte)$/.test(file) ? "default" : pickExport(file, await renderer.server.readSource(file));
+    const exportName = /\.(vue|svelte|html)$/.test(file) ? "default" : pickExport(file, await renderer.server.readSource(file));
     if (!exportName) { const e: AuditEntry = { file: rel, status: "skipped", warnings: ["No component export"] }; entries.push(e); onEntry(e); continue; }
     let entry: AuditEntry;
     try {

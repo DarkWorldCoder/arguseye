@@ -1,3 +1,4 @@
+import { fileFromUrl } from "../server/fileUrl.js";
 import { inspectRender, errorLocations, type AccessibilityEvidence, type ElementEvidence, type ErrorLocation } from "./inspectRender.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { installFixtures, validateFixtures, type RenderFixtures, type FixtureProvenance } from "./renderFixtures.js";
@@ -232,6 +233,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   /** The colour scheme each warm page currently emulates. */
   const schemes = new WeakMap<Page, PreviewTarget["theme"]>();
+  const pointerDirty = new WeakSet<Page>();
 
   /** Bundle generation each warm page was loaded under. */
   const generations = new WeakMap<Page, number>();
@@ -244,11 +246,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     try { guard(); } catch (error) { await page.close(); throw error; }
     const evidence = await installFixtures(page, server.url, fixtures, storage);
     if (evidence) fixtureEvidence.set(page, evidence);
+    await page.mouse.move(-1, -1);
     await page.emulateMedia({ colorScheme: target.theme ?? null });
     schemes.set(page, target.theme);
     const errors: string[] = [];
     const loaded = new Set<string>(); loadedModules.set(page, loaded);
-    page.on("request", (request) => { const url = new URL(request.url()); if (url.pathname.startsWith("/@fs/")) loaded.add(decodeURIComponent(url.pathname.slice(4))); });
+    page.on("request", (request) => { const url = new URL(request.url()); if (url.pathname.startsWith("/@fs/")) { try { loaded.add(fileFromUrl(url.pathname.slice(4))); } catch {} } });
     pageErrors.set(page, errors);
     page.on("pageerror", (e) => errors.push(e.stack ?? e.message));
     const logged: string[] = [];
@@ -270,7 +273,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
     guard();
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
-    await page.waitForFunction(() => (window as any).__CP__?.ready, null, { timeout: 15000 });
+    await page.waitForFunction(() => (window as any).__CP__?.ready || (window as any).__CP__?.status === "error", null, { timeout: 15000 });
     await page.evaluate(() => Promise.race([(window as any).__CP__.ready, new Promise((_, reject) => setTimeout(() => reject(new Error("Component setup did not become ready within 15 s")), 15000))]));
     guard();
     // Agents get the settled frame: transitions end instantly, animations hold still, no blinking caret.
@@ -430,8 +433,11 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       failedRequests.length = 0;
       let reloaded = false;
       const marks: number[] = [performance.now()];
+      if (pointerDirty.has(page)) { await page.mouse.move(-1, -1); pointerDirty.delete(page); }
       // Storage is per render: cleared, then seeded, so one render's state never leaks into the next.
       await page.evaluate((s) => {
+        if (scrollX || scrollY) window.scrollTo(0, 0);
+        if (document.activeElement !== document.body) (document.activeElement as HTMLElement | null)?.blur?.();
         localStorage.clear();
         sessionStorage.clear();
         for (const [k, v] of Object.entries(s?.local ?? {})) localStorage.setItem(k, v);
@@ -442,7 +448,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         if (schemes.get(page) !== rest.theme) { await page.emulateMedia({ colorScheme: rest.theme ?? null }); schemes.set(page, rest.theme); }
         const state = server.syncDisk();
         const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
-        if (generation !== generations.get(page)) {
+        if (generation !== generations.get(page) || frameworkOf(rest.file) === "html" && await page.evaluate((epoch) => (window as any).__CP__.epoch !== epoch, state.epoch)) {
           reloaded = true;
           await load(page, target);
         } else {
@@ -454,7 +460,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             const updateErrors: string[] = [];
             for (const file of changed) {
               if (/\.(css|scss|sass)$/.test(file) || sameEpoch) {
-                try { await cp.importModule("/@fs" + file + "?e=" + s.epoch + "&v=" + s.versions[file]); } catch (error) { updateErrors.push(String(error)); }
+                try { await cp.importModule(cp.fileUrl(file) + "?e=" + s.epoch + "&v=" + s.versions[file]); } catch (error) { updateErrors.push(String(error)); }
               }
             }
             if (sameEpoch && changed.some((f) => !/\.(css|scss|sass)$/.test(f))) cp.refresh?.performReactRefresh();
@@ -471,6 +477,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       guard();
       marks.push(performance.now());
       const actionsApplied = await runActions(page, actions, errors);
+      if (actions.length) pointerDirty.add(page);
 
       const warnings: string[] = server.warnings(rest.file);
       if (unresolved.length) warnings.push("Runtime usage inputs were not evaluated: " + unresolved.join(", "));

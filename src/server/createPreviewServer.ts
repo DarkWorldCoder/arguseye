@@ -1,3 +1,5 @@
+import { fileUrl, fileFromUrl } from "./fileUrl.js";
+import { htmlRuntime } from "./htmlRuntime.js";
 import { buildInputs } from "../project/buildInputs.js";
 import { vueRuntime } from "./vueRuntime.js";
 import { svelteRuntime } from "./svelteRuntime.js";
@@ -12,7 +14,7 @@ import { CssPipeline, isStylesheet } from "./cssPipeline.js";
 import { contentType } from "./assets.js";
 import { createFontContext } from "../project/createFontContext.js";
 
-const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
+const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte|html)$/;
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { detectAppContext, wrapperModule } from "../project/appContext.js";
@@ -139,7 +141,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return { ...context, entry: setupFiles.jsx, wrappers: [{ kind: "component" as const, source: setupFiles.jsx, importName: "default", props: {} }], layouts: [path.relative(options.root, setupFiles.jsx)] };
   };
   const globalStyles = (app: ReturnType<typeof appContext>) => [
-    ...app.globalCss.map((file) => `/@fs${file}?import&${query(file).slice(1)}`),
+    ...app.globalCss.map((file) => `${fileUrl(file)}?import&${query(file).slice(1)}`),
     ...(fonts.stylesheet() ? ["/@next-fonts?v=" + createHash("sha256").update(fonts.stylesheet()).digest("hex").slice(0, 12)] : []),
   ];
   const readSource = async (file: string) => {
@@ -221,7 +223,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     }
     if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true, jsx: graph.jsx }));
     const runtimeDeps = graph.jsx === "preact" ? ["preact", "preact/hooks", "preact/jsx-runtime", "preact/jsx-dev-runtime"] : graph.jsx === "solid" ? ["solid-js", "solid-js/web"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"];
-    ({ vue: ["vue"], svelte: ["svelte"], react: runtimeDeps })[frameworkOf(file)].forEach((spec) => deps.add(spec));
+    ({ vue: ["vue"], svelte: ["svelte"], html: [], react: runtimeDeps })[frameworkOf(file)].forEach((spec) => deps.add(spec));
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
     // (only the providers: the layout itself may import server-only code).
@@ -233,6 +235,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (setup) await graph.crawlVirtual(setup.file, setup.source, { refresh: false });
       await graph.crawlVirtual(autoComponentsFile, autoComponentsModule(readAutoComponents(options.root)), { refresh: false });
     }
+    if (frameworkOf(file) === "svelte" && setupFiles.svelte) await graph.crawlVirtual(path.join(options.root, "preview-svelte-setup.ts"), `export {default} from ${JSON.stringify(setupFiles.svelte)};`, { refresh: false });
     await deps.ensureBuilt();
     return { generation: buildGeneration + deps.generation, cached: deps.cached };
   }
@@ -311,6 +314,11 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const globalCssUrls = globalStyles(app);
         return send(res, 200, "text/html", previewHtml(target, { state, jsx: graph.jsx, env: publicEnv(options.root), metaEnv: importMetaEnv(options.root, graph.vite.envPrefix), define: graph.vite.define, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
+      if (url.pathname === "/@html-script") {
+        const file = url.searchParams.get("file") ?? ""; access.assert(file);
+        if (!file.endsWith(".html")) throw new Error(`Inline module source must be HTML: ${file}`);
+        return send(res, 200, "text/javascript", await graph.loadHtmlScript(file, Number(url.searchParams.get("index"))));
+      }
       if (url.pathname === "/@context") {
         const { file, wrappers } = decodeContext(url.searchParams.get("c") ?? "");
         access.assert(file);
@@ -333,6 +341,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (url.pathname === "/@vue-components") {
         return send(res, 200, "text/javascript", await graph.loadVirtual(autoComponentsFile, autoComponentsModule(readAutoComponents(options.root)), { refresh: false }));
       }
+      if (url.pathname === "/@svelte-setup") return send(res, 200, "text/javascript", setupFiles.svelte ? await graph.loadVirtual(path.join(options.root, "preview-svelte-setup.ts"), `export {default} from ${JSON.stringify(setupFiles.svelte)};`, { refresh: false }) : "export default null;");
       if (url.pathname === "/@vue-setup") {
         const setup = await vueSetup();
         return send(res, 200, "text/javascript", setup ? await graph.loadVirtual(setup.file, setup.source, { refresh: false }) : "export default null;");
@@ -375,6 +384,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       }
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "preact") return send(res, 200, "text/javascript", preactRuntime);
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "solid") return send(res, 200, "text/javascript", solidRuntime);
+      if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "html") return send(res, 200, "text/javascript", htmlRuntime);
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "vue") return send(res, 200, "text/javascript", vueRuntime);
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "svelte") { deps.add("svelte"); return send(res, 200, "text/javascript", svelteRuntime); }
       if (url.pathname === "/@runtime") {
@@ -382,12 +392,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return send(res, 200, "text/javascript", reactRuntime);
       }
       if (url.pathname.startsWith("/@fs/") && url.searchParams.has("raw")) {
-        const file = decodeURIComponent(url.pathname.slice("/@fs".length));
+        const file = fileFromUrl(url.pathname.slice("/@fs".length));
         access.assert(file);
         return sendFile(res, file);
       }
       if (url.pathname.startsWith("/@fs/")) {
-        const file = decodeURIComponent(url.pathname.slice("/@fs".length));
+        const file = fileFromUrl(url.pathname.slice("/@fs".length));
         access.assert(file);
         return send(res, 200, "text/javascript", await graph.load(file));
       }
@@ -439,7 +449,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
     readSource,
-    moduleUrl: (file) => `/@fs${file}`,
+    moduleUrl: fileUrl,
     pageUrl: (target, { live = true } = {}) => `/?t=${encodeTarget(target)}${live ? "" : "&live=0"}`,
     updateBuffer,
     syncDisk,
@@ -447,7 +457,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     prepare,
     ready: () => warming,
     layoutsFor: (route) => appContext(route).layouts,
-    setupFor: (file) => frameworkOf(file) === "vue" ? setupFiles.vue : frameworkOf(file) === "react" ? setupFiles.jsx : undefined,
+    setupFor: (file) => frameworkOf(file) === "vue" ? setupFiles.vue : frameworkOf(file) === "react" ? setupFiles.jsx : frameworkOf(file) === "svelte" ? setupFiles.svelte : undefined,
     close: () => new Promise((r) => { watcher?.close(); server.closeAllConnections(); server.close(() => r()); }),
   };
 }

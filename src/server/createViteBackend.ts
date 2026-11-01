@@ -1,3 +1,4 @@
+import { fileUrl, fileFromUrl } from "./fileUrl.js";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import http from "node:http";
 import path from "node:path";
@@ -57,8 +58,8 @@ export async function createViteBackend(options: PreviewServerOptions, notify: (
     const detected = detectAppContext(root, source, route);
     return setup.jsx ? { ...detected, entry: setup.jsx, wrappers: [{ kind: "component" as const, source: setup.jsx, importName: "default", props: {} }], layouts: [path.relative(root, setup.jsx)] } : detected;
   };
-  const globals = () => { const context = app(); return { globalCssUrls: context.globalCss.map((f) => `/@fs${slash(f)}?import&e=${epoch}`), htmlClass: context.htmlClass, bodyClass: context.bodyClass }; };
-  const register = (file: string, code: string) => { generated.set(slash(file), code); return `/@fs${slash(file)}?e=${epoch}`; };
+  const globals = () => { const context = app(); return { globalCssUrls: context.globalCss.map((f) => `${fileUrl(f)}?import&e=${epoch}`), htmlClass: context.htmlClass, bodyClass: context.bodyClass }; };
+  const register = (file: string, code: string) => { generated.set(slash(file), code); return `${fileUrl(file)}?e=${epoch}`; };
   const runtimeCode = (code: string) => code.replace(/(["'])\/@deps\/(.+?)\.js\1/g, (_match, _q, spec) => JSON.stringify(spec));
   const runtimes = { react: reactRuntime, vue: vueRuntime, svelte: svelteRuntime, preact: preactRuntime, solid: solidRuntime };
   const generatedUrl = (url: URL) => {
@@ -74,6 +75,7 @@ export async function createViteBackend(options: PreviewServerOptions, notify: (
       const { file: from, wrappers } = decodeContext(url.searchParams.get("c") ?? ""); access.assert(from);
       return register(from.replace(/\.[^.]+$/, ".arguseye-context.tsx"), wrapperModule(wrappers, { markInnermost: true, jsx: jsxRuntimeOf(root) }));
     }
+    if (url.pathname === "/@svelte-setup") return register(file, setup.svelte ? `export {default} from ${JSON.stringify(setup.svelte)};` : "export default null;");
     if (url.pathname === "/@vue-components") return register(file, autoComponentsModule(readAutoComponents(root)));
     if (url.pathname === "/@vue-setup") {
       if (setup.vue) return register(file, `export { default } from ${JSON.stringify(setup.vue)};`);
@@ -105,7 +107,7 @@ export async function createViteBackend(options: PreviewServerOptions, notify: (
         if (!result) throw new Error(`Vite did not transform ${url.pathname}`);
         return send(res, 200, "text/javascript", result.code);
       }
-      if (url.pathname.startsWith("/@fs/")) access.assert(decodeURIComponent(url.pathname.slice(4)));
+      if (url.pathname.startsWith("/@fs/")) access.assert(fileFromUrl(url.pathname.slice(4)));
       else if (!url.pathname.startsWith("/@id/") && !url.pathname.startsWith("/@vite/")) {
         const absolute = path.join(root, decodeURIComponent(url.pathname));
         if (existsSync(absolute)) access.assert(absolute);
@@ -148,12 +150,12 @@ export async function createViteBackend(options: PreviewServerOptions, notify: (
   return {
     url,
     snapshot: () => ({ ...state(), generation, configDependencies: vite.config.configFileDependencies, context: globals(), warnings: [...app(lastTarget?.route).warnings], layouts: app(lastTarget?.route).layouts, setup }),
-    async prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string) { if (file !== "/@empty") access.assert(file); if (context) access.assert(context.file); if (route) access.assert(route); lastTarget = { file, route }; return { generation, cached: false }; },
+    async prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string) { if (frameworkOf(file) === "html") throw new Error("HTML/Web Components currently use native mode; retry with --build-mode native."); if (file !== "/@empty") access.assert(file); if (context) access.assert(context.file); if (route) access.assert(route); lastTarget = { file, route }; return { generation, cached: false }; },
     updateBuffer(file: string, text?: string) { access.assert(file); if (text === undefined) overlay.delete(file); else overlay.set(file, text); return changed(file); },
     syncDisk() { for (const [file, seen] of mtimes) if (!overlay.has(file) && statSync(file, { throwIfNoEntry: false })?.mtimeMs !== seen) { mtimes.delete(file); changed(file); } return state(); },
     async sourceLocation(file: string, line: number, column: number) {
       access.assert(file);
-      const result = await vite.transformRequest(`/@fs${slash(file)}`);
+      const result = await vite.transformRequest(fileUrl(file));
       if (!result?.map) return null;
       const point = originalPositionFor(new TraceMap(result.map as any), { line, column: column - 1 });
       if (!point.source || point.line === null || point.column === null) return null;

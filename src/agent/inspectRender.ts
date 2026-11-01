@@ -1,3 +1,4 @@
+import { fileFromUrl } from "../server/fileUrl.js";
 import type { Page } from "playwright-core";
 import type { PreviewServer } from "../server/createPreviewServer.js";
 
@@ -12,7 +13,7 @@ export async function errorLocations(errors: string[], server: PreviewServer): P
   const points: SourcePoint[] = [], seen = new Set<string>();
   for (const error of errors.slice(0, 10)) for (const match of error.matchAll(/\/@fs([^\s)]+?):(\d+):(\d+)/g)) {
     let file: string;
-    try { file = decodeURIComponent(match[1].split("?")[0]); } catch { continue; }
+    try { file = fileFromUrl(match[1].split("?")[0]); } catch { continue; }
     const point = { file, line: Number(match[2]), column: Number(match[3]) };
     const key = JSON.stringify(point); if (!seen.has(key)) { seen.add(key); points.push(point); }
     if (points.length >= 40) break;

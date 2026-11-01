@@ -1,0 +1,44 @@
+name: Native conformance
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [codex/research-implementation]
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install real fixture packages
+        run: for d in test/fixtures/*/; do (cd "$d" && npm ci --no-audit --no-fund); done
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run typecheck
+      - name: Native framework and MCP contracts
+        run: npx vitest run test/browser/render.test.ts test/browser/vue.test.ts test/browser/svelte.test.ts test/browser/preact.test.ts test/browser/solid.test.ts test/browser/html.test.ts test/browser/mcp.test.ts --maxWorkers 1
+      - run: npm run build
+      - name: Execute the extracted native VSIX on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/nativeConformance.mjs
+      - name: Execute the extracted native VSIX on Windows and macOS
+        if: runner.os != 'Linux'
+        run: node scripts/nativeConformance.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-${{ matrix.os }}
+          path: artifacts/native-conformance/

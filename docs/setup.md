@@ -36,8 +36,20 @@ export default function setup(app) {
 
 Verification renders recreate the Vue app and its setup. Interactive template/style updates keep state; script and setup dependency updates reset it. Setup failures appear in warnings and leave evidence incomplete even if the component mounts.
 
+## Svelte mount context
+
+Create `arguseye.setup.svelte.ts` (or `.js`) in the selected root. Its default export returns a fresh `Map` for Svelte's mount context. It may be async. The same contract works with Svelte 5 `mount` and the Svelte 4 component constructor.
+
+```ts
+export default function setup() {
+  return new Map([["theme", { accent: "#0e7490" }]]);
+}
+```
+
+This supplies explicit context without starting SvelteKit loaders or reconstructing a backend. Each verification mount gets fresh context. Svelte live edits currently remount and reset state.
+
 ## Editing and boundaries
 
-Create setup files before starting the MCP or editor preview; restart to discover a newly added file or change the dependency manifest. Existing setup files and their imports participate in source fingerprints and unsaved buffer updates. Keep them inside the selected project or an explicitly approved source root. The engine rejects symlinks that escape approved roots.
+Saved setup and manifest changes invalidate compilation at the next verification render. Refresh the live panel after adding a new setup file. Existing setup files and their imports participate in source fingerprints and unsaved buffer updates. Keep them inside the selected project or an explicitly approved source root. The engine rejects symlinks that escape approved roots.
 
-There is no explicit Svelte context adapter in this slice. The existing Svelte/SvelteKit support remains limited to its documented browser stand-ins and inferred global styles. Application loaders, auth, network effects, computed configuration and arbitrary build plugins still require application-level validation. Native preview performance and full-plugin compatibility are separate concerns.
+Application loaders, auth, network effects and server behavior still require application-level validation. Native preview and the opt-in project Vite pipeline have separate performance costs and limits; see [rendering contracts](rendering.md).

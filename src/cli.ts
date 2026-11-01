@@ -13,7 +13,7 @@ import { routeFor } from "./project/routeFor.js";
 import { audit } from "./agent/audit.js";
 import { inspectProject } from "./project/inspectProject.js";
 
-const HELP = `arguseye: inspect React and Vue components and verify UI edits, no dev server
+const HELP = `arguseye: inspect components and verify UI edits, no application server
 
   arguseye mcp [--root DIR] [--build-mode native|vite]
       MCP server on stdio for coding agents (render_component, list_usages, render_usages)
@@ -125,14 +125,18 @@ if (values.help || !command) {
 } else if (command === "audit") {
   const renderer = await createRenderer({ root, buildMode });
   try {
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    process.on("SIGINT", cancel); process.on("SIGTERM", cancel);
     const report = await audit(renderer, root, file ? path.resolve(root, file) : root, {
-      limit: values.limit ? Number(values.limit) : 200, cursor: values.cursor,
+      limit: values.limit ? Number(values.limit) : 200, cursor: values.cursor, signal: controller.signal,
       onEntry: (e) => { if (!values.json) console.log(`${e.status.padEnd(7)} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}${e.errors ? "\n        " + e.errors[0] : ""}`); },
     });
+    process.off("SIGINT", cancel); process.off("SIGTERM", cancel);
     if (values.out) await writeFile(values.out, JSON.stringify(report, null, 2));
     if (values.json) console.log(JSON.stringify(report));
     else console.log(`\n${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped${report.topErrors.length ? "\nMost common errors:\n" + report.topErrors.map((t) => `  ${t.count}× ${t.message}`).join("\n") : ""}`);
-    process.exitCode = report.error ? 1 : 0;
+    process.exitCode = report.cancelled ? 130 : report.error ? 1 : 0;
   } finally {
     await renderer.close();
   }

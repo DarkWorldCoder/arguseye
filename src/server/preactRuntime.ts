@@ -2,7 +2,7 @@
 export const preactRuntime = `import { h, render, Component as Base } from "/@deps/preact.js";
 const cp = window.__CP__;
 cp.warnings = [];
-const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
+const moduleUrl = (file) => cp.fileUrl(file) + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
 const reviveProps = (value) => {
   if (Array.isArray(value)) return value.map(reviveProps);
   if (value && typeof value === "object") {

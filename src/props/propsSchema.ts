@@ -27,6 +27,7 @@ type Ctx = { file: string; code: string; program: Program; comments: ReturnType<
 
 /** Reads what props a component accepts from its TypeScript parameter type, without running the TypeScript compiler. */
 export async function propsSchema(file: string, exportName = "default", readSource: SourceReader = (file) => readFile(file, "utf8")): Promise<PropSchema[]> {
+  if (file.endsWith(".html")) return [];
   const ctx = await load(file, 0, readSource);
   if (file.endsWith(".vue")) return vueProps(ctx);
   const fn = componentFunction(ctx.program, exportName);
@@ -300,7 +301,7 @@ function literalKeys(t: any): string[] {
 
 /** Static component metadata; computed declarations stay limitations rather than fabricated events/slots. */
 export async function componentMetadata(file: string, readSource: SourceReader) {
-  const framework = file.endsWith(".vue") ? "vue" : file.endsWith(".svelte") ? "svelte" : "jsx";
+  const framework = file.endsWith(".html") ? "html" : file.endsWith(".vue") ? "vue" : file.endsWith(".svelte") ? "svelte" : "jsx";
   if (framework !== "vue") return { framework, events: [] as string[], slots: [] as string[], limitations: ["Only TypeScript parameter props and literal defaults are inspected; runtime values are not evaluated."] };
   const ctx = await load(file, 0, readSource);
   const names = (macro: string) => {

@@ -38,6 +38,22 @@ it("invalidates native aliases and dependency generations when build inputs chan
   } finally { await server?.close(); server = undefined; rmSync(project, { recursive: true, force: true }); }
 });
 
+it("serves real component filenames with spaces and URL metacharacters without treating them as a query", async () => {
+  const project = mkdtempSync(path.join(os.tmpdir(), "cp-url-paths-"));
+  writeFileSync(path.join(project, "package.json"), '{"type":"module"}');
+  // Question marks are not valid Windows filenames; spaces and # are valid on both platforms.
+  const file = path.join(project, "A card #1.tsx");
+  writeFileSync(file, 'export default function Card(){ return "Real filename" }');
+  try {
+    server = await createPreviewServer({ root: project });
+    expect(server.moduleUrl(file)).toContain("%20");
+    expect(server.moduleUrl(file)).toContain("%23");
+    const response = await get(server.moduleUrl(file));
+    expect(response.status).toBe(200);
+    expect(response.body).toContain("Real filename");
+  } finally { await server?.close(); server = undefined; rmSync(project, { recursive: true, force: true }); }
+});
+
 describe("preview server HTTP", () => {
   it("serves a component as browser ESM with types stripped and imports rewritten", async () => {
     server = await createPreviewServer({ root });

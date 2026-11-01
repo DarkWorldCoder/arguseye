@@ -2,7 +2,7 @@
 
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 
-Development status: project inspection, explicit setup, the revised MCP contracts and boundary fixes in the **Unreleased** changelog are local research-implementation changes. Public 0.0.12 does not contain them. Package checks of this branch use private candidates; do not describe these additions as released until a new release is verified.
+Development status: project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components are local research-implementation changes. Public 0.0.12 does not contain them. Package checks use private candidates; do not describe these additions as released until a new release is verified. See [conformance and explicit limits](conformance.md).
 
 ## What is implemented
 

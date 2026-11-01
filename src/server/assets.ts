@@ -1,3 +1,4 @@
+import { fileUrl } from "./fileUrl.js";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -11,7 +12,7 @@ const TYPES: Record<string, string> = {
 export const contentType = (file: string) => TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream";
 
 /** URL that serves a project file's raw bytes (images, fonts, videos). */
-export const rawUrl = (file: string) => `/@fs${file}?raw`;
+export const rawUrl = (file: string) => `${fileUrl(file)}?raw`;
 
 /** True for projects whose static image imports return `{ src, width, height }` (Next.js) instead of a URL string. */
 export function importsImagesAsObjects(root: string): boolean {

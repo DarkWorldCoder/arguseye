@@ -1,3 +1,5 @@
+import { fileUrl, fileFromUrl } from "./fileUrl.js";
+import { compileHtml } from "./compileHtml.js";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import { createVueCompiler } from "./createVueCompiler.js";
 import { createSvelteCompiler } from "./createSvelteCompiler.js";
@@ -21,7 +23,7 @@ import { jsxRuntimeOf } from "../project/framework.js";
 import { createSolidCompiler } from "./createSolidCompiler.js";
 import { expandImportGlobs } from "./importGlob.js";
 
-const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
+const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte|html)$/;
 
 /** Turns project files into browser ESM the preview page can import directly. */
 export class ModuleGraph {
@@ -43,6 +45,7 @@ export class ModuleGraph {
   private svelte: ReturnType<typeof createSvelteCompiler>;
   private transformed = new Map<string, { source: string; code: string; map?: any; prefix?: number; revision?: string }>();
   /** Project files each module imports, from its last load; feeds `crawl`. */
+  private htmlScripts = new Map<string, { file: string; source: string }>();
   private projectImports = new Map<string, string[]>();
   /** Every import URL a module was served with (project and package), for `reachableUrls`. */
   private importUrls = new Map<string, string[]>();
@@ -111,7 +114,7 @@ export class ModuleGraph {
       seen.add(f);
       for (const url of this.importUrls.get(f) ?? []) {
         urls.add(url);
-        if (url.startsWith("/@fs")) walk(decodeURIComponent(url.slice(4).split("?")[0]));
+        if (url.startsWith("/@fs")) walk(fileFromUrl(url.slice(4).split("?")[0]));
       }
     };
     walk(file);
@@ -161,7 +164,31 @@ export class ModuleGraph {
     return this.rewriteImports(asFile, refresh && this.jsx === "react" ? this.withRefresh(asFile, code) : code);
   }
 
+  /** Inline modules are selected from the actual bounded HTML source, never supplied through HTTP text. */
+  async loadHtmlScript(file: string, index: number): Promise<string> {
+    await this.load(file);
+    const script = this.htmlScripts.get(`${file}:${index}`);
+    if (!script) throw new Error(`Unknown inline module ${index} in ${file}`);
+    return this.loadVirtual(script.file, script.source, { refresh: false });
+  }
+
   async load(file: string): Promise<string> {
+    if (file.endsWith(".html")) {
+      const source = await this.readSource(file);
+      const inline: Array<{ file: string; source: string; url: string }> = [];
+      const document = compileHtml(file, source, (specifier) => {
+        if (specifier.startsWith("/")) specifier = pathJoin(this.root, "public", specifier);
+        return this.urlFor(file, specifier);
+      }, (index, source) => {
+        const script = { file: file + `.inline-${index}.ts`, source, url: `/@html-script?file=${encodeURIComponent(file)}&index=${index}&e=${encodeURIComponent(this.query(file))}` };
+        this.htmlScripts.set(`${file}:${index}`, script); inline.push(script); return script.url;
+      });
+      for (const script of inline) await this.crawlVirtual(script.file, script.source, { refresh: false });
+      const urls = [...document.scripts.map((s) => s.url), ...document.styles];
+      this.projectImports.set(file, [...urls.filter((url) => url.startsWith("/@fs/")).map((url) => fileFromUrl(url.slice(4).split("?")[0])), ...inline.flatMap((script) => this.projectImports.get(script.file) ?? [])]);
+      this.importUrls.set(file, [...urls, ...inline.flatMap((script) => this.importUrls.get(script.file) ?? [])]);
+      return `export default ${JSON.stringify(document)};`;
+    }
     if (file.endsWith(".json")) return jsonModule(file, await this.readSource(file));
     if (!SCRIPT_EXT.test(file) && !isStylesheet(file)) return assetModule(file, this.imagesAsObjects);
 
@@ -229,7 +256,7 @@ export class ModuleGraph {
       const url = nextFontUrl(imp.specifier, file, statement) ?? virtualUrl(imp.specifier, statement) ?? this.urlFor(file, imp.specifier);
       urls.push(url);
       if (url.startsWith("/@virtual?")) warnings.push(`${imp.specifier} comes from a Vite plugin and is empty in a preview.`);
-      if (url.startsWith("/@fs")) project.push(decodeURIComponent(url.slice(4).split("?")[0]));
+      if (url.startsWith("/@fs")) project.push(fileFromUrl(url.slice(4).split("?")[0]));
       // A dynamic import's span includes its quotes; a static import's does not.
       out += code.slice(last, imp.start);
       const text = imp.type === "dynamic" ? JSON.stringify(url) : url;
@@ -248,7 +275,7 @@ export class ModuleGraph {
   private urlFor(importer: string, specifier: string): string {
     if (specifier.startsWith("/@")) return specifier;
     const shim = shimFor(specifier);
-    if (shim) return `/@fs${shim}${this.query(shim)}`;
+    if (shim) return `${fileUrl(shim)}${this.query(shim)}`;
     if (specifier === ROUTER_ALIAS) {
       const router = routerPackage(this.root);
       if (!router) throw new Error(`${importer}: @remix-run/react renders with react-router-dom 6.4+ or react-router 7; neither is installed in the project.`);
@@ -266,7 +293,7 @@ export class ModuleGraph {
       return `/@deps/${specifier}.js`;
     }
     const query = this.query(path);
-    return SCRIPT_EXT.test(path) ? `/@fs${path}${query}` : `/@fs${path}?import&${query.slice(1)}`;
+    return SCRIPT_EXT.test(path) ? `${fileUrl(path)}${query}` : `${fileUrl(path)}?import&${query.slice(1)}`;
   }
 }
 

@@ -39,6 +39,7 @@
     "oxc-parser": "^0.156.0",
     "oxc-resolver": "^11.24.2",
     "oxc-transform": "^0.156.0",
+    "parse5": "8.0.1",
     "playwright-core": "^1.64.1",
     "react-refresh": "^0.19.0",
     "rolldown": "^1.2.15",
@@ -68,6 +69,7 @@
     "docs/product.md",
     "docs/setup.md",
     "docs/rendering.md",
+    "docs/conformance.md",
     "docs/technique.md",
     "docs/agent-wishlist.md",
     "benchmarks/README.md",
@@ -83,7 +85,8 @@
     "onLanguage:typescriptreact",
     "onLanguage:javascriptreact",
     "onLanguage:vue",
-    "onLanguage:svelte"
+    "onLanguage:svelte",
+    "onLanguage:html"
   ],
   "contributes": {
     "commands": [
@@ -99,7 +102,7 @@
         {
           "command": "componentPreview.open",
           "group": "navigation",
-          "when": "resourceExtname =~ /\\.(tsx|jsx|vue|svelte)$/"
+          "when": "resourceExtname =~ /\\.(tsx|jsx|vue|svelte|html)$/"
         }
       ]
     },
@@ -144,7 +147,10 @@
     "claude",
     "codex",
     "cursor",
-    "screenshot"
+    "screenshot",
+    "lit",
+    "web-components",
+    "html"
   ],
   "icon": "assets/icon.png",
   "galleryBanner": {

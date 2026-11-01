@@ -1,3 +1,5 @@
+import { browserFileUrl } from "./fileUrl.js";
+
 /** What the preview page should show: a component export and the props to render it with. */
 export type PreviewTarget = {
   /** URL path and params of the page the component lives on, for router hooks (usePathname, useParams, router.query). */
@@ -81,6 +83,7 @@ export function previewHtml(target: PreviewTarget, { state, env, metaEnv = {}, d
 window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [] };
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
 window.__CP__.importModule = (url) => import(url);
+window.__CP__.fileUrl = ${browserFileUrl};
 window.process ??= { env: ${envJson} };
 // Finite JavaScript animations (charts drawing in, springs, count-ups) measure progress from requestAnimationFrame
 // timestamps: the capture step moves those forward so they reach their end frame instead of being caught mid-way.
@@ -156,7 +159,7 @@ import { flushSync } from "/@deps/react-dom.js";
 
 const cp = window.__CP__;
 const fail = (error) => cp.errors.push(String(error?.stack ?? error));
-const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
+const moduleUrl = (file) => cp.fileUrl(file) + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
 let root;
 let mountKey = 0;
 

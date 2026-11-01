@@ -1,3 +1,4 @@
+import { fileUrl } from "./fileUrl.js";
 import { fork, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync, mkdirSync } from "node:fs";
@@ -90,13 +91,13 @@ export async function createVitePreviewServer(options: PreviewServerOptions): Pr
     version: (file) => state.versions[file] ?? 0,
     warnings: () => state.warnings,
     context: () => state.context,
-    moduleUrl: (file) => `/@fs${file.replaceAll(path.sep, "/")}`,
+    moduleUrl: fileUrl,
     pageUrl: (target, { live = true } = {}) => `/?t=${encodeTarget(target)}${live ? "" : "&live=0"}`,
     sourceLocation: async (file, line, column) => { access.assert(file); return rpc("sourceLocation", file, line, column); },
     syncDisk, errorsSince: (since) => errors.filter((e) => e.at >= since),
     async prepare(...args) { await writes.catch(() => {}); await start(); writes = Promise.resolve(); const value = await rpc("prepare", ...args); return { ...value, generation: value.generation + generation * 100000 }; },
     layoutsFor: () => state.layouts,
-    setupFor: (file) => frameworkOf(file) === "vue" ? state.setup.vue : frameworkOf(file) === "react" ? state.setup.jsx : undefined,
+    setupFor: (file) => frameworkOf(file) === "vue" ? state.setup.vue : frameworkOf(file) === "react" ? state.setup.jsx : frameworkOf(file) === "svelte" ? state.setup.svelte : undefined,
     ready: async () => {},
     updateBuffer(file, text) {
       access.assert(file); if (text === undefined) overlay.delete(file); else overlay.set(file, text);

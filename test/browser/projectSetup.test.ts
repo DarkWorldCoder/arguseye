@@ -13,6 +13,23 @@ const project = (fixture: string) => {
   return root;
 };
 
+it("installs explicit Svelte context before mounting and refreshes it after an unsaved edit", async () => {
+  const root = project("svelte-app");
+  const file = path.join(root, "src/Card.svelte"), setup = path.join(root, "arguseye.setup.svelte.ts");
+  writeFileSync(file, '<script>import {getContext} from "svelte"; const theme=getContext("theme");</script><h1>Theme: {theme}</h1>');
+  writeFileSync(setup, 'export default function setup(){return new Map([["theme","explicit"]]);}');
+  let renderer: Renderer | undefined;
+  try {
+    renderer = await createRenderer({ root });
+    const first = await renderer.render({ file });
+    expect(first.errors).toEqual([]);
+    expect(first.snapshot).toContain("Theme: explicit");
+    expect(first.setupApplied).toBe("arguseye.setup.svelte.ts");
+    renderer.server.updateBuffer(setup, 'export default function setup(){return new Map([["theme","unsaved"]]);}');
+    expect((await renderer.render({ file })).snapshot).toContain("Theme: unsaved");
+  } finally { await renderer?.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
 it("uses an explicit JSX provider wrapper while retaining global app styles, including unsaved setup edits", async () => {
   const root = project("react-app");
   const at = (f: string) => path.join(root, f);

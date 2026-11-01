@@ -3,7 +3,7 @@ export const svelteRuntime = `import * as svelte from "/@deps/svelte.js";
 const cp = window.__CP__;
 cp.warnings = [];
 let instance;
-const moduleUrl = (file) => "/@fs" + file + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
+const moduleUrl = (file) => cp.fileUrl(file) + "?e=" + cp.epoch + (cp.versions[file] ? "&v=" + cp.versions[file] : "");
 const reviveProps = (value) => {
   if (Array.isArray(value)) return value.map(reviveProps);
   if (value && typeof value === "object") {
@@ -40,7 +40,12 @@ cp.show = async (target, state) => {
     destroy();
     const props = reviveProps(target.props ?? {});
     const into = host(target);
-    instance = svelte.mount ? svelte.mount(Component, { target: into, props }) : new Component({ target: into, props });
+    let context;
+    try {
+      const setup = (await import("/@svelte-setup?e=" + cp.epoch)).default;
+      if (setup) { context = await setup(); if (!(context instanceof Map)) throw new Error("Svelte setup must return a Map of context keys and values."); }
+    } catch (error) { cp.warnings.push("Svelte context setup could not run: " + (error?.message ?? error)); }
+    instance = svelte.mount ? svelte.mount(Component, { target: into, props, context }) : new Component({ target: into, props, context });
     if (svelte.flushSync) svelte.flushSync(); else await svelte.tick();
     // Components with top-level await (experimental.async) mount empty and fill in later; svelte.settled() can
     // resolve before that work is tracked, so wait for content to appear (2 s cap), then for 50 ms of quiet.
