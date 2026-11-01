@@ -75,7 +75,7 @@ Ask your agent:
 
 > Render the component I changed, using its real usage props. Capture a baseline, compare after the edit, and show the screenshots, accessibility changes, errors, and incomplete context.
 
-MCP tools connect the workflow: `inspect_project`, `render_component`, `list_usages`, `render_usages`, `describe_props`, `render_diff`, and `audit_components`. Outputs include cropped PNGs and versioned structured evidence. Use `output: "summary"` when you only need text. `inspect_project` and CLI `doctor --json` diagnose project setup without launching Chromium. Version 0.0.13 adds explicit replay fixtures, cancellation and bounded sessions, resumable audits, and optional component-scope accessibility/source inspection; unavailable context stays explicit.
+MCP tools connect the workflow: `inspect_project`, `render_component`, `list_usages`, `render_usages`, `describe_props`, `render_diff`, and `audit_components`. Outputs include cropped PNGs and versioned structured evidence. Use `output: "summary"` when you only need text. `inspect_project` and CLI `doctor --json` diagnose project setup without launching Chromium. Version 0.0.14 adds explicit replay fixtures, cancellation and bounded sessions, resumable audits, and optional component-scope accessibility/source inspection; unavailable context stays explicit.
 
 ## Know what the preview covers
 

@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.0.13 — 2026-11-01
+## 0.0.14 — 2026-11-01
+
+The tagged 0.0.13 candidate was withheld after a macOS timing failure; it was not published to npm or Marketplace. This release carries those changes forward.
+
+- Native macOS timing preflight requires three quiet load samples before measurement, waiting at most five minutes. Busy runners fail preflight rather than accepting an unreliable benchmark; measured tests still run once with the same limits. Vue timing failures include browser-side mutation and resource timestamps.
 
 - In-viewport verification uses Chromium's native PNG crops on Linux/Windows. macOS retains the faster viewport surface and crops in an isolated browser realm, outside application canvas overrides. Exact offset/fractional pixels and offscreen captures remain covered. Live-edit checks measure a visible-DOM mutation notification against a strict 100 ms bound, log headless frame-observation delay separately, and retain the state/visibility checks. The 50 ms edit-to-pixels product target remains a separate display benchmark; no physical-display timing is claimed.
 - Native Vue template edits retain unchanged scoped stylesheets instead of reparsing identical CSS and recreating font faces. Style changes still update CSS; script edits retain their explicit state-reset behavior.

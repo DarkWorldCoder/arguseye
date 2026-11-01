@@ -2,7 +2,7 @@
 
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 
-Version scope: 0.0.13 adds project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.
+Version scope: 0.0.14 adds project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.
 
 ## What is implemented
 

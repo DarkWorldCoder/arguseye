@@ -17,13 +17,19 @@ try {
     } finally { await browser.close(); }
   }
   const limit = record.cores * 0.75, started = performance.now();
-  for (let sample = 0; sample < 3; sample++) {
+  let quietSamples = 0;
+  // Fixture installation leaves a long run queue on small macOS runners. Wait before
+  // measuring, rather than retrying measured edits or accepting a busy benchmark.
+  for (let sample = 0; sample < 60; sample++) {
     const load = os.loadavg()[0];
     record.samples.push({ elapsedMs: Math.round(performance.now() - started), load, limit });
     console.log(`Native timing conditions: load ${load.toFixed(2)}, quiet reference <= ${limit.toFixed(2)} (${record.cores} cores)`);
-    if (sample < 2) await new Promise((resolve) => setTimeout(resolve, 5000));
+    quietSamples = load <= limit ? quietSamples + 1 : 0;
+    if (quietSamples === 3) break;
+    if (sample < 59) await new Promise((resolve) => setTimeout(resolve, 5000));
   }
-  record.status = record.samples.every((s) => s.load <= s.limit) ? "quiet" : "busy";
-  record.policy = "Conditions are evidence, not an assertion bypass. Native render/live-update tests run once with unchanged 100 ms limits. Busy-run numbers are not controlled benchmarks.";
+  record.status = quietSamples === 3 ? "quiet" : "busy";
+  record.policy = "Require three quiet samples before measurement, bounded to five minutes. Native render/live-update tests run once with unchanged 100 ms limits; no measured retries or fastest-run selection.";
   save(); console.log(record.policy);
+  if (record.status !== "quiet") throw new Error("Native timing preflight remained busy for five minutes; no performance measurements were accepted. See benchmark-machine.json.");
 } catch (error) { record.status = "failed"; record.error = String(error); save(); throw error; }

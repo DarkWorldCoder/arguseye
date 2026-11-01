@@ -1,4 +1,4 @@
-# Adapter and client conformance (0.0.13)
+# Adapter and client conformance (0.0.14)
 
 Support means the bounded behaviors below have installed fixtures. It does not mean every package, backend, framework plugin or coding client is certified.
 
@@ -32,7 +32,7 @@ Pixel comparisons use a YIQ color-distance threshold of 0.1 to suppress small re
 
 VSIX extraction uses a temporary directory outside the checkout. This prevents absent packaged dependencies from resolving through the repository's parent `node_modules`. The result records the isolated path; successful runs clean it up, and failed runs retain it for inspection.
 
-On macOS, the workflow first warms browser executable loading and records three load samples five seconds apart, plus browser versions, in `benchmark-machine.json`. A 75%-of-available-cores reference annotates busy conditions; it never bypasses assertions, retries measured renders or selects a fastest run. Warm-render p95 remains <=100 ms over 20 renders; the existing live-update limit remains <100 ms against a 50 ms target. These are fixture checks on the recorded runners. Busy-run observations are not controlled benchmarks or universal performance guarantees; remeasure performance on a documented quiet machine for release benchmarking.
+On macOS, the workflow first warms browser executable loading and records load samples five seconds apart, plus browser versions, in `benchmark-machine.json`. It requires three consecutive samples at or below 75% of available cores before measuring. Waiting is bounded to five minutes: if the runner stays busy, preflight fails and performance tests do not run. Measured renders are never retried and no fastest run is selected. Warm-render p95 remains <=100 ms over 20 renders; the live-update limit remains <100 ms against a 50 ms target. These are fixture checks on the recorded runners, not universal performance guarantees. Physical-display performance remains a separate benchmark.
 
 Live-update timing checks measure the notification of the expected visible DOM mutation, using the renderer's uncapped headless compositor setting. The observer checks text and computed visibility, so the measurement includes buffer processing, compilation, transport and browser application of the edit. The <100 ms DOM-update bound is separate from the 50 ms edit-to-pixels product target. Frame-observation latency is logged separately and the update must still become visible within two seconds. State and accessible button labels are verified. Locator retry backoff and headless frame scheduling are not counted as DOM-update latency; no physical-display or VS Code refresh-rate benchmark is claimed.
 
