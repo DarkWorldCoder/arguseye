@@ -2,6 +2,8 @@
 
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 
+Development status: project inspection, explicit setup, the revised MCP contracts and boundary fixes in the **Unreleased** changelog are local research-implementation changes. Public 0.0.12 does not contain them. Package checks of this branch use private candidates; do not describe these additions as released until a new release is verified.
+
 ## What is implemented
 
 - Your actual React/Next.js browser component, Vue 3 SFC or Svelte component, using the project's packages and Chromium. React Router and Remix browser components use the project's memory data router.

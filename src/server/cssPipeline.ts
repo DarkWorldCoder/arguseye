@@ -5,6 +5,7 @@ import { applyAlias, readViteConfig, type ViteConfig } from "../project/viteConf
 import { pathToFileURL } from "node:url";
 import { transform as transformCss } from "lightningcss";
 import { rewriteCssUrls } from "./assets.js";
+import { createResolver } from "./resolver.js";
 
 type TailwindNode = typeof import("@tailwindcss/node");
 type TailwindOxide = typeof import("@tailwindcss/oxide");
@@ -96,11 +97,22 @@ export class CssPipeline {
     this.postcss ??= (async () => {
       const configFile = POSTCSS_CONFIGS.map((f) => path.join(this.root, f)).find((f) => existsSync(f));
       if (!configFile) return undefined;
-      const postcss = (await this.importFromProject("postcss")).default;
       const config = configFile.endsWith(".json")
         ? JSON.parse(readFileSync(configFile, "utf8"))
         : (await import(pathToFileURL(configFile).href)).default;
-      const declared = typeof config === "function" ? config({ env: "development" }) : config;
+      const declared = await (typeof config === "function" ? config({ env: "development" }) : config);
+      // pnpm does not expose transitive packages at the application root. Use its configured plugin's
+      // or build tool's own PostCSS, never a convenient copy from Arguseye's dependencies.
+      const resolver = createResolver();
+      const manifestFile = path.join(this.root, "package.json");
+      const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+      const dependencies = { ...manifest.devDependencies, ...manifest.dependencies };
+      const pluginNames = Array.isArray(declared.plugins) ? [] : Object.entries(declared.plugins ?? {}).filter(([, value]) => value !== false).map(([name]) => name);
+      const owners = [...pluginNames, ...["next", "vite"].filter((name) => dependencies[name])];
+      const anchors = [manifestFile, ...owners.flatMap((name) => resolver.resolveFileSync(manifestFile, name).path ?? [])];
+      const postcssFile = anchors.map((from) => resolver.resolveFileSync(from, "postcss").path).find(Boolean);
+      if (!postcssFile) throw new Error(`PostCSS cannot be resolved from ${this.root}, its configured plugins or its declared build tools. Install postcss in this project.`);
+      const postcss = (await import(pathToFileURL(postcssFile).href)).default;
       const plugins = Array.isArray(declared.plugins)
         ? declared.plugins
         : await Promise.all(

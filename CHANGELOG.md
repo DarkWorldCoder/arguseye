@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Warm stylesheet refresh works in strict pnpm layouts where PostCSS belongs to a configured plugin or declared Next/Vite build tool rather than the application root. It resolves that project's runtime through the shared resolver; no Arguseye-owned PostCSS fallback is substituted. Found by rendering and comparing CSCA.ai's existing hero from a freshly installed package.
 - Virtual-module approximation warnings survive browser import caching and remain scoped to the target and Vue setup dependencies. Statically ignored computed Vite settings appear in render warnings too. Diffs report new/resolved warnings without carrying repaired provider/asset failures into the current render; replayed sampled and unresolved inputs retain their provenance.
 - Prop inspection and generated samples read imported type files through the same bounded, unsaved source reader as rendering. Outside type imports are rejected instead of leaking their enum/sample values; unsaved type edits appear immediately in metadata.
 - Optional `arguseye.setup.tsx` provider wrappers and `arguseye.setup.vue.ts` app setup replace inferred browser context using project packages. Existing setup files support unsaved updates and appear as `setupApplied` in evidence. Vue verification recreates plugin state; live template/style edits retain state, and setup failures remain explicit.
