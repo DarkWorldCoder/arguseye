@@ -7,7 +7,11 @@
     "vue.svg": "https://vuejs.org/logo.svg",
     "vscode.png": "https://code.visualstudio.com/assets/branding/code-stable.png",
     "svelte.png": "https://svelte.dev/favicon.png",
-    "react-router.png": "https://reactrouter.com/favicon-light.png"
+    "react-router.png": "https://reactrouter.com/favicon-light.png",
+    "preact.svg": "https://preactjs.com/branding/symbol.svg",
+    "solid.svg": "https://www.solidjs.com/img/logo/without-wordmark/logo.svg",
+    "nuxt.png": "https://nuxt.com/icon.png"
   },
-  "retrieved_svelte_react_router": "2026-10-31"
+  "retrieved_svelte_react_router": "2026-10-31",
+  "retrieved_preact_solid_nuxt": "2026-11-01"
 }

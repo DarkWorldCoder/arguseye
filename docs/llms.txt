@@ -2,7 +2,7 @@
 
 > Local component previews and UI edit evidence for coding agents and VS Code developers.
 
-Arguseye renders real React (React Router and Remix included), browser-renderable Next.js, Vue 3 and Svelte 5 components using the project's installed packages, in light or dark (`theme`). No running app or authored stories are required. Node.js 22+, installed project dependencies, and Chromium or Google Chrome are required.
+Arguseye renders real React (React Router and Remix included), Next.js, Vue 3 and Nuxt, Svelte 5 and SvelteKit, Preact and Solid components using the project's installed packages, in light or dark (`theme`). Providers from the layout or main entry, Vue plugins from src/main.ts and auto-imports are applied; Next.js, Nuxt and SvelteKit server APIs have browser stand-ins and server data comes back empty with a warning. `audit_components` renders every component once and lists what breaks. No running app or authored stories are required. Node.js 22+, installed project dependencies, and Chromium or Google Chrome are required.
 
 ## Agent resources
 - [Agent setup](https://darkworldcoder.github.io/arguseye/agents.html)
