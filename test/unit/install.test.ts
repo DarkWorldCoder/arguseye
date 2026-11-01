@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import { parseForESLint, getStaticTOMLValue } from "toml-eslint-parser";
+import { parse } from "jsonc-parser";
 import os from "node:os";
 import path from "node:path";
 import { install } from "../../src/install.js";
@@ -7,6 +9,64 @@ import { install } from "../../src/install.js";
 const tmp = () => mkdtempSync(path.join(os.tmpdir(), "cp-install-"));
 
 describe("install for agent clients", () => {
+  it("reinstalls Codex without corrupting arrays, comments, environment or other servers", () => {
+    const home = tmp(), project = tmp();
+    install({ client: "codex", project, home });
+    const file = path.join(home, ".codex/config.toml");
+    writeFileSync(file, '# personal settings\n' + readFileSync(file, "utf8") + '\n[mcp_servers.arguseye.env]\nKEEP = "yes"\n\n[mcp_servers.other]\ncommand = "other"\n');
+    install({ client: "codex", project, home });
+    install({ client: "codex", project, home });
+    const text = readFileSync(file, "utf8");
+    const parsed = getStaticTOMLValue(parseForESLint(text).ast) as any;
+    expect(parsed.mcp_servers.arguseye.args).toEqual(["-y", "@ayushniroula/arguseye", "mcp", "--root", project]);
+    expect(parsed.mcp_servers.arguseye.env).toEqual({ KEEP: "yes" });
+    expect(parsed.mcp_servers.other.command).toBe("other");
+    expect(text).toContain("# personal settings");
+  });
+
+  it("preserves JSONC comments, trailing commas, other servers and custom environment on reinstall", () => {
+    const home = tmp(), project = tmp(), file = path.join(project, ".vscode/mcp.json");
+    mkdirSync(path.dirname(file));
+    writeFileSync(file, '{\n // keep this comment\n "servers": {\n  "other": {"command": "other"}, // other tool\n  "arguseye": {"env": {"KEEP": "yes"}, "command": "old",},\n },\n}\n', { mode: 0o600 });
+    install({ client: "vscode", project, home });
+    install({ client: "vscode", project, home });
+    const text = readFileSync(file, "utf8"), config = parse(text);
+    expect(text).toContain("// keep this comment");
+    expect(text).toContain("// other tool");
+    expect(config.servers.other.command).toBe("other");
+    expect(config.servers.arguseye.env).toEqual({ KEEP: "yes" });
+    expect(config.servers.arguseye.args.at(-1)).toBe(project);
+    if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
+  });
+
+  it("validates every selected config before writing any of them", () => {
+    const home = tmp(), project = tmp(), file = path.join(home, ".codex/config.toml");
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, 'broken = ["unterminated"');
+    expect(() => install({ client: "all", project, home })).toThrow(file);
+    expect(readFileSync(file, "utf8")).toBe('broken = ["unterminated"');
+    expect(existsSync(path.join(project, ".mcp.json"))).toBe(false);
+    expect(existsSync(path.join(home, ".claude/skills/arguseye/SKILL.md"))).toBe(false);
+  });
+
+  it.each([
+    '[mcp_servers."arguseye"]\ncommand = "old" # command note\nargs = [\n "old", # old argument\n]\n',
+    'mcp_servers.arguseye = { command = "old", args = ["old"], env = { KEEP = "yes" } }\n',
+    '[mcp_servers]\narguseye = { command = "old", args = ["old"] }\n',
+    '[mcp_servers.arguseye.env]\nKEEP = "yes"\n',
+  ])("updates quoted, multiline, inline and implicit TOML tables: %s", (before) => {
+    const home = tmp(), project = tmp(), file = path.join(home, ".codex/config.toml");
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, '# top comment\n' + before);
+    install({ client: "codex", project, home });
+    install({ client: "codex", project, home });
+    const text = readFileSync(file, "utf8"), config = getStaticTOMLValue(parseForESLint(text).ast) as any;
+    expect(config.mcp_servers.arguseye.command).toBe("npx");
+    expect(config.mcp_servers.arguseye.args.at(-1)).toBe(project);
+    expect(text).toContain("# top comment");
+    if (before.includes("# command note")) expect(text).toContain("# command note");
+    if (before.includes("KEEP")) expect(config.mcp_servers.arguseye.env.KEEP).toBe("yes");
+  });
   it("writes the MCP server and the skill where Claude Code, Codex and Cursor read them, merging existing config", () => {
     const home = tmp(), project = tmp();
     const steps = install({ client: "all", project, home });

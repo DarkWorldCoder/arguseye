@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Agent installation updates JSONC and TOML with parser-based edits, preserving comments, other servers and custom settings. Repeated Codex installs remain valid; all selected configurations are validated before any are written, and each config is replaced atomically.
+
 ## 0.0.12
 
 Preact and Solid join React, Vue and Svelte. Vite project support expands to `import.meta.glob`, supported Sass `additionalData` and aliases, CSS asset aliases, and Vue JSX. Plugin `virtual:` modules use empty stand-ins with warnings; this does not execute the actual plugin pipeline. Previews run in the browser: missing data and context remain warnings or errors, and captured changes require review.

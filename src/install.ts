@@ -1,4 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, realpathSync, statSync, renameSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { editAgentConfig } from "./editAgentConfig.js";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,71 +37,74 @@ export function install({ client, project, home = os.homedir(), dryRun = false }
   const steps: InstallStep[] = [];
   const server = { command: SERVER.command, args: [...SERVER.args, root] };
   const skillSource = path.join(PACKAGE_ROOT, "skills", "arguseye");
+  const writes = new Map<string, string>();
+  const copies: string[] = [];
 
-  const writeJsonMerge = (file: string, mutate: (json: any) => void, note?: string) => {
-    const current = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
-    mutate(current);
+  const config = (file: string, format: "toml" | "mcpServers" | "servers", entry: { command: string; args: string[]; type?: string } = server, note?: string) => {
+    const current = writes.get(file) ?? (existsSync(file) ? readFileSync(file, "utf8") : "");
+    try { writes.set(file, editAgentConfig(current, format, entry)); }
+    catch { throw new Error(`Cannot update ${file}: invalid ${format === "toml" ? "TOML" : "JSONC"} or server configuration. Fix this file and retry; no configuration was written.`); }
     steps.push({ file, action: existsSync(file) ? "merge" : "write", note });
-    if (!dryRun) {
-      mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, JSON.stringify(current, null, 2) + "\n");
-    }
   };
   const copySkill = (dir: string, note?: string) => {
     steps.push({ file: path.join(dir, "SKILL.md"), action: "copy", note });
-    if (!dryRun) {
-      mkdirSync(dir, { recursive: true });
-      cpSync(skillSource, dir, { recursive: true });
-    }
+    copies.push(dir);
   };
 
   for (const c of clients) {
     switch (c) {
       case "claude":
         // Project-scoped MCP config Claude Code reads; the skill goes to the user's skills directory.
-        writeJsonMerge(path.join(root, ".mcp.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Claude Code reads .mcp.json in the project");
+        config(path.join(root, ".mcp.json"), "mcpServers", server, "Claude Code reads .mcp.json in the project");
         copySkill(path.join(home, ".claude", "skills", "arguseye"), "user skill for Claude Code");
         break;
       case "codex": {
         const file = path.join(home, ".codex", "config.toml");
-        const current = existsSync(file) ? readFileSync(file, "utf8") : "";
-        const block = `\n[mcp_servers.arguseye]\ncommand = ${JSON.stringify(server.command)}\nargs = ${JSON.stringify(server.args)}\n`;
-        const next = current.includes("[mcp_servers.arguseye]")
-          ? current.replace(/\n\[mcp_servers\.arguseye\][^[]*/s, block)
-          : current + block;
-        steps.push({ file, action: current ? "merge" : "write", note: "Codex reads ~/.codex/config.toml" });
-        if (!dryRun) { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, next); }
+        config(file, "toml", server, "Codex reads ~/.codex/config.toml");
         copySkill(path.join(home, ".agents", "skills", "arguseye"), "Codex (and Antigravity) read ~/.agents/skills");
         break;
       }
       case "gemini":
         // Gemini CLI reads project settings from .gemini/settings.json (merged with ~/.gemini/settings.json) and skills from .gemini/skills.
-        writeJsonMerge(path.join(root, ".gemini", "settings.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Gemini CLI reads .gemini/settings.json in the project");
+        config(path.join(root, ".gemini", "settings.json"), "mcpServers", server, "Gemini CLI reads .gemini/settings.json in the project");
         copySkill(path.join(root, ".gemini", "skills", "arguseye"), "Gemini CLI reads project skills from .gemini/skills");
         break;
       case "cursor":
-        writeJsonMerge(path.join(home, ".cursor", "mcp.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = { type: "stdio", ...server }; }, "Cursor reads ~/.cursor/mcp.json");
+        config(path.join(home, ".cursor", "mcp.json"), "mcpServers", { type: "stdio", ...server }, "Cursor reads ~/.cursor/mcp.json");
         copySkill(path.join(root, ".cursor", "skills", "arguseye"), "Cursor reads project skills from .cursor/skills");
         break;
       case "windsurf":
-        writeJsonMerge(path.join(home, ".codeium", "windsurf", "mcp_config.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Windsurf reads ~/.codeium/windsurf/mcp_config.json");
+        config(path.join(home, ".codeium", "windsurf", "mcp_config.json"), "mcpServers", server, "Windsurf reads ~/.codeium/windsurf/mcp_config.json");
         break;
       case "vscode":
-        writeJsonMerge(path.join(root, ".vscode", "mcp.json"), (j) => { j.servers ??= {}; j.servers["arguseye"] = { type: "stdio", ...server }; }, "VS Code (Copilot agent mode) reads .vscode/mcp.json");
+        config(path.join(root, ".vscode", "mcp.json"), "servers", { type: "stdio", ...server }, "VS Code (Copilot agent mode) reads .vscode/mcp.json");
         break;
       case "copilot":
         // GitHub Copilot (coding agent and VS Code) reads repository skills from .github/skills and MCP from .vscode/mcp.json.
         copySkill(path.join(root, ".github", "skills", "arguseye"), "Copilot reads .github/skills in the repo");
-        writeJsonMerge(path.join(root, ".vscode", "mcp.json"), (j) => { j.servers ??= {}; j.servers["arguseye"] = { type: "stdio", ...server }; }, "VS Code / Copilot read .vscode/mcp.json");
+        config(path.join(root, ".vscode", "mcp.json"), "servers", { type: "stdio", ...server }, "VS Code / Copilot read .vscode/mcp.json");
         break;
       case "print":
         steps.push({ file: "(stdout)", action: "write", note: mcpSnippet(root) });
         break;
       case "antigravity":
-        writeJsonMerge(path.join(root, ".agents", "mcp_config.json"), (j) => { j.mcpServers ??= {}; j.mcpServers["arguseye"] = server; }, "Antigravity reads .agents/mcp_config.json in the workspace");
+        config(path.join(root, ".agents", "mcp_config.json"), "mcpServers", server, "Antigravity reads .agents/mcp_config.json in the workspace");
         copySkill(path.join(root, ".agents", "skills", "arguseye"), "Antigravity and Codex read .agents/skills in the repo");
         break;
     }
+  }
+  if (!dryRun) {
+    for (const [file, text] of writes) {
+      // Follow existing config symlinks, but replace the target atomically on the same filesystem.
+      const target = existsSync(file) ? realpathSync(file) : file;
+      mkdirSync(path.dirname(target), { recursive: true });
+      const temp = path.join(path.dirname(target), `.${path.basename(target)}.${randomUUID()}.tmp`);
+      try {
+        writeFileSync(temp, text, { flag: "wx", mode: existsSync(target) ? statSync(target).mode & 0o777 : 0o600 });
+        renameSync(temp, target);
+      } finally { rmSync(temp, { force: true }); }
+    }
+    for (const dir of copies) { mkdirSync(dir, { recursive: true }); cpSync(skillSource, dir, { recursive: true }); }
   }
   return steps;
 }
