@@ -11,11 +11,15 @@ import { createPreviewServer } from "./server/createPreviewServer.js";
 import { findUsages } from "./usages/findUsages.js";
 import { routeFor } from "./project/routeFor.js";
 import { audit } from "./agent/audit.js";
+import { inspectProject } from "./project/inspectProject.js";
 
 const HELP = `arguseye: inspect React and Vue components and verify UI edits, no dev server
 
   arguseye mcp [--root DIR]
       MCP server on stdio for coding agents (render_component, list_usages, render_usages)
+
+  arguseye doctor [--root DIR] [--json]
+      Check installed framework packages and compiler limitations without starting a browser
 
   arguseye shot FILE [--export NAME] [--usage ID] [--props JSON] [--viewport WxH] [--theme light|dark] [--out FILE.png] [--root DIR]
       Render once: writes a PNG and prints the accessibility snapshot and errors
@@ -67,6 +71,10 @@ const root = path.resolve(values.root!);
 
 if (values.help || !command) {
   console.log(HELP);
+} else if (command === "doctor") {
+  const report = inspectProject(root);
+  console.log(values.json ? JSON.stringify(report) : `${report.root}\n${report.packages.map((p) => `${p.name}: ${p.installed ?? "not installed"}`).join("\n")}\n${report.diagnostics.map((d) => `${d.code}: ${d.message}\n  ${d.recovery}`).join("\n")}`);
+  process.exitCode = report.errors.length ? 1 : 0;
 } else if (command === "mcp") {
   const mcp = await createMcpServer({ root });
   await mcp.server.connect(new StdioServerTransport());

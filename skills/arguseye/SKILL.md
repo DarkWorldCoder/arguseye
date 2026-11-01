@@ -17,6 +17,7 @@ Render component source in Chromium with the project's packages, styles, assets 
 ## Tools (MCP server `arguseye`)
 | Tool | Use |
 |---|---|
+| `inspect_project {}` | Check the selected application root, installed framework versions and missing/computed configuration before browser startup. Read each diagnostic's recovery advice. This does not test a browser mount or execute Vite plugins. |
 | `render_component {file, export?, usage?, props?, viewport?, theme?, in_context?, frame?, actions?, storage?, output?}` | Render with a discovered usage or explicit props. `viewport`: `mobile`, `tablet`, `desktop` or `WxH`. `theme`: `light` or `dark` forces the colour scheme (the `dark` class on `<html>`, `color-scheme`, `prefers-color-scheme`); check both when the app has a dark mode. Without supplied inputs, required props may be generated from TypeScript samples. |
 | `list_usages {file, export?}` | Every call site with literal props, unresolved runtime props, and the JSX ancestors (`context`). |
 | `render_usages {file, export?, viewport?, theme?, cursor?, limit?, output?}` | A page of isolated literal-prop variants, not full-page integration tests. `limit` is 1–12; pass the returned `nextCursor` as `cursor` until it is null. |
@@ -32,6 +33,7 @@ For render tools, `output` is `"image"`, `"summary"` or `"both"` (default). Use 
 Providers from the root layout or from `src/main.tsx` (React Query, Redux, i18n set up by a side-effect import, theme providers), Vue plugins installed in `src/main.ts` (Pinia, vue-router, vue-i18n, Element Plus, directives, `app.provide`), `<Suspense>`, top-level `await` and `<Teleport>` in Vue, SvelteKit's `$app/*`, `$env/*`, `$lib` and `kit.alias`, auto-imports and auto-registered components (`unplugin-auto-import`, `unplugin-vue-components`, Nuxt's declaration files), Nuxt composables and built-in components (data calls return their `default` in a preview), Next's `next/router`, `next/head`, `next/dynamic`, `next/headers` and async server components, `React.lazy`/Suspense and data loaded on mount (the capture waits for them, up to 3 s), animations, charts and WebGL canvases, portals (dialogs, menus, toasts), virtualized lists, JSX in `.js`, tsconfig paths and `vite.config` aliases, `import.meta.env`/`define`, CSS modules, Sass, Tailwind v3/v4, JSON and image imports, custom elements. A component that renders nothing for the given props comes back with a warning instead of a blank image.
 
 ## Reading a result
+- MCP results include `schemaVersion: 1` and `errors[]`, even for requests that fail before producing evidence. Inspect `isError` and `errors` before using tool-specific fields. Text-only clients can pass the printed `captureId` back to `render_diff`.
 - `errors[]` are real: a resolve error names the import and the importer; a render error carries the component stack. Fix them before trusting the pixels.
 - Read `warnings[]`, `unresolved[]`, `propsSource` and `complete` before trusting context. Generated samples are not real application data; provider gaps, runtime values or unsettled assets can make a successful render incomplete.
 - `changes` and explicit diffs report `unchanged`, `changed` or `incomplete`, with pixel, accessibility and error evidence. None of these establishes that the intended behavior is correct.
@@ -51,6 +53,7 @@ npx @ayushniroula/arguseye shot src/components/Card.tsx --export Card --usage ap
 npx @ayushniroula/arguseye usages src/components/Card.tsx --export Card
 npx @ayushniroula/arguseye serve src/components/Card.tsx --export Card --port 4321
 npx @ayushniroula/arguseye audit src/components --out audit.json
+npx @ayushniroula/arguseye doctor --root . --json
 ```
 
 Use `shot --json` for structured metadata and `--output summary` to omit the ordinary PNG output. CLI baselines survive separate commands when explicitly saved in a chosen directory:

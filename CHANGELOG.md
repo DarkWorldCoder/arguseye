@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `inspect_project` and CLI `doctor --json` report the selected application directory, actual installed framework packages and actionable missing-package/config diagnostics without launching Chromium or executing project configuration. MCP initializes before rendering so inspection remains available when browser setup is broken.
 - MCP reports the installed build version, declares versioned output schemas for all tools, includes capture handles in text, and adds structured static-inspection and error results. Render tools conservatively declare that project code and actions may have external effects; static inspection remains read-only.
 - Preview HTTP and headless target reads are bounded to canonical project paths, declared package roots, runtime shims and caller-approved extra roots. Outside and retargeted symlink requests are rejected; unexpected HTTP hosts and origins cannot read preview content.
 - Agent installation updates JSONC and TOML with parser-based edits, preserving comments, other servers and custom settings. Repeated Codex installs remain valid; all selected configurations are validated before any are written, and each config is replaced atomically.

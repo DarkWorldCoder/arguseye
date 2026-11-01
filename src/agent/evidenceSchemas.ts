@@ -5,6 +5,14 @@ const record = z.record(z.string(), z.unknown());
 const viewport = z.object({ width: z.number(), height: z.number() });
 const region = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() });
 
+/** Reports project prerequisites even when rendering cannot start. */
+export const projectOutputSchema = z.object({
+  ...common, root: z.string(), packages: z.array(z.object({ name: z.string(), installed: z.string().nullable(), declared: z.string().nullable(), root: z.string().nullable() })),
+  diagnostics: z.array(z.object({ code: z.string(), severity: z.enum(["error", "warning", "info"]), message: z.string(), recovery: z.string() })),
+  build: z.object({ mode: z.literal("native"), executesVitePlugins: z.literal(false) }).passthrough(),
+  browser: z.object({ probed: z.literal(false), note: z.string() }),
+}).passthrough();
+
 /** Request failures have errors but no invented render/prop data; SDK clients validate errors against this schema too. */
 export const toolOutputSchema = <T extends z.ZodRawShape>(schema: z.ZodObject<T>) =>
   schema.partial().extend(common).passthrough()

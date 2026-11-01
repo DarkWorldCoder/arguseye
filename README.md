@@ -190,6 +190,8 @@ A real Next.js 14 app (MUI, Emotion, Redux, next-auth, 1,197 files), rendered fr
 
 ## Tools (MCP server `arguseye`)
 
+If a preview cannot start, call `inspect_project {}` or run `npx @ayushniroula/arguseye doctor --root . --json`. It reports the selected application directory, installed framework versions and recovery steps without starting Chromium or executing project configuration. The native compiler reads supported Vite settings statically; it does not run arbitrary Vite plugins. A successful isolated render still requires reviewing warnings and unresolved inputs.
+
 | Tool | What the agent gets back |
 |---|---|
 | `render_component {file, export?, usage?, props?, viewport?, theme?, in_context?, frame?, actions?, storage?}` | PNG cropped to the component, accessibility tree, `errors[]`, `warnings[]`, `timings`, `changes` since the previous render of the same target. `usage` takes the props of a real call site; `in_context` renders inside that call site's parent elements; `frame` is a stand-in parent box; `actions` and `storage` set the state first; `theme` forces `light` or `dark` (the `dark` class on `<html>`, `color-scheme` and `prefers-color-scheme`). Function props: `{"$fn": "(x) => …"}`. |

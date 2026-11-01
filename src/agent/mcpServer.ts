@@ -3,16 +3,18 @@ import { VIEWPORTS, parseViewport } from "./viewports.js";
 import { renderEvidence, diffEvidence } from "./renderEvidence.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { createRenderer, type RenderRequest, type RenderResult } from "./createRenderer.js";
+import { createRenderer, type Renderer, type RenderRequest, type RenderResult } from "./createRenderer.js";
+import { inspectProject } from "../project/inspectProject.js";
 import { audit } from "./audit.js";
 import { packageVersion } from "../packageVersion.js";
 import { FileAccessError } from "../server/createFileAccess.js";
-import { toolOutputSchema, renderOutputSchema, diffOutputSchema, propsOutputSchema, usagesOutputSchema, usageRendersOutputSchema, auditOutputSchema } from "./evidenceSchemas.js";
+import { toolOutputSchema, projectOutputSchema, renderOutputSchema, diffOutputSchema, propsOutputSchema, usagesOutputSchema, usageRendersOutputSchema, auditOutputSchema } from "./evidenceSchemas.js";
 
 /** Sent to the agent when it connects: when to reach for these tools, so it uses them without being asked. */
 const INSTRUCTIONS = `Arguseye shows you UI you cannot otherwise see: it renders React (incl. browser-compatible Next.js, React Router, Remix), Vue, Svelte, Preact and Solid components from source with project packages and supported layout, provider, style and font context. Missing inputs and runtime approximations remain explicit. No application server or authored stories are required.
 
 Use it whenever you create or change a UI component, its styles or its props:
+- Call inspect_project if setup or rendering fails: it checks the selected project and installed framework packages without starting a browser or executing project config.
 - After the edit, call render_component on the file (pass usage from list_usages for real props). Read errors first, then the accessibility snapshot, then the image.
 - Before saying a UI change is done, render it again and read \`changes\`; for a shared component, render_usages checks every call site.
 - Use theme "dark" when the app has a dark mode, viewport "mobile" for responsive work, actions to open menus, dialogs or tabs.
@@ -41,7 +43,16 @@ const look = {
 /** Exposes the headless renderer as MCP tools so a coding agent can see what it built in one call. */
 export async function createMcpServer(options: { root: string; warmup?: boolean }) {
   const root = path.resolve(options.root);
-  const renderer = await createRenderer({ root, warmup: options.warmup ?? true });
+  let pendingRenderer: Promise<Renderer> | undefined;
+  let previewUrl: string | undefined;
+  let closed = false;
+  const getRenderer = () => {
+    if (closed) throw new Error("Arguseye session is closed");
+    return pendingRenderer ??= createRenderer({ root, warmup: options.warmup ?? true }).then((renderer) => {
+      previewUrl = renderer.server.url;
+      return renderer;
+    }).catch((error) => { pendingRenderer = undefined; throw error; });
+  };
   const server = new McpServer({ name: "arguseye", version: packageVersion }, { instructions: INSTRUCTIONS });
   const abs = (file: string) => path.resolve(root, file);
   const rel = (file: string) => path.relative(root, file);
@@ -74,13 +85,13 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       .split("\n")
       .slice(0, 6)
       .join("\n  ")
-      .replaceAll(`${renderer.server.url}/@fs`, "")
+      .replaceAll(`${previewUrl ?? "arguseye:not-started"}/@fs`, "")
       .replace(/\?e=\d+(&v=\d+)?/g, "")
       .replaceAll(root + path.sep, "");
   }
 
   async function renderContent(request: RenderRequest, output = "both") {
-    const result = await renderer.render(request);
+    const result = await (await getRenderer()).render(request);
     return {
       result,
       content: [
@@ -94,6 +105,17 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     isError: true,
     content: [{ type: "text" as const, text: `error: ${(error as Error).message}` }],
     structuredContent: { schemaVersion: 1, errors: [(error as Error).message], diagnostics: [{ code: error instanceof FileAccessError ? "ACCESS_DENIED" : "TOOL_FAILED", severity: "error", phase: "request", message: (error as Error).message }] },
+  });
+
+  server.registerTool("inspect_project", {
+    annotations: READ_ONLY, outputSchema: toolOutputSchema(projectOutputSchema),
+    description: "Diagnose the selected project before rendering: actual installed framework versions, native compiler limits and actionable missing-package/config diagnostics. Does not launch Chromium, execute project configuration or test full-app fidelity.",
+    inputSchema: {},
+  }, async () => {
+    try {
+      const report = inspectProject(root);
+      return { isError: report.errors.length > 0, structuredContent: report, content: [{ type: "text" as const, text: `${report.root}\n${report.packages.map((p) => `${p.name}: ${p.installed ?? "not installed"}`).join("\n")}\n${report.diagnostics.map((d) => `${d.code}: ${d.message} ${d.recovery}`).join("\n")}` }] };
+    } catch (error) { return failure(error); }
   });
 
   server.registerTool(
@@ -132,7 +154,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     inputSchema: { baselineId: z.string(), output },
   }, async (args) => {
     try {
-      const result = await renderer.diff(args.baselineId);
+      const result = await (await getRenderer()).diff(args.baselineId);
       const content = [
         ...(args.output === "summary" ? [] : [result.before.png, result.after.png, result.diffPng].map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }))),
         ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\n${result.after.warnings.join("\n")}\n${result.newErrors.join("\n")}` }]),
@@ -152,7 +174,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const schema = await renderer.describeProps(abs(args.file), args.export);
+        const schema = await (await getRenderer()).describeProps(abs(args.file), args.export);
         return { content: [{ type: "text" as const, text: JSON.stringify(schema, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], ...schema } };
       } catch (error) {
         return failure(error);
@@ -170,7 +192,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const usages = await renderer.listUsages(abs(args.file), args.export);
+        const usages = await (await getRenderer()).listUsages(abs(args.file), args.export);
         return { content: [{ type: "text" as const, text: JSON.stringify(usages, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], usages } };
       } catch (error) {
         return failure(error);
@@ -190,7 +212,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       try {
         const file = abs(args.file);
         if (args.cursor && !/^\d+$/.test(args.cursor)) throw new Error(`Invalid usage cursor "${args.cursor}"`);
-        const page = await renderer.renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), theme: args.theme, offset: Number(args.cursor ?? 0), limit: args.limit });
+        const page = await (await getRenderer()).renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), theme: args.theme, offset: Number(args.cursor ?? 0), limit: args.limit });
         const content = page.results.flatMap((result) => [
           ...(args.output === "summary" ? [] : [{ type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" }]),
           ...(args.output === "image" ? [] : [{ type: "text" as const, text: describe({ ...result.target, usage: result.usage, viewport: result.viewport }, result) }]),
@@ -214,7 +236,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     },
     async (args) => {
       try {
-        const report = await audit(renderer, root, args.dir ? abs(args.dir) : root, { limit: args.limit ?? 200 });
+        const report = await audit(await getRenderer(), root, args.dir ? abs(args.dir) : root, { limit: args.limit ?? 200 });
         const lines = report.entries.filter((e) => e.status !== "ok").map((e) => `${e.status} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.errors ? ": " + tidy(e.errors[0]) : ""}`);
         const text = `${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped\n${lines.join("\n")}`;
         return { isError: report.error > 0, content: [{ type: "text" as const, text }], structuredContent: { schemaVersion: 1 as const, errors: report.topErrors.map((e) => e.message), ...report } };
@@ -227,8 +249,9 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   return {
     server,
     async close() {
+      closed = true;
       await server.close();
-      await renderer.close();
+      await pendingRenderer?.then((renderer) => renderer.close(), () => {});
     },
   };
 }

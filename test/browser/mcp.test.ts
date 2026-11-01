@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createMcpServer } from "../../src/agent/mcpServer.js";
@@ -24,13 +25,13 @@ type Content = Array<{ type: string; text?: string; data?: string; mimeType?: st
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "describe_props", "list_usages", "render_component", "render_diff", "render_usages"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "describe_props", "inspect_project", "list_usages", "render_component", "render_diff", "render_usages"]);
   });
 
   it("distinguishes static inspection from rendering project code with possible external effects", async () => {
     const { tools } = await client.listTools();
     for (const tool of tools) {
-      const staticTool = ["describe_props", "list_usages"].includes(tool.name);
+      const staticTool = ["describe_props", "list_usages", "inspect_project"].includes(tool.name);
       expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: staticTool, idempotentHint: staticTool, destructiveHint: !staticTool, openWorldHint: !staticTool });
     }
   });
@@ -42,6 +43,42 @@ describe("MCP tools (what a coding agent calls)", () => {
       expect(tool.outputSchema?.type, tool.name).toBe("object");
       expect((tool.outputSchema?.properties as any)?.schemaVersion.const, tool.name).toBe(1);
       expect(tool.outputSchema?.required, tool.name).toContain("errors");
+    }
+  });
+
+  it("inspects actual project packages without claiming a browser mount", async () => {
+    const result = await client.callTool({ name: "inspect_project", arguments: {} });
+    const evidence = result.structuredContent as any;
+    expect(result.isError).toBeFalsy();
+    expect(evidence.root).toBe(root);
+    expect(evidence.packages.find((p: any) => p.name === "react").installed).toBe(JSON.parse(readFileSync(path.join(root, "node_modules/react/package.json"), "utf8")).version);
+    expect(evidence.build.mode).toBe("native");
+    expect(evidence.build.executesVitePlugins).toBe(false);
+    expect(evidence.browser.probed).toBe(false);
+  });
+
+  it("offers recovery diagnostics before browser startup and never executes project config", async () => {
+    const broken = mkdtempSync(path.join(os.tmpdir(), "arguseye-doctor-"));
+    writeFileSync(path.join(broken, "package.json"), JSON.stringify({ dependencies: { vue: "3.5.13", vite: "6.0.0" } }));
+    writeFileSync(path.join(broken, "vite.config.ts"), 'throw new Error("PROJECT CONFIG MUST NOT RUN"); export default {};');
+    let mcp: Awaited<ReturnType<typeof createMcpServer>> | undefined;
+    let inspector: Client | undefined;
+    try {
+      mcp = await createMcpServer({ root: broken });
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await mcp.server.connect(b);
+      inspector = new Client({ name: "doctor-test", version: "0" });
+      await inspector.connect(a);
+      const result = await inspector.callTool({ name: "inspect_project", arguments: {} });
+      const evidence = result.structuredContent as any;
+      expect(result.isError).toBe(true);
+      expect(evidence.root).toBe(broken);
+      expect(evidence.packages.find((p: any) => p.name === "vue").installed).toBeNull();
+      expect(evidence.diagnostics).toContainEqual(expect.objectContaining({ code: "PACKAGE_NOT_INSTALLED", recovery: expect.stringContaining("Install") }));
+      expect(evidence.diagnostics).toContainEqual(expect.objectContaining({ code: "VITE_PLUGINS_NOT_EXECUTED" }));
+      expect(evidence.browser.probed).toBe(false);
+    } finally {
+      await inspector?.close(); await mcp?.close(); rmSync(broken, { recursive: true, force: true });
     }
   });
 

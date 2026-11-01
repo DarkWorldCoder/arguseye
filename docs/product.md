@@ -9,6 +9,7 @@ Arguseye is eyes for coding agents and developers: see a component, change it, a
 - Global styles, Tailwind v3/v4, PostCSS, Sass, CSS modules, assets, and statically reconstructable layout wrappers. Incomplete context is reported.
 - Warm browser pages and per-module compilation. Unsaved editor buffers update the live page; React refresh and Vue template/style updates preserve state. Vue script edits and Svelte edits reset state with a warning.
 - MCP and CLI render evidence: PNG, accessibility snapshot, resolved inputs, source fingerprint, timing, warnings and errors. Responses can omit images.
+- Project inspection through MCP `inspect_project` and CLI `doctor --json`: selected root, installed framework versions and actionable configuration diagnostics, available before browser startup. The native compiler does not execute the project's Vite plugins.
 - Immutable baselines and before/after comparisons of pixels, dimensions, accessibility snapshots and errors. Comparisons report change or incomplete evidence, never automatic correctness.
 - Paginated usage rendering, with a maximum of 12 isolated variants per batch and an incremental source index.
 - A VS Code panel with export/usage selection, typed React prop controls, viewport presets, capture and comparison controls. Verification uses the shared renderer and unsaved source.
