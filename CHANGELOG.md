@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.0.11
+
+These previews run in the browser. Framework stand-ins approximate supported APIs; they do not execute a full Next.js, Nuxt or SvelteKit server. Missing data and context remain warnings or errors. Captured changes require review.
 
 - Vite apps: providers set up in `src/main.tsx` around `<App />` (React Query, Redux and other `createRoot(...).render(...)` wrappers) apply to every preview, including module-level values passed to them (`const queryClient = new QueryClient()`) and side-effect imports such as `import "./i18n"`.
 - `React.lazy`, Suspense boundaries and `fetch` calls a component starts on mount are waited for (up to 3 s) before the capture, so the result shows the loaded state instead of the fallback; a warning says when the cap was hit.
