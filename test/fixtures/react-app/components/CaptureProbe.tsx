@@ -1,4 +1,4 @@
 /** Solid, offset pixels make crop coordinates and offscreen coverage unambiguous. */
-export default function CaptureProbe({ color, height }: { color: string; height: number }) {
-  return <div style={{ marginLeft: 17, width: 340, height, background: color }} />;
+export default function CaptureProbe({ color, height, width = 340, offset = 17 }: { color: string; height: number; width?: number; offset?: number }) {
+  return <div style={{ marginLeft: offset, width, height, background: color }} />;
 }

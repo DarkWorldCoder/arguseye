@@ -728,7 +728,9 @@ const FREEZE_MOTION = `*, *::before, *::after {
 /** Avoids Chromium's clipped-view resize; crop actual viewport pixels with the same native codec used for diffs. */
 async function capture(page: Page, session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
   const viewport = page.viewportSize()!;
-  const within = viewport.width * viewport.height <= 4_194_304 && Object.values(box).every(Number.isInteger) && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height;
+  // Text line boxes are usually fractional. Include every covered device pixel without resampling it.
+  const clip = { x: Math.floor(box.x), y: Math.floor(box.y), width: Math.ceil(box.x + box.width) - Math.floor(box.x), height: Math.ceil(box.y + box.height) - Math.floor(box.y) };
+  const within = viewport.width * viewport.height <= 4_194_304 && clip.x >= 0 && clip.y >= 0 && clip.x + clip.width <= viewport.width && clip.y + clip.height <= viewport.height;
   const { data } = await session.send("Page.captureScreenshot", {
     format: "png",
     ...(!within ? { clip: { ...box, scale: 1 } } : {}),
@@ -742,7 +744,7 @@ async function capture(page: Page, session: CDPSession, box: { x: number; y: num
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(image, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
     return canvas.toDataURL("image/png").split(",")[1];
-  }, { data, box });
+  }, { data, box: clip });
   return Buffer.from(cropped, "base64");
 }
 

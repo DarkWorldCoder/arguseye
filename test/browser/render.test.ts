@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import path from "node:path";
 import os from "node:os";
-import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js";
 
 const root = path.resolve("test/fixtures/react-app");
@@ -69,15 +69,23 @@ describe("headless render (what an agent gets back)", () => {
 
   it("captures exact offset pixels both inside and beyond the viewport", async () => {
     const file = path.join(root, "components/CaptureProbe.tsx");
-    for (const { height, viewport } of [{ height: 120 }, { height: 900 }, { height: 120, viewport: { width: 4096, height: 2048 } }]) {
-      const white = await renderer.render({ file, props: { color: "white", height }, viewport });
+    const source = readFileSync(file, "utf8");
+    const cases = [
+      { height: 120, expected: { width: 340, height: 120 }, pixels: 40800 },
+      { height: 900, expected: { width: 340, height: 900 }, pixels: 306000 },
+      { height: 120, viewport: { width: 4096, height: 2048 }, expected: { width: 340, height: 120 }, pixels: 40800 },
+      // x=17.25..357.75 covers 341 device pixels; y=0..120.5 covers 121 rows.
+      { height: 120.5, width: 340.5, offset: 17.25, expected: { width: 341, height: 121 }, pixels: 41261 },
+    ];
+    for (const { height, width, offset, viewport, expected, pixels } of cases) {
+      const white = await renderer.render({ file, props: { color: "white", height, width, offset }, viewport });
       expect(white.errors).toEqual([]);
-      renderer.server.updateBuffer(file, 'export default function CaptureProbe({ height }) { return <div style={{marginLeft:17,width:340,height,background:"black"}} />; }');
+      renderer.server.updateBuffer(file, source.replace("background: color", 'background: "black"'));
       try {
         const changed = await renderer.diff(white.captureId!);
         expect(changed.after.errors).toEqual([]);
-        expect(changed.dimensions).toEqual({ before: { width: 340, height }, after: { width: 340, height } });
-        expect(changed.changedPixels).toBe(340 * height);
+        expect(changed.dimensions).toEqual({ before: expected, after: expected });
+        expect(changed.changedPixels).toBe(pixels);
         expect(changed.changedPercent).toBe(100);
       } finally { renderer.server.updateBuffer(file, undefined); }
     }
