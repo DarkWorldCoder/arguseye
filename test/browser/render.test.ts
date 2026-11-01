@@ -67,6 +67,34 @@ describe("headless render (what an agent gets back)", () => {
     expect(result.snapshot).toContain("Saved");
   });
 
+  it("captures exact offset pixels both inside and beyond the viewport", async () => {
+    const file = path.join(root, "components/CaptureProbe.tsx");
+    for (const { height, viewport } of [{ height: 120 }, { height: 900 }, { height: 120, viewport: { width: 4096, height: 2048 } }]) {
+      const white = await renderer.render({ file, props: { color: "white", height }, viewport });
+      expect(white.errors).toEqual([]);
+      renderer.server.updateBuffer(file, 'export default function CaptureProbe({ height }) { return <div style={{marginLeft:17,width:340,height,background:"black"}} />; }');
+      try {
+        const changed = await renderer.diff(white.captureId!);
+        expect(changed.after.errors).toEqual([]);
+        expect(changed.dimensions).toEqual({ before: { width: 340, height }, after: { width: 340, height } });
+        expect(changed.changedPixels).toBe(340 * height);
+        expect(changed.changedPercent).toBe(100);
+      } finally { renderer.server.updateBuffer(file, undefined); }
+    }
+  });
+
+  it("finishes finite native animations and exposes the freeze of an infinite animation", async () => {
+    const file = path.join(root, "components/NativeAnimation.tsx");
+    const still = await renderer.render({ file, props: { animated: false } });
+    const finished = await renderer.render({ file, props: { animated: true } });
+    expect(finished.errors).toEqual([]);
+    expect(finished.png.equals(still.png)).toBe(true);
+    const looping = await renderer.render({ file, props: { animated: true, loop: true } });
+    expect(looping.errors).toEqual([]);
+    expect(looping.complete).toBe(false);
+    expect(looping.warnings.join()).toContain("Infinite web animation paused");
+  });
+
   it("re-renders a warm component in well under 100 ms with the new props", async () => {
     await renderer.render({ file: card, exportName: "ProductCard", props: { title: "Warm-up", price: 1 } });
 

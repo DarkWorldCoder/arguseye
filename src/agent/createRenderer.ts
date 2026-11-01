@@ -464,6 +464,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             }
             if (sameEpoch && changed.some((f) => !/\.(css|scss|sass)$/.test(f))) cp.refresh?.performReactRefresh();
             if (document.documentElement.className !== (context.htmlClass ?? "")) document.documentElement.className = context.htmlClass ?? "";
+            // A previous forced theme must not leave its inline UA color-scheme on the next plain render.
+            document.documentElement.style.colorScheme = t.theme ?? "";
+            if (t.theme) document.documentElement.classList.toggle("dark", t.theme === "dark");
             if (document.body.className !== (context.bodyClass ?? "")) document.body.className = context.bodyClass ?? "";
             for (const url of context.globalCssUrls) { try { await cp.importModule(url); } catch (error) { updateErrors.push(String(error)); } }
             await cp.show(t, s);
@@ -493,25 +496,42 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         let moved = 0;
         const watcher = new MutationObserver((records) => { moved += records.length; });
         watcher.observe(document.body, { subtree: true, attributes: true, childList: true, characterData: true });
+        let infiniteWebAnimation = false;
+        const finishAnimations = () => {
+          let active = 0;
+          for (const animation of document.getAnimations()) {
+            if (animation.playState === "finished" || animation.playState === "idle") continue;
+            const end = animation.effect?.getComputedTiming().endTime;
+            if (typeof end === "number" && Number.isFinite(end)) {
+              if (animation.playState === "paused" && animation.currentTime === end) continue;
+              try { animation.finish(); } catch { animation.pause(); animation.currentTime = end; }
+              active++;
+            }
+            else { animation.pause(); animation.currentTime = 0; infiniteWebAnimation = true; }
+          }
+          return active;
+        };
+        let webAnimations = finishAnimations();
         // When the app has frames pending (an animation), one frame with animation time pushed ahead; if anything
         // moved, keep pushing until two frames in a row are still: an animation started on mount reaches its end
         // frame within a couple of frames. No pending frame, no wait.
-        if (!cp.frame || cp.rafPending > 0) { cp.fastForward?.(60000); await nextFrame(); }
+        if (!cp.frame || cp.rafPending > 0 || webAnimations) { cp.fastForward?.(60000); await nextFrame(); webAnimations += finishAnimations(); await Promise.resolve(); }
         let animating = false;
-        if (moved) {
+        if (moved || webAnimations) {
           const until = performance.now() + 2500;
           let still = 0;
-          while (still < 2 && performance.now() < until) { moved = 0; cp.fastForward?.(60000); await nextFrame(); still = moved ? 0 : still + 1; }
+          while (still < 2 && performance.now() < until) { moved = 0; cp.fastForward?.(60000); await nextFrame(); const finished = finishAnimations(); await Promise.resolve(); still = moved || finished ? 0 : still + 1; }
           animating = still < 2;
         }
         watcher.disconnect();
         // ResizeObserver clients can debounce their first measurement, so the default 300×150 canvas can
-        // briefly look settled. Require stable CSS/buffer sizes across frames before capturing, bounded at 60.
+        // briefly look settled. Require stable CSS/buffer sizes for 100 ms, with a real one-second bound.
         let canvasesPending = false;
         if (document.querySelector("canvas")) {
           const frame = () => new Promise((done) => requestAnimationFrame(() => done(undefined)));
-          let previous = "", stable = 0;
-          for (let i = 0; i < 60 && stable < 6; i++) {
+          let previous = "", stable = 0, stableSince = performance.now();
+          const until = performance.now() + 1000;
+          while ((stable < 6 || performance.now() - stableSince < 100) && performance.now() < until) {
             await frame();
             const sizes = [...document.querySelectorAll("canvas")].map((c) => {
               const { width, height } = c.getBoundingClientRect();
@@ -520,9 +540,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             const current = JSON.stringify(sizes);
             const sized = sizes.every((c) => Math.abs(c.bufferWidth - Math.round(c.width * devicePixelRatio)) <= 1 && Math.abs(c.bufferHeight - Math.round(c.height * devicePixelRatio)) <= 1);
             stable = sized && current === previous ? stable + 1 : 0;
+            if (!stable) stableSince = performance.now();
             previous = current;
           }
-          canvasesPending = stable < 6;
+          canvasesPending = stable < 6 || performance.now() - stableSince < 100;
         }
         const pending = [...document.images].filter((img) => !img.complete);
         if (pending.length || document.fonts.status !== "loaded") {
@@ -531,10 +552,11 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             new Promise((r) => cp.setTimeout(r, 300)),
           ]);
         }
-        return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0 };
+        return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0, infiniteWebAnimation };
       });
       if (settled.assets.length) warnings.push("Assets did not settle: " + settled.assets.join(", "));
       if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");
+      if (settled.infiniteWebAnimation) warnings.push("Infinite web animation paused at its first frame for verification; its running state was not captured.");
       marks.push(performance.now());
       const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, rootIntact, scheduledTimers } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
@@ -575,7 +597,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const layoutAt = performance.now();
       let screenshotAt = layoutAt, accessibilityAt = layoutAt;
       const [png, snapshot] = await Promise.all([
-        capture(cdp.get(page)!, box).then((png) => { screenshotAt = performance.now(); return png; }),
+        capture(page, cdp.get(page)!, box).then((png) => { screenshotAt = performance.now(); return png; }),
         page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot().then((snapshot) => { accessibilityAt = performance.now(); return snapshot; }),
       ]);
 
@@ -703,23 +725,36 @@ const FREEZE_MOTION = `*, *::before, *::after {
   caret-color: transparent !important;
 }`;
 
-/** Screenshot through the DevTools protocol directly: no Playwright waiting, encoder tuned for speed. */
-async function capture(session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
+/** Avoids Chromium's clipped-view resize; crop actual viewport pixels with the same native codec used for diffs. */
+async function capture(page: Page, session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
+  const viewport = page.viewportSize()!;
+  const within = viewport.width * viewport.height <= 4_194_304 && Object.values(box).every(Number.isInteger) && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height;
+  // A viewport capture can reuse the prior compositor surface. Cross a paint boundary after a theme/style swap.
+  if (within) await page.evaluate(async () => { const cp = (window as any).__CP__; await cp.frame(); await cp.frame(); });
   const { data } = await session.send("Page.captureScreenshot", {
     format: "png",
-    clip: { ...box, scale: 1 },
+    ...(!within ? { clip: { ...box, scale: 1 } } : {}),
     optimizeForSpeed: true,
-    captureBeyondViewport: true,
+    captureBeyondViewport: !within,
   });
-  return Buffer.from(data, "base64");
+  if (!within) return Buffer.from(data, "base64");
+  const cropped = await page.evaluate(async ({ data, box }) => {
+    const image = new Image(); image.src = "data:image/png;base64," + data; await image.decode();
+    const canvas = document.createElement("canvas"); canvas.width = box.width; canvas.height = box.height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(image, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
+    return canvas.toDataURL("image/png").split(",")[1];
+  }, { data, box });
+  return Buffer.from(cropped, "base64");
 }
 
 /** Playwright's headless shell (a stripped Chromium) when installed: lighter and quicker to start than full Chrome. */
 async function launchChrome(): Promise<Browser> {
   const attempts: Array<() => Promise<Browser>> = [
-    () => chromium.launch({ channel: "chromium-headless-shell" }),
-    () => chromium.launch({ channel: "chrome" }),
-    () => chromium.launch(),
+    // Verification captures must not wait for the host display's compositor cadence.
+    () => chromium.launch({ channel: "chromium-headless-shell", args: ["--disable-frame-rate-limit"] }),
+    () => chromium.launch({ channel: "chrome", args: ["--disable-frame-rate-limit"] }),
+    () => chromium.launch({ args: ["--disable-frame-rate-limit"] }),
   ];
   let lastError: unknown;
   for (const attempt of attempts) {
