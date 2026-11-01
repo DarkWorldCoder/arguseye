@@ -44,13 +44,17 @@ _sfc_main.__file = ${JSON.stringify(file)};
 _sfc_main.__hmrId = ${JSON.stringify(id)};
 ${descriptor.styles.some((s: any) => s.scoped) ? `_sfc_main.__scopeId = ${JSON.stringify(scope)};` : ""}
 _sfc_main.__cssModules = ${JSON.stringify(classes)};
+{
 let style = document.querySelector('style[data-vue-id="${id}"]');
 if (!style) { style = document.createElement("style"); style.dataset.vueId = ${JSON.stringify(id)}; document.head.append(style); }
-style.textContent = ${JSON.stringify(styles.join("\n"))};
+const __cpStyleText = ${JSON.stringify(styles.join("\n"))};
+// A template edit must not rebuild the same stylesheet or recreate its FontFace objects.
+if (style.textContent !== __cpStyleText) style.textContent = __cpStyleText;
 const hmr = globalThis.__VUE_HMR_RUNTIME__;
 if (hmr && !hmr.createRecord(${JSON.stringify(id)}, _sfc_main)) {
   if (${JSON.stringify(change)} === "template") hmr.rerender(${JSON.stringify(id)}, _sfc_main.render);
   else if (${JSON.stringify(change)} === "script") hmr.reload(${JSON.stringify(id)}, _sfc_main);
+}
 }
 export const __cpVueChange = ${JSON.stringify(change)};
 export default _sfc_main;`;

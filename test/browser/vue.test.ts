@@ -46,6 +46,12 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
     try {
       await page.goto(renderer.server.url + renderer.server.pageUrl({ file, props: { title: "Lamp", price: 5 } }));
       await page.getByRole("button").click();
+      await page.evaluate(() => {
+        const style = [...document.querySelectorAll("style[data-vue-id]")].find((node) => node.textContent?.includes("rgb(0, 80, 120)"));
+        if (!style) throw new Error("Fixture scoped stylesheet was not loaded");
+        (window as any).__scopedStyle = style;
+        (window as any).__scopedText = style.firstChild;
+      });
       let observed = 0;
       await page.exposeFunction("recordEdit", () => { observed = performance.now(); });
       await page.evaluate(() => {
@@ -66,6 +72,7 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
       const ms = performance.now() - start;
       console.log("Vue edit-to-pixels", Math.round(ms), "ms; mutation delivered", Math.round(observed - start), "ms; target 50 ms, enforced limit 100 ms");
       console.log("Vue update phases", JSON.stringify({ buffer: updated - start, bufferCpuMs: (cpu.user + cpu.system) / 1000, resources: await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("Card.vue")).map((e) => ({ duration: e.duration, serverTiming: (e as PerformanceResourceTiming).serverTiming }))) }));
+      expect(await page.evaluate(() => (window as any).__scopedStyle.firstChild === (window as any).__scopedText)).toBe(true);
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy (").replace("rgb(0, 80, 120)", "rgb(255, 0, 0)"));
       await expect.poll(() => page.locator("h2").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 0, 0)");
       expect(await page.locator("button").innerText()).toBe("Buy (1)");

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Native Vue template edits retain unchanged scoped stylesheets instead of reparsing identical CSS and recreating font faces. Style changes still update CSS; script edits retain their explicit state-reset behavior.
 - Explicit Vite compatibility uses the project's installed Vite, configuration and plugins in a separate process, with unsaved buffers and build-input invalidation. Native compilation stays the default. Compatibility edits reload state; generated virtual modules can now come from actual plugins rather than native stand-ins.
 - Verification accepts explicit clock, seeded random, locale/timezone and bounded network fixtures, reports their provenance and blocked requests, and supports cancellation and execution deadlines. Sessions bound pages, capture count, history and retained PNG bytes; audit cursors continue bounded batches.
 - Optional component-scope axe accessibility findings include incomplete checks. Original stack locations and element ownership are returned only where source evidence exists; unavailable mappings remain explicit. Vue metadata reads imported macro types through the bounded unsaved source reader.
