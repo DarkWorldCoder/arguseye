@@ -729,8 +729,6 @@ const FREEZE_MOTION = `*, *::before, *::after {
 async function capture(page: Page, session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
   const viewport = page.viewportSize()!;
   const within = viewport.width * viewport.height <= 4_194_304 && Object.values(box).every(Number.isInteger) && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height;
-  // A viewport capture can reuse the prior compositor surface. Cross a paint boundary after a theme/style swap.
-  if (within) await page.evaluate(async () => { const cp = (window as any).__CP__; await cp.frame(); await cp.frame(); });
   const { data } = await session.send("Page.captureScreenshot", {
     format: "png",
     ...(!within ? { clip: { ...box, scale: 1 } } : {}),

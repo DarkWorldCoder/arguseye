@@ -67,10 +67,13 @@ describe("a forced theme in agent renders", () => {
   });
 
   it("a warm page used for dark renders the app as written on the next plain request", async () => {
-    await renderer.render({ ...request, theme: "dark" });
-    const plain = await renderer.render(request);
-    expect(plain.target.theme).toBeUndefined();
-    const light = await renderer.render({ ...request, theme: "light" });
-    expect(plain.png.equals(light.png)).toBe(true);
+    for (let i = 0; i < 10; i++) {
+      const dark = await renderer.render({ ...request, theme: "dark" });
+      const plain = await renderer.render(request);
+      expect(plain.target.theme).toBeUndefined();
+      const light = await renderer.render({ ...request, theme: "light" });
+      expect(plain.png.equals(light.png)).toBe(true);
+      expect(dark.png.equals(light.png)).toBe(false);
+    }
   });
 });
