@@ -28,7 +28,7 @@ jobs:
         run: for d in test/fixtures/*/; do (cd "$d" && npm ci --no-audit --no-fund); done
       - run: npx playwright-core install --with-deps chromium
       - run: npm run typecheck
-      - name: Require a quiet native timing machine
+      - name: Record native timing conditions
         if: runner.os == 'macOS'
         run: node scripts/prepareNativeBenchmark.mjs
       - name: Native framework and MCP contracts
