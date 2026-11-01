@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createMcpServer } from "../../src/agent/mcpServer.js";
@@ -26,9 +27,22 @@ describe("MCP tools (what a coding agent calls)", () => {
     expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "describe_props", "list_usages", "render_component", "render_diff", "render_usages"]);
   });
 
-  it("declares every tool read-only and local (MCP tool annotations)", async () => {
+  it("distinguishes static inspection from rendering project code with possible external effects", async () => {
     const { tools } = await client.listTools();
-    for (const tool of tools) expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+    for (const tool of tools) {
+      const staticTool = ["describe_props", "list_usages"].includes(tool.name);
+      expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: staticTool, idempotentHint: staticTool, destructiveHint: !staticTool, openWorldHint: !staticTool });
+    }
+  });
+
+  it("announces the installed package version and versioned output schemas", async () => {
+    expect(client.getServerVersion()?.version).toBe(JSON.parse(readFileSync(path.resolve("package.json"), "utf8")).version);
+    const { tools } = await client.listTools();
+    for (const tool of tools) {
+      expect(tool.outputSchema?.type, tool.name).toBe("object");
+      expect((tool.outputSchema?.properties as any)?.schemaVersion.const, tool.name).toBe(1);
+      expect(tool.outputSchema?.required, tool.name).toContain("errors");
+    }
   });
 
   it("tells a connecting agent when to use it, without being asked", () => {
@@ -82,6 +96,15 @@ describe("MCP tools (what a coding agent calls)", () => {
     const text = (result.content as Content).find((c) => c.type === "text")!.text!;
     expect(result.isError).toBe(true);
     expect(text).toContain('No component export "Missing"');
+    expect((result.structuredContent as any).schemaVersion).toBe(1);
+    expect((result.structuredContent as any).errors[0]).toContain('No component export "Missing"');
+  });
+
+  it("returns an actionable structured boundary error for outside source inspection", async () => {
+    const result = await client.callTool({ name: "describe_props", arguments: { file: "../outside.tsx" } });
+    expect(result.isError).toBe(true);
+    expect((result.structuredContent as any).errors[0]).toContain("outside.tsx");
+    expect((result.structuredContent as any).diagnostics[0].code).toBe("ACCESS_DENIED");
   });
 
   it("describe_props tells an agent what a component accepts, from its TypeScript type", async () => {
@@ -108,7 +131,9 @@ it("returns structured evidence without images when summary output is requested"
   const result = await client.callTool({ name: "render_component", arguments: { file: "components/ProductCard.tsx", export: "ProductCard", usage: "app/page.tsx:9", output: "summary" } });
   expect((result.content as Content).some((c) => c.type === "image")).toBe(false);
   const evidence = result.structuredContent as any;
+  expect(evidence.schemaVersion).toBe(1);
   expect(evidence.captureId).toBeTruthy();
+  expect((result.content as Content).find((c) => c.type === "text")?.text).toContain(evidence.captureId);
   expect(evidence.target.props.title).toBe("Wireless Headphones");
   expect(evidence.errors).toEqual([]);
   const diff = await client.callTool({ name: "render_diff", arguments: { baselineId: evidence.captureId, output: "summary" } });

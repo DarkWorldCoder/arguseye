@@ -5,19 +5,24 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createRenderer, type RenderRequest, type RenderResult } from "./createRenderer.js";
 import { audit } from "./audit.js";
+import { packageVersion } from "../packageVersion.js";
+import { FileAccessError } from "../server/createFileAccess.js";
+import { toolOutputSchema, renderOutputSchema, diffOutputSchema, propsOutputSchema, usagesOutputSchema, usageRendersOutputSchema, auditOutputSchema } from "./evidenceSchemas.js";
 
 /** Sent to the agent when it connects: when to reach for these tools, so it uses them without being asked. */
-const INSTRUCTIONS = `Arguseye shows you UI you cannot otherwise see: it renders React (incl. Next.js, React Router, Remix), Vue and Svelte components straight from source, inside the app's own layout, providers, global CSS, Tailwind and fonts, in a headless browser. No dev server, no stories, no login.
+const INSTRUCTIONS = `Arguseye shows you UI you cannot otherwise see: it renders React (incl. browser-compatible Next.js, React Router, Remix), Vue, Svelte, Preact and Solid components from source with project packages and supported layout, provider, style and font context. Missing inputs and runtime approximations remain explicit. No application server or authored stories are required.
 
 Use it whenever you create or change a UI component, its styles or its props:
 - After the edit, call render_component on the file (pass usage from list_usages for real props). Read errors first, then the accessibility snapshot, then the image.
 - Before saying a UI change is done, render it again and read \`changes\`; for a shared component, render_usages checks every call site.
 - Use theme "dark" when the app has a dark mode, viewport "mobile" for responsive work, actions to open menus, dialogs or tabs.
 - After a refactor or dependency upgrade, audit_components renders everything once and lists what broke.
-It is faster than starting the app and driving a browser (about 50 ms per render once warm) and works when the app cannot boot.`;
+Rendering runs trusted project code in a browser. Project code and actions can contact external services or change application state; rendering is not an offline sandbox. Missing context, sampled props and unsettled assets remain limitations even when pixels render.`;
 
-/** Every tool reads the project and renders it locally: nothing is written, nothing outside the machine is contacted. */
+/** Static inspection reads source without mounting project code or running component actions. */
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+/** Rendering executes user code and handlers; these conservative hints do not enforce a network policy. */
+const EXECUTES_CODE = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true } as const;
 
 /** Cap for render_usages so one call stays cheap on tokens. */
 const MAX_USAGES = 12;
@@ -37,7 +42,7 @@ const look = {
 export async function createMcpServer(options: { root: string; warmup?: boolean }) {
   const root = path.resolve(options.root);
   const renderer = await createRenderer({ root, warmup: options.warmup ?? true });
-  const server = new McpServer({ name: "arguseye", version: "0.0.1" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "arguseye", version: packageVersion }, { instructions: INSTRUCTIONS });
   const abs = (file: string) => path.resolve(root, file);
   const rel = (file: string) => path.relative(root, file);
 
@@ -53,12 +58,14 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       `${size.width}x${size.height}`,
       request.theme && `${request.theme} theme`,
       `${result.ms} ms`,
+      result.complete ? "complete" : "incomplete",
+      result.captureId && `captureId: ${result.captureId}`,
     ].filter(Boolean);
     const errors = result.errors.length
       ? `errors:\n${result.errors.map((e) => `- ${tidy(e)}`).join("\n")}`
       : "errors: none";
     const logged = (result.console ?? []).map((l) => "console.error: " + tidy(l)).join("\n");
-    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}\n${result.snapshot}`;
+    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}${result.unresolved.length ? "\nunresolved: " + result.unresolved.join("; ") : ""}\n${result.snapshot}`;
   }
 
   /** Short stacks with project-relative paths instead of preview-server URLs. */
@@ -86,14 +93,16 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   const failure = (error: unknown) => ({
     isError: true,
     content: [{ type: "text" as const, text: `error: ${(error as Error).message}` }],
+    structuredContent: { schemaVersion: 1, errors: [(error as Error).message], diagnostics: [{ code: error instanceof FileAccessError ? "ACCESS_DENIED" : "TOOL_FAILED", severity: "error", phase: "request", message: (error as Error).message }] },
   });
 
   server.registerTool(
     "render_component",
     {
-      annotations: READ_ONLY,
+      annotations: EXECUTES_CODE,
+      outputSchema: toolOutputSchema(renderOutputSchema),
       description:
-        "Use after creating or editing any UI component to see it exactly as it looks in the app, without a dev server: returns a PNG cropped to the component and its accessibility tree. Pass `usage` (from list_usages) to use the props from a real call site, or `props` as JSON; with neither, required props are filled with samples from the TypeScript type (see describe_props).",
+        "Inspect a UI edit using actual source, project packages and supported context, without starting the application: returns a cropped PNG, accessibility text and explicit completeness evidence. Pass `usage` (from list_usages) for discovered call-site props, or `props` as JSON; with neither, required props are sampled from the type (see describe_props). A successful mount does not establish full-app fidelity.",
       inputSchema: {
         ...target,
         usage: z.string().optional().describe('Usage id from list_usages, e.g. "app/page.tsx:9"'),
@@ -117,7 +126,8 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   );
 
   server.registerTool("render_diff", {
-    annotations: READ_ONLY,
+    annotations: EXECUTES_CODE,
+    outputSchema: toolOutputSchema(diffOutputSchema),
     description: "Compare current source against an immutable captureId returned by render_component. Reuses the original resolved props and viewport; changed pixels are evidence, not a correctness verdict.",
     inputSchema: { baselineId: z.string(), output },
   }, async (args) => {
@@ -125,7 +135,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
       const result = await renderer.diff(args.baselineId);
       const content = [
         ...(args.output === "summary" ? [] : [result.before.png, result.after.png, result.diffPng].map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }))),
-        ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\n${result.after.warnings.join("\n")}\n${result.newErrors.join("\n")}` }]),
+        ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\n${result.after.warnings.join("\n")}\n${result.newErrors.join("\n")}` }]),
       ];
       return { isError: result.after.errors.length > 0, content, structuredContent: diffEvidence(result) };
     } catch (error) { return failure(error); }
@@ -135,6 +145,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     "describe_props",
     {
       annotations: READ_ONLY,
+      outputSchema: toolOutputSchema(propsOutputSchema),
       description:
         "What props a component accepts, read from its TypeScript type: name, kind (string, number, boolean, enum with options, array, object with fields, function, node), required, default, description. Includes `sample`, the props render_component uses when you pass none.",
       inputSchema: target,
@@ -142,7 +153,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     async (args) => {
       try {
         const schema = await renderer.describeProps(abs(args.file), args.export);
-        return { content: [{ type: "text" as const, text: JSON.stringify(schema, null, 1) }] };
+        return { content: [{ type: "text" as const, text: JSON.stringify(schema, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], ...schema } };
       } catch (error) {
         return failure(error);
       }
@@ -153,13 +164,14 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
     "list_usages",
     {
       annotations: READ_ONLY,
+      outputSchema: toolOutputSchema(usagesOutputSchema),
       description: "List every place a component is used in the project, with the literal props each call site passes (and the ones that depend on runtime values).",
       inputSchema: target,
     },
     async (args) => {
       try {
         const usages = await renderer.listUsages(abs(args.file), args.export);
-        return { content: [{ type: "text" as const, text: JSON.stringify(usages, null, 1) }] };
+        return { content: [{ type: "text" as const, text: JSON.stringify(usages, null, 1) }], structuredContent: { schemaVersion: 1 as const, errors: [], usages } };
       } catch (error) {
         return failure(error);
       }
@@ -169,7 +181,8 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   server.registerTool(
     "render_usages",
     {
-      annotations: READ_ONLY,
+      annotations: EXECUTES_CODE,
+      outputSchema: toolOutputSchema(usageRendersOutputSchema),
       description: `After changing a component, render it at every place it is used (up to ${MAX_USAGES}) with each call site's real props, to inspect isolated literal-prop variants. These are not full-page integration tests.`,
       inputSchema: { ...target, ...look, cursor: z.string().optional(), limit: z.number().int().min(1).max(MAX_USAGES).optional() },
     },
@@ -184,7 +197,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
         ]);
         if (!page.total) content.push({ type: "text", text: "No usages found in the project." });
         if (page.nextOffset !== null) content.push({ type: "text", text: `${page.total - page.nextOffset} more usages; continue with cursor ${page.nextOffset}` });
-        return { isError: page.results.some((r) => r.errors.length > 0), content, structuredContent: { results: page.results.map((r) => ({ ...renderEvidence(r), usage: r.usage })), total: page.total, nextCursor: page.nextOffset === null ? null : String(page.nextOffset), coverage: "Isolated component renders with discovered literal props; surrounding pages are not exercised." } };
+        return { isError: page.results.some((r) => r.errors.length > 0), content, structuredContent: { schemaVersion: 1 as const, errors: page.results.flatMap((r) => r.errors), results: page.results.map((r) => ({ ...renderEvidence(r), usage: r.usage })), total: page.total, nextCursor: page.nextOffset === null ? null : String(page.nextOffset), coverage: "Isolated component renders with discovered literal props; surrounding pages are not exercised." } };
       } catch (error) {
         return failure(error);
       }
@@ -194,7 +207,8 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   server.registerTool(
     "audit_components",
     {
-      annotations: READ_ONLY,
+      annotations: EXECUTES_CODE,
+      outputSchema: toolOutputSchema(auditOutputSchema),
       description: "Render every component in the project (or a folder) once with sample props and report which render, which throw and which come out empty. Use after a refactor, a dependency upgrade or a shared-style change, or to get to know a new codebase's UI. Text only; render_component shows any one of them.",
       inputSchema: { dir: z.string().optional().describe("Folder to audit, relative to the project root; default the whole project"), limit: z.number().int().min(1).max(500).optional().describe("Most components to render (default 200)") },
     },
@@ -203,7 +217,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
         const report = await audit(renderer, root, args.dir ? abs(args.dir) : root, { limit: args.limit ?? 200 });
         const lines = report.entries.filter((e) => e.status !== "ok").map((e) => `${e.status} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.errors ? ": " + tidy(e.errors[0]) : ""}`);
         const text = `${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped\n${lines.join("\n")}`;
-        return { isError: report.error > 0, content: [{ type: "text" as const, text }], structuredContent: report as any };
+        return { isError: report.error > 0, content: [{ type: "text" as const, text }], structuredContent: { schemaVersion: 1 as const, errors: report.topErrors.map((e) => e.message), ...report } };
       } catch (error) {
         return failure(error);
       }
