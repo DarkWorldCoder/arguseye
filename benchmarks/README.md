@@ -27,24 +27,25 @@ Run `node scripts/benchmark-real.mjs` after `npm run build` and installing the f
 
 Nine real components from the libraries and frameworks people ship with, each rendered inside its real provider or router, through a fresh `arguseye mcp` process per project. Every row verified: no render errors, and the edit's text appeared in the next render.
 
-## Result: 2026-10-31
+## Result: 2026-11-01
 
-linux x64; 12th Gen Intel(R) Core(TM) i5-1235U; 12 logical CPUs; Node v24.21.0.
+linux x64; 12th Gen Intel(R) Core(TM) i5-1235U; 12 logical CPUs; Node v24.21.0. Re-run after the capture began fast-forwarding JavaScript animations and waiting out anything still moving.
 
 | Component | First render | Warm p50 / p95 | Edit → pixels | Capture | Tokens (image + text) |
 | --- | ---: | ---: | ---: | --- | ---: |
-| MUI card (MUI 7 + Emotion, ThemeProvider) | 11,068 ms (cold) | 50 / 71 ms | 67 ms | 320×181 | ~78 + 42 |
-| Mantine card (Mantine 8, MantineProvider) | 81 ms | 50 / 51 ms | 67 ms | 320×119 | ~51 + 39 |
-| Chakra stat (Chakra 3, ChakraProvider) | 66 ms | 50 / 50 ms | 50 ms | 320×151 | ~65 + 40 |
-| styled-components tag (themed) | 64 ms | 50 / 50 ms | 50 ms | 75×33 | ~4 + 25 |
-| shadcn/Radix dialog, open (portal) | 116 ms | 69 / 107 ms | 61 ms | 1280×800 | ~1366 + 60 |
-| React Router 7 nav (Link, hooks) | 724 ms (cold) | 50 / 50 ms | 50 ms | 1264×136 | ~230 + 61 |
-| Svelte 5 badge (runes, scoped CSS) | 460 ms (cold) | 44 / 56 ms | 66 ms | 101×18 | ~3 + 26 |
-| Vue 3 SFC card (script setup, scoped CSS) | 535 ms (cold) | 49 / 50 ms | 66 ms | 1280×154 | ~263 + 41 |
-| Next.js hero (Tailwind v4, CSS module, next/image) | 703 ms (cold) | 65 / 73 ms | 68 ms | 1280×160 | ~274 + 38 |
+| MUI card (MUI 7 + Emotion, ThemeProvider) | 4,133 ms (cold) | 64 / 82 ms | 67 ms | 320×181 | ~78 + 42 |
+| Mantine card (Mantine 8, MantineProvider) | 81 ms | 50 / 67 ms | 66 ms | 320×119 | ~51 + 39 |
+| Chakra stat (Chakra 3, ChakraProvider) | 84 ms | 52 / 67 ms | 51 ms | 320×151 | ~65 + 40 |
+| styled-components tag (themed) | 64 ms | 50 / 51 ms | 50 ms | 75×33 | ~4 + 25 |
+| shadcn/Radix dialog, open (portal) | 105 ms | 67 / 73 ms | 85 ms | 1280×800 | ~1366 + 60 |
+| React Router 7 nav (Link, hooks) | 676 ms (cold) | 50 / 54 ms | 52 ms | 1264×136 | ~230 + 61 |
+| Svelte 5 badge (runes, scoped CSS) | 367 ms (cold) | 50 / 51 ms | 65 ms | 101×18 | ~3 + 26 |
+| Vue 3 SFC card (script setup, scoped CSS) | 475 ms (cold) | 50 / 64 ms | 67 ms | 1280×154 | ~263 + 41 |
+| Next.js hero (Tailwind v4, CSS module, next/image) | 756 ms (cold) | 53 / 68 ms | 67 ms | 1280×160 | ~274 + 38 |
 
-- **Warm renders are about 50 ms**, and an edit on disk shows up in the next render in 50–68 ms, across MUI, Mantine, Chakra, styled-components, Radix, React Router, Svelte, Vue and Next.js.
+- **Components that request animation frames pay one more frame.** MUI (ripple) and the Radix dialog (presence transitions) ask for frames after mounting, so the capture waits one fast-forwarded frame to catch an animation's end; the others are unchanged from the previous run.
+- **Warm renders are about 50 ms** (64–67 ms for the two components above), and an edit on disk shows up in the next render in 50–85 ms, across MUI, Mantine, Chakra, styled-components, Radix, React Router, Svelte, Vue and Next.js.
 - **Times step in 16.7 ms frames** (33, 50, 66 ms): a warm render is about three display frames (swap, settle, capture), not a fixed wait.
-- **The first render in a project pays for bundling its packages once.** The libraries project (MUI + Emotion, Mantine, Chakra, styled-components, Radix) took 11 s cold; the other projects were under 0.75 s. The bundle is cached on disk, so a later process starts warm.
+- **The first render in a project pays for bundling its packages once.** The libraries project (MUI + Emotion, Mantine, Chakra, styled-components, Radix) took 4–11 s cold across runs; the other projects were under 0.8 s. The bundle is cached on disk, so a later process starts warm.
 - **An open dialog is the whole screen.** Radix renders it in a portal with a full-viewport overlay, so the capture is 1280×800 (~1,366 image tokens). Block-level components (a full-width nav, hero or card) are captured at their real width; fixed-width cards cost 50–80 image tokens.
 - Not measured: LLM reasoning time, model billing, or a full app journey. Token counts are estimates (image: width × height / 750; text: characters / 4).
