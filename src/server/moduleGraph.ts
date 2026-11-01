@@ -28,6 +28,8 @@ export class ModuleGraph {
   readonly kit: KitConfig;
   private boundaries = new Set<string>();
   private imagesAsObjects: boolean;
+  /** React Fast Refresh only where React is: in a Vue or Svelte project, a `useX` composable is not a hook. */
+  private react: boolean;
   private vue: ReturnType<typeof createVueCompiler>;
   private svelte: ReturnType<typeof createSvelteCompiler>;
   private transformed = new Map<string, { source: string; code: string }>();
@@ -51,6 +53,7 @@ export class ModuleGraph {
     this.vue = createVueCompiler(root, css);
     this.svelte = createSvelteCompiler(root, css);
     this.imagesAsObjects = importsImagesAsObjects(root);
+    this.react = Boolean(this.resolver.resolveFileSync(pathJoin(root, "package.json"), "react").path);
   }
 
   /** Project dependencies reachable from a target's last transform, for scoped provenance and diagnostics. */
@@ -130,10 +133,11 @@ export class ModuleGraph {
       const vue = file.endsWith(".vue"), svelte = file.endsWith(".svelte"), sfc = vue || svelte;
       const input = vue ? await this.vue.compile(file, source) : svelte ? await this.svelte.compile(file, source) : source;
       const modular = sfc ? input : modularizeBarrelImports(file, input, this.resolver);
+      const refresh = !sfc && this.react && !/[\\/]shims[\\/](nuxt|sveltekit)[\\/]/.test(file);
       const { code, errors } = await transform(vue ? file + ".ts" : svelte ? file + ".js" : file, modular, {
         // JSX in .js files is common (Create React App, older Vite and webpack setups): parse plain JS as JSX.
         ...(/\.(m|c)?js$/.test(file) && !sfc ? { lang: "jsx" as const } : {}),
-        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: !sfc },
+        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh },
       });
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
       // Vite exposes env through import.meta.env; the page holds the values, each module that reads them gets them.
@@ -141,7 +145,7 @@ export class ModuleGraph {
       // Names an auto-import tool (unplugin-auto-import, Nuxt) provides without an import statement.
       const auto = file.includes("/node_modules/") ? [] : autoImportLines(file, code, readAutoImports(this.root));
       const head = env + (auto.length ? auto.join("\n") + "\n" : "");
-      cached = { source, code: head + (sfc ? code : this.withRefresh(file, code)) };
+      cached = { source, code: head + (refresh ? this.withRefresh(file, code) : code) };
       this.transformed.set(file, cached);
     }
     return this.rewriteImports(file, cached.code);

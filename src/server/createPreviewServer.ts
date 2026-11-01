@@ -18,6 +18,7 @@ import { detectAppContext, wrapperModule } from "../project/appContext.js";
 import { routerPackage } from "../project/routerPackage.js";
 import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
 import { nextFontModule } from "./nextFont.js";
+import { isShim } from "./shims.js";
 import { vueEntry, vueSetupModule } from "../project/vueSetup.js";
 import { kitEnvModule } from "../project/svelteKit.js";
 import { autoComponentsModule, readAutoComponents } from "../project/autoImports.js";
@@ -121,7 +122,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     const source = buffered ?? await readFromDisk(file);
     const warnings: string[] = [];
     if (/next\/(headers|font|server)|["']use server["']/.test(source)) warnings.push(`${file}: Next.js server/font behavior requires the application runtime.`);
-    if (/useNuxtApp|useAsyncData|defineNuxtConfig/.test(source)) warnings.push(`${file}: Nuxt application context is unsupported.`);
+    if (!isShim(file) && /\b(useFetch|useAsyncData|useLazyFetch|useLazyAsyncData|\$fetch)\s*\(/.test(source)) warnings.push(`${path.relative(options.root, file)}: Nuxt data calls return their \`default\` (or null) in a preview, which has no server; pass data as props to see real content.`);
     moduleWarnings.set(file, warnings);
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
     return source;

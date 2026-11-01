@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseSync } from "oxc-parser";
+import { SHIMS_DIR } from "../server/shims.js";
 
 /** What a file may use without importing it: name → module and export, as auto-import tools declare them. */
 export type AutoImports = Map<string, { from: string; name: string }>;
@@ -18,8 +19,12 @@ const cached = <T>(file: string, read: () => T): T => {
   return value;
 };
 
+/** Nuxt's runtime (composables, built-in components, unhead) needs a running Nuxt app: previews use stand-ins. */
+const NUXT_RUNTIME = /(^#app\b|^#imports$|\/nuxt\/dist\/(app|pages|head)\b|^nuxt\/app$|^@unhead\/vue|^#head|\/@unhead\/vue\b|^#build\/|\/nuxt\/dist\/app\/components|\/@nuxt\/image\/)/;
+
 /** A module path from a declaration file: relative paths become absolute (they are relative to the .d.ts). */
 const target = (dts: string, from: string) => (from.startsWith(".") ? path.resolve(path.dirname(dts), from) : from);
+const nuxtShim = (from: string, kind: "app" | "components") => (NUXT_RUNTIME.test(from) ? path.join(SHIMS_DIR, "nuxt", kind + ".ts") : undefined);
 
 /**
  * Auto-imports declared by unplugin-auto-import (`const ref: typeof import('vue')['ref']`) or Nuxt
@@ -39,14 +44,16 @@ function parseImportDeclarations(file: string): Array<[string, { from: string; n
   const text = readFileSync(file, "utf8");
   const out: Array<[string, { from: string; name: string }]> = [];
   for (const m of text.matchAll(/^\s*const\s+([A-Za-z_$][\w$]*)\s*:\s*typeof\s+import\(\s*['"]([^'"]+)['"]\s*\)\s*\[\s*['"]([^'"]+)['"]\s*\]/gm)) {
-    out.push([m[1], { from: target(file, m[2]), name: m[3] }]);
+    const from = target(file, m[2]);
+    out.push([m[1], { from: nuxtShim(m[2], "app") ?? nuxtShim(from, "app") ?? from, name: m[3] }]);
   }
   for (const m of text.matchAll(/^\s*export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/gm)) {
     if (/^\s*export\s+type\b/.test(m[0])) continue;
     for (const part of m[1].split(",").map((s) => s.trim()).filter(Boolean)) {
       if (part.startsWith("type ")) continue;
       const [name, local] = part.split(/\s+as\s+/).map((s) => s.trim());
-      out.push([local ?? name, { from: target(file, m[2]), name }]);
+      const from = target(file, m[2]);
+      out.push([local ?? name, { from: nuxtShim(m[2], "app") ?? nuxtShim(from, "app") ?? from, name }]);
     }
   }
   return out;
@@ -60,7 +67,11 @@ export function readAutoComponents(root: string): Array<{ name: string; from: st
     const file = path.join(root, rel);
     if (!existsSync(file)) continue;
     const entries = cached(file, () => [...readFileSync(file, "utf8").matchAll(/^\s*['"]?([A-Z][\w]*)['"]?\s*:\s*typeof\s+import\(\s*['"]([^'"]+)['"]\s*\)\s*\[\s*['"]([^'"]+)['"]\s*\]/gm)]
-      .map((m) => ({ name: m[1], from: target(file, m[2]), export: m[3] })));
+      .map((m) => {
+        const from = target(file, m[2]);
+        const shim = nuxtShim(m[2], "components") ?? nuxtShim(from, "components");
+        return shim ? { name: m[1], from: shim, export: m[1] } : { name: m[1], from, export: m[3] };
+      }));
     for (const e of entries) if (!seen.has(e.name)) { seen.add(e.name); out.push(e); }
   }
   return out;
@@ -110,6 +121,12 @@ export function autoImportLines(file: string, code: string, imports: AutoImports
 /** A module that registers the declared components on a Vue app, each loaded when a preview first uses it. */
 export function autoComponentsModule(components: Array<{ name: string; from: string; export: string }>): string {
   if (!components.length) return "export default null;";
-  const entries = components.map((c) => `  app.component(${JSON.stringify(c.name)}, defineAsyncComponent(() => import(${JSON.stringify(c.from)}).then((m) => m[${JSON.stringify(c.export)}])));`);
-  return `import { defineAsyncComponent } from "vue";\nexport default function register(app) {\n${entries.join("\n")}\n}\n`;
+  // A declared file that is not there (a Nuxt module that is not installed) renders its slot instead of failing them all.
+  const present = (from: string) => !path.isAbsolute(from) || ["", ".vue", ".ts", ".js", ".mjs", ".tsx", "/index.ts", "/index.js", "/index.mjs"].some((ext) => existsSync(from + ext));
+  const missing = components.filter((c) => !present(c.from));
+  components = components.filter((c) => present(c.from));
+  // A component a stand-in module does not provide renders its default slot instead of failing the preview.
+  const entries = components.map((c) => `  app.component(${JSON.stringify(c.name)}, defineAsyncComponent(() => import(${JSON.stringify(c.from)}).then((m) => m[${JSON.stringify(c.export)}] ?? m.default ?? passThrough)));`);
+  entries.push(...missing.map((c) => `  app.component(${JSON.stringify(c.name)}, passThrough);`));
+  return `import { defineAsyncComponent } from "vue";\nconst passThrough = { setup: (_, { slots }) => () => slots.default?.() };\nexport default function register(app) {\n${entries.join("\n")}\n}\n`;
 }
