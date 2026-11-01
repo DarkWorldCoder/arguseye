@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import type { PreviewApi } from "../../src/extension/extension.js";
 
 const root = process.env.CP_FIXTURE_ROOT!;
-const card = path.join(root, "components/ProductCard.tsx");
+const card = vscode.Uri.file(path.join(root, "components/ProductCard.tsx")).fsPath;
 
 /** Entry point for @vscode/test-electron: runs the checks and throws on the first failure. */
 export async function run(): Promise<void> {
@@ -66,7 +66,7 @@ export async function run(): Promise<void> {
   assert.ok(diff.changedPixels > 0);
 
   // Switching to another component file follows along.
-  const page = path.join(root, "app/page.tsx");
+  const page = vscode.Uri.file(path.join(root, "app/page.tsx")).fsPath;
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(page));
   const followed = await api.waitForStatus((s) => s.file === page && s.status === "mounted", 10000);
   assert.match(followed.text, /Hi Ayush/);

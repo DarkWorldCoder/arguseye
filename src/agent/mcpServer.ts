@@ -62,7 +62,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
   const getStaticRenderer = () => options.buildMode === "vite" ? staticRenderer ??= createRenderer({ root, warmup: false }) : getRenderer(false);
   const server = new McpServer({ name: "arguseye", version: packageVersion }, { instructions: INSTRUCTIONS });
   const abs = (file: string) => path.resolve(root, file);
-  const rel = (file: string) => path.relative(root, file);
+  const rel = (file: string) => path.relative(root, file).split(path.sep).join("/");
 
   const viewport = (value: string | undefined) => parseViewport(value);
 

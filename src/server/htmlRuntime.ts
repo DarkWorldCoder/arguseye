@@ -17,12 +17,17 @@ cp.show = async (target, state) => {
     const documentSource = (await import(moduleUrl(target.file))).default;
     cp.warnings.push(...documentSource.warnings);
     const parsed = new DOMParser().parseFromString(documentSource.html, "text/html");
-    document.documentElement.lang = parsed.documentElement.lang;
-    document.documentElement.dir = parsed.documentElement.dir;
-    const classes = parsed.documentElement.className.split(" ").filter(Boolean).filter((name) => !target.theme || name !== "dark");
+    for (const [actual, source] of [[document.documentElement, parsed.documentElement], [document.body, parsed.body]]) {
+      for (const attribute of [...actual.attributes]) actual.removeAttribute(attribute.name);
+      for (const attribute of source.attributes) {
+        if (attribute.name === "id" && attribute.value === "root" || attribute.name.startsWith("on")) { cp.warnings.push("Document attribute " + attribute.name + " requires the full document lifecycle or conflicts with the preview root."); continue; }
+        actual.setAttribute(attribute.name, attribute.value);
+      }
+    }
+    const classes = document.documentElement.className.split(" ").filter(Boolean).filter((name) => !target.theme || name !== "dark");
     if (target.theme === "dark") classes.push("dark");
-    document.documentElement.className = classes.join(" "); document.body.className = parsed.body.className;
-    document.body.style.cssText = parsed.body.style.cssText;
+    document.documentElement.className = classes.join(" ");
+    if (target.theme) document.documentElement.style.colorScheme = target.theme;
     const root = document.getElementById("root"); root.replaceChildren();
     let into = root;
     if (target.frame) {

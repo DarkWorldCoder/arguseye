@@ -287,7 +287,7 @@ export class ModuleGraph {
     if (this.kit.kit && specifier.startsWith("$env/")) return `/@sveltekit-env?m=${encodeURIComponent(specifier)}`;
     const aliased = isShim(importer) ? undefined : applyAlias(this.vite.aliases, specifier) ?? applyAlias(this.kit.aliases, specifier);
     const { path, error } = this.resolver.resolveFileSync(from, aliased ?? specifier);
-    if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer}: ${error}`);
+    if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer.replaceAll("\\", "/")}: ${error}`);
     if (/[\\/]node_modules[\\/]/.test(path) && !isStylesheet(path)) {
       this.deps.add(specifier);
       return `/@deps/${specifier}.js`;

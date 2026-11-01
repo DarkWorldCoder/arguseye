@@ -237,6 +237,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   /** Bundle generation each warm page was loaded under. */
   const generations = new WeakMap<Page, number>();
+  const epochs = new WeakMap<Page, number>();
   const fixtureEvidence = new WeakMap<Page, FixtureProvenance>();
 
   async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget, fixtures?: RenderFixtures, storage?: RenderRequest["storage"]): Promise<Page> {
@@ -274,7 +275,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     guard();
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready || (window as any).__CP__?.status === "error", null, { timeout: 15000 });
-    await page.evaluate(() => Promise.race([(window as any).__CP__.ready, new Promise((_, reject) => setTimeout(() => reject(new Error("Component setup did not become ready within 15 s")), 15000))]));
+    epochs.set(page, await page.evaluate(() => Promise.race([(window as any).__CP__.ready, new Promise((_, reject) => setTimeout(() => reject(new Error("Component setup did not become ready within 15 s")), 15000))]).then(() => (window as any).__CP__.epoch)));
     guard();
     // Agents get the settled frame: transitions end instantly, animations hold still, no blinking caret.
     await page.addStyleTag({ content: FREEZE_MOTION });
@@ -434,25 +435,21 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       let reloaded = false;
       const marks: number[] = [performance.now()];
       if (pointerDirty.has(page)) { await page.mouse.move(-1, -1); pointerDirty.delete(page); }
-      // Storage is per render: cleared, then seeded, so one render's state never leaks into the next.
-      await page.evaluate((s) => {
-        if (scrollX || scrollY) window.scrollTo(0, 0);
-        if (document.activeElement !== document.body) (document.activeElement as HTMLElement | null)?.blur?.();
-        localStorage.clear();
-        sessionStorage.clear();
-        for (const [k, v] of Object.entries(s?.local ?? {})) localStorage.setItem(k, v);
-        for (const [k, v] of Object.entries(s?.session ?? {})) sessionStorage.setItem(k, v);
-      }, storage ?? null);
       if (!isNew) {
         // A warm page may have been used for the other theme; re-emulate only on a change (it is a CDP round trip).
         if (schemes.get(page) !== rest.theme) { await page.emulateMedia({ colorScheme: rest.theme ?? null }); schemes.set(page, rest.theme); }
         const state = server.syncDisk();
         const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
-        if (generation !== generations.get(page) || frameworkOf(rest.file) === "html" && await page.evaluate((epoch) => (window as any).__CP__.epoch !== epoch, state.epoch)) {
+        if (generation !== generations.get(page) || frameworkOf(rest.file) === "html" && epochs.get(page) !== state.epoch) {
           reloaded = true;
           await load(page, target);
         } else {
-          await page.evaluate(async ([t, s, loaded, context]) => {
+          const shownEpoch = await page.evaluate(async ([t, s, loaded, context, storage]) => {
+            if (scrollX || scrollY) window.scrollTo(0, 0);
+            if (document.activeElement !== document.body) (document.activeElement as HTMLElement | null)?.blur?.();
+            localStorage.clear(); sessionStorage.clear();
+            for (const [key, value] of Object.entries(storage?.local ?? {})) localStorage.setItem(key, value);
+            for (const [key, value] of Object.entries(storage?.session ?? {})) sessionStorage.setItem(key, value);
             const cp = (window as any).__CP__;
             const sameEpoch = cp.epoch === s.epoch;
             const changed = loaded.filter((f) => s.versions[f] && s.versions[f] !== cp.versions[f]);
@@ -469,8 +466,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             for (const url of context.globalCssUrls) { try { await cp.importModule(url); } catch (error) { updateErrors.push(String(error)); } }
             await cp.show(t, s);
             cp.errors.push(...updateErrors);
-            return cp.status;
-          }, [target, state, [...loadedModules.get(page)!], server.context()] as const);
+            return cp.epoch;
+          }, [target, state, [...loadedModules.get(page)!], server.context(), storage] as const);
+          epochs.set(page, shownEpoch);
         }
       }
 
@@ -536,7 +534,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (settled.assets.length) warnings.push("Assets did not settle: " + settled.assets.join(", "));
       if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");
       marks.push(performance.now());
-      const { box, inPage, runtimeWarnings, portals, canvases, empty, environment } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, rootIntact } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
@@ -558,7 +556,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           right = Math.min(innerWidth, Math.max(right, b.right)); bottom = Math.min(innerHeight, Math.max(bottom, b.bottom));
         }
         return {
-          environment: { locale: navigator.language, timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone },
+          environment: (window as any).__CP__.environment,
+          rootIntact: !!document.getElementById("root"),
           box: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) },
           portals: portaled.length,
           // A <canvas> (WebGL, charts) has no accessible content: report it so an agent knows the pixels are the evidence.
@@ -570,8 +569,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         };
       });
       // With portaled content the snapshot is the whole body, so an open dialog's text and buttons are in it.
-      const rootIntact = await page.evaluate(() => !!document.getElementById("root"));
-      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
+      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box, viewport), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
 
       const capturedAt = performance.now();
       warnings.push(...runtimeWarnings);
@@ -698,12 +696,12 @@ const FREEZE_MOTION = `*, *::before, *::after {
 }`;
 
 /** Screenshot through the DevTools protocol directly: no Playwright waiting, encoder tuned for speed. */
-async function capture(session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
+async function capture(session: CDPSession, box: { x: number; y: number; width: number; height: number }, viewport: { width: number; height: number }): Promise<Buffer> {
   const { data } = await session.send("Page.captureScreenshot", {
     format: "png",
     clip: { ...box, scale: 1 },
     optimizeForSpeed: true,
-    captureBeyondViewport: true,
+    captureBeyondViewport: box.x < 0 || box.y < 0 || box.x + box.width > viewport.width || box.y + box.height > viewport.height,
   });
   return Buffer.from(data, "base64");
 }

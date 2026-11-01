@@ -13,6 +13,7 @@ export async function openPreview(root: string, target: PreviewTarget) {
   await page.waitForFunction(() => (window as any).__CP__?.ready);
   await page.evaluate(() => (window as any).__CP__.ready);
   errors.push(...(await page.evaluate(() => (window as any).__CP__.errors as string[])));
+  if (errors.length) errors.push(...server.errorsSince(0).map((error) => `${error.url}: ${error.message}`));
   const style = (selector: string, prop: string) =>
     page.locator(selector).first().evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), prop);
   return {

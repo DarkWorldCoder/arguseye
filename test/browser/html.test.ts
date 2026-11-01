@@ -22,6 +22,9 @@ it("renders installed Lit components and shadow DOM without React, with props an
     renderer.server.updateBuffer(css, readFileSync(css, "utf8").replace("220, 240, 230", "30, 80, 210"));
     expect((await renderer.diff(first.captureId!)).changedPixels).toBeGreaterThan(0);
     renderer.server.updateBuffer(css, undefined);
+    renderer.server.updateBuffer(file, readFileSync(file, "utf8").replace('<html lang="en">', '<html lang="en" style="--card-bg:rgb(0,0,0)">'));
+    expect((await renderer.diff(first.captureId!)).changedPixels).toBeGreaterThan(0);
+    renderer.server.updateBuffer(file, undefined);
     const script = path.join(root, "card.ts");
     renderer.server.updateBuffer(script, readFileSync(script, "utf8").replace("<h1>", "<h2>").replace("</h1>", "</h2>"));
     const edited = await renderer.render(target);

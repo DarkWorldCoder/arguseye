@@ -85,6 +85,7 @@ window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [
 window.__CP__.importModule = (url) => import(url);
 window.__CP__.fileUrl = ${browserFileUrl};
 window.__CP__.now = window.__CP_ENGINE_NOW__ ?? Date.now.bind(Date);
+window.__CP__.environment = { locale: navigator.language, timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone };
 window.process ??= { env: ${envJson} };
 // Finite JavaScript animations (charts drawing in, springs, count-ups) measure progress from requestAnimationFrame
 // timestamps: the capture step moves those forward so they reach their end frame instead of being caught mid-way.
