@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.0.12
+
+Preact and Solid join React, Vue and Svelte, and real Vite apps render as they are built: `import.meta.glob`, plugin `virtual:` modules, Sass `additionalData`, aliases in Sass and CSS `url()`, and Vue JSX. As before, previews run in the browser: missing data and context remain warnings or errors, and captured changes require review.
 
 - Preact projects (preact without react): JSX compiles against Preact and components render with Preact's own `render`, inside the providers `src/main.tsx` wraps the app in, with an error boundary, global CSS, signals and actions. Edits re-render (state resets). `test/fixtures/preact-app` covers it.
 - Solid projects: JSX compiles with the project's own `babel-preset-solid` (from vite-plugin-solid) after oxc strips TypeScript, and components render with Solid's `render` inside an `ErrorBoundary` and the providers `render(() => <App />)` wraps the app in, created lazily so context reaches them. Signals, `Show`, `For`, resources and actions work; edits remount. `test/fixtures/solid-app` covers it.
