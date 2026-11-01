@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createRenderer, type Renderer } from "../../src/agent/createRenderer.js";
 import path from "node:path";
 import { openPreview } from "./openPreview.js";
 
@@ -45,5 +46,37 @@ describe("Next.js components render as Next renders them, without Next running",
       expect(css).toContain("--font-brand:");
       expect(css).toContain("public/fonts/Brand.woff2?raw");
     } finally { await fonts.close(); }
+  });
+
+});
+
+describe("Next.js modules that only work inside Next", () => {
+  let renderer: Renderer;
+  beforeAll(async () => { renderer = await createRenderer({ root }); });
+  afterAll(async () => renderer?.close());
+  const at = (f: string) => path.join(root, f);
+
+  it("usePathname and useParams return the route of the page the component lives on", async () => {
+    const result = await renderer.render({ file: at("components/ProductPath.tsx"), exportName: "ProductPath" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Viewing /products/1 (product 1)");
+  });
+
+  it("next/router (pages router), next/head and next/script render without Next", async () => {
+    const result = await renderer.render({ file: at("components/LegacyRouterInfo.tsx"), exportName: "LegacyRouterInfo" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Pages router at /blog/[slug] with slug 1");
+  });
+
+  it("next/dynamic loads the component behind its loading state", async () => {
+    const result = await renderer.render({ file: at("components/LazyStats.tsx"), exportName: "LazyStats" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Heavy stats loaded");
+  });
+
+  it("an async server component using next/headers, next/cache and server-only renders", async () => {
+    const result = await renderer.render({ file: at("app/(shop)/account/page.tsx") });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("Plan Pro, theme default");
   });
 });

@@ -3,9 +3,11 @@ const router = {
   push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, refresh: () => {}, prefetch: () => Promise.resolve(),
 };
 export const useRouter = () => router;
-export const usePathname = () => "/";
+// The route of the page the component lives on (set by the preview), e.g. "/cart/1" for app/cart/[id]/page.tsx.
+const cp = () => (globalThis as any).__CP__ ?? {};
+export const usePathname = () => cp().pathname ?? "/";
 export const useSearchParams = () => new URLSearchParams();
-export const useParams = () => ({});
+export const useParams = () => cp().params ?? {};
 export const useSelectedLayoutSegment = () => null;
 export const useSelectedLayoutSegments = () => [];
 export const useServerInsertedHTML = () => {};

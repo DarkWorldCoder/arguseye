@@ -1,5 +1,10 @@
 /** What the preview page should show: a component export and the props to render it with. */
 export type PreviewTarget = {
+  /** URL path and params of the page the component lives on, for router hooks (usePathname, useParams, router.query). */
+  pathname?: string;
+  /** The route with its dynamic segments, e.g. "/blog/[slug]" (pages router `router.pathname`). */
+  pattern?: string;
+  params?: Record<string, string | string[]>;
   file: string;
   exportName?: string;
   props?: Record<string, unknown>;
@@ -74,6 +79,14 @@ window.__CP__ = { target: ${json}, ...${stateJson}, status: "loading", errors: [
 // Node globals that app packages read at runtime (process.env.X, global), as a bundler would provide.
 window.__CP__.importModule = (url) => import(url);
 window.process ??= { env: ${envJson} };
+// Finite JavaScript animations (charts drawing in, springs, count-ups) measure progress from requestAnimationFrame
+// timestamps: the capture step moves those forward so they reach their end frame instead of being caught mid-way.
+{
+  const raf = window.requestAnimationFrame.bind(window);
+  window.__CP__.skew = 0;
+  window.__CP__.fastForward = (ms) => { window.__CP__.skew += ms; };
+  window.requestAnimationFrame = (callback) => raf((time) => callback(time + window.__CP__.skew));
+}
 // fetch() calls a component starts on mount, counted so every runtime can wait for its data before the capture.
 window.__CP__.net = { inFlight: 0, last: 0 };
 window.__CP__.realFetch = window.fetch.bind(window);
@@ -128,7 +141,7 @@ window.$RefreshSig$ = () => (type) => type;
 window.__CP__.refresh = RR;`;
 
 /** Runs in the preview page: `__CP__.show(target)` renders a target into the already-loaded page. */
-export const reactRuntime = `import { createElement } from "/@deps/react.js";
+export const reactRuntime = `import { createElement, cloneElement, isValidElement } from "/@deps/react.js";
 import { createRoot } from "/@deps/react-dom/client.js";
 import { flushSync } from "/@deps/react-dom.js";
 
@@ -164,6 +177,16 @@ const preload = async (target) => {
       document.head.append(link);
     }
   } catch {}
+};
+
+const isAsync = (fn) => typeof fn === "function" && fn.constructor?.name === "AsyncFunction";
+/** Calls async (server) components in a tree and awaits them, as the server would, keeping client components as they are. */
+const resolveServerTree = async (node) => {
+  if (Array.isArray(node)) return Promise.all(node.map(resolveServerTree));
+  if (!isValidElement(node)) return node;
+  if (isAsync(node.type)) return resolveServerTree(await node.type(node.props));
+  if (node.props?.children === undefined) return node;
+  return cloneElement(node, undefined, ...[].concat(await resolveServerTree(node.props.children)));
 };
 
 /** A failed import() only says "failed to fetch"; the server kept the real reason. */
@@ -246,6 +269,9 @@ const appWrapper = async (since) => {
 cp.show = async (target, state) => {
   if (state) Object.assign(cp, state);
   cp.target = target;
+  cp.pathname = target.pathname ?? "/";
+  cp.params = target.params ?? {};
+  cp.pattern = target.pattern ?? cp.pathname;
   cp.errors = [];
   cp.warnings = [];
   cp.status = "loading";
@@ -271,7 +297,10 @@ cp.show = async (target, state) => {
     if (target.fresh) mountKey++;
     const Wrapper = await appWrapper(since);
     const Box = await parentBox(target, since);
-    flushSync(() => root.render(createElement(Wrapper, null, createElement(Box, null, createElement(Component, { ...reviveProps(target.props), key: mountKey })))));
+    let element = createElement(Component, { ...reviveProps(target.props), key: mountKey });
+    // An async server component (and async components inside its tree) cannot render on the client: resolve them first.
+    if (isAsync(Component)) element = await resolveServerTree(element);
+    flushSync(() => root.render(createElement(Wrapper, null, createElement(Box, null, element))));
     await settled();
   } catch (error) {
     cp.errors.push(...(await explain(error, since)));

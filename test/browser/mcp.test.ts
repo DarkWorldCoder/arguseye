@@ -26,6 +26,11 @@ describe("MCP tools (what a coding agent calls)", () => {
     expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "describe_props", "list_usages", "render_component", "render_diff", "render_usages"]);
   });
 
+  it("declares every tool read-only and local (MCP tool annotations)", async () => {
+    const { tools } = await client.listTools();
+    for (const tool of tools) expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+  });
+
   it("tells a connecting agent when to use it, without being asked", () => {
     const instructions = client.getInstructions()!;
     expect(instructions).toMatch(/whenever you create or change a UI component/);

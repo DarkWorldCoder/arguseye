@@ -16,6 +16,9 @@ Use it whenever you create or change a UI component, its styles or its props:
 - After a refactor or dependency upgrade, audit_components renders everything once and lists what broke.
 It is faster than starting the app and driving a browser (about 50 ms per render once warm) and works when the app cannot boot.`;
 
+/** Every tool reads the project and renders it locally: nothing is written, nothing outside the machine is contacted. */
+const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+
 /** Cap for render_usages so one call stays cheap on tokens. */
 const MAX_USAGES = 12;
 
@@ -88,6 +91,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   server.registerTool(
     "render_component",
     {
+      annotations: READ_ONLY,
       description:
         "Use after creating or editing any UI component to see it exactly as it looks in the app, without a dev server: returns a PNG cropped to the component and its accessibility tree. Pass `usage` (from list_usages) to use the props from a real call site, or `props` as JSON; with neither, required props are filled with samples from the TypeScript type (see describe_props).",
       inputSchema: {
@@ -113,6 +117,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   );
 
   server.registerTool("render_diff", {
+    annotations: READ_ONLY,
     description: "Compare current source against an immutable captureId returned by render_component. Reuses the original resolved props and viewport; changed pixels are evidence, not a correctness verdict.",
     inputSchema: { baselineId: z.string(), output },
   }, async (args) => {
@@ -129,6 +134,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   server.registerTool(
     "describe_props",
     {
+      annotations: READ_ONLY,
       description:
         "What props a component accepts, read from its TypeScript type: name, kind (string, number, boolean, enum with options, array, object with fields, function, node), required, default, description. Includes `sample`, the props render_component uses when you pass none.",
       inputSchema: target,
@@ -146,6 +152,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   server.registerTool(
     "list_usages",
     {
+      annotations: READ_ONLY,
       description: "List every place a component is used in the project, with the literal props each call site passes (and the ones that depend on runtime values).",
       inputSchema: target,
     },
@@ -162,6 +169,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   server.registerTool(
     "render_usages",
     {
+      annotations: READ_ONLY,
       description: `After changing a component, render it at every place it is used (up to ${MAX_USAGES}) with each call site's real props, to inspect isolated literal-prop variants. These are not full-page integration tests.`,
       inputSchema: { ...target, ...look, cursor: z.string().optional(), limit: z.number().int().min(1).max(MAX_USAGES).optional() },
     },
@@ -186,6 +194,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean 
   server.registerTool(
     "audit_components",
     {
+      annotations: READ_ONLY,
       description: "Render every component in the project (or a folder) once with sample props and report which render, which throw and which come out empty. Use after a refactor, a dependency upgrade or a shared-style change, or to get to know a new codebase's UI. Text only; render_component shows any one of them.",
       inputSchema: { dir: z.string().optional().describe("Folder to audit, relative to the project root; default the whole project"), limit: z.number().int().min(1).max(500).optional().describe("Most components to render (default 200)") },
     },

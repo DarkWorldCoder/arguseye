@@ -117,9 +117,9 @@ describe("edge cases: every kind of component renders", () => {
     expect(result.warnings.join("\n")).toContain("Requests failed");
   });
 
-  it.each(["Spinner.tsx", "FadeIn.tsx", "SalesChart.tsx", "LiveClock.tsx", "VirtualRows.tsx"])("%s renders the same frame twice (deterministic capture)", async (file) => {
+  it.each(["Spinner.tsx", "FadeIn.tsx", "SalesChart.tsx", "LiveClock.tsx", "VirtualRows.tsx"])("%s renders the same frame on every render (deterministic capture)", async (file) => {
+    // Animations started on mount (Recharts bars drawing in) are fast-forwarded to their end frame.
     await renderer.render({ file: at(file) });
-    const again = await renderer.render({ file: at(file) });
-    expect(again.changes?.status).toBe("unchanged");
+    for (let i = 0; i < 2; i++) expect((await renderer.render({ file: at(file) })).changes?.status).toBe("unchanged");
   });
 });

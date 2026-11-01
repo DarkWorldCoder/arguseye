@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { routeFor } from "../project/routeFor.js";
+import { routeFor, routePath } from "../project/routeFor.js";
 import { defaultRouteFile } from "../project/appContext.js";
 import path from "node:path";
 import { compareCaptures, type DiffResult } from "./compareCaptures.js";
@@ -301,6 +301,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target.contextFile = rest.file;
       }
       target.route = resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
+      Object.assign(target, routePath(options.root, target.route));
       // A Next layout renders <html>/<body>, which cannot mount inside a preview. It is every preview's wrapper
       // already, so render its chain (providers, elements, html/body classes) down to this layout around its children.
       const layout = isLayoutFile(options.root, rest.file) && (rest.exportName ?? "default") === "default";
@@ -372,18 +373,20 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
       const settled = await page.evaluate(async () => {
         // JavaScript animations (charts drawing in, springs) move the DOM every frame and CSS freezing cannot stop
-        // them: if anything changed during one frame, wait until two frames in a row are still (at most 2.5 s).
+        // them: they are fast-forwarded, and anything still moving is waited out (at most 2.5 s).
         const nextFrame = () => new Promise((done) => requestAnimationFrame(() => done(undefined)));
+        const cp = (window as any).__CP__;
         let moved = 0;
         const watcher = new MutationObserver((records) => { moved += records.length; });
         watcher.observe(document.body, { subtree: true, attributes: true, childList: true, characterData: true });
-        await nextFrame();
+        // One frame with animation time pushed ahead; if anything moved, keep pushing until two frames in a row are
+        // still: an animation started on mount reaches its end frame within a couple of frames.
+        cp.fastForward?.(60000); await nextFrame();
         let animating = false;
         if (moved) {
           const until = performance.now() + 2500;
-          // Two still frames in a row: chart libraries skip a frame now and then mid-animation.
           let still = 0;
-          while (still < 2 && performance.now() < until) { moved = 0; await nextFrame(); still = moved ? 0 : still + 1; }
+          while (still < 2 && performance.now() < until) { moved = 0; cp.fastForward?.(60000); await nextFrame(); still = moved ? 0 : still + 1; }
           animating = still < 2;
         }
         watcher.disconnect();
