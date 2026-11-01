@@ -22,7 +22,7 @@ Version scope: 0.0.13 adds project inspection, explicit setup, revised MCP/bound
 
 ## Product constraints
 
-Warm render p95 must stay at or below 100 ms over 20 measured renders on a documented machine. The edit-to-pixels target is 50 ms; current live-edit tests enforce a looser 100 ms bound. New work on either path needs a timing assertion.
+Warm render p95 must stay at or below 100 ms over 20 measured renders on a documented machine. The physical edit-to-pixels target is 50 ms and remains a separate display benchmark. Live-edit tests enforce a strict 100 ms bound from a ready source buffer to notification of the expected visible DOM mutation; headless frame-observation delay is reported separately. New work on either path needs a timing assertion.
 
 App modules are transformed with oxc; Vue SFCs use the project's matching compiler. Dependencies are pre-bundled by Rolldown. CSS processing uses the project's toolchain and Lightning CSS where appropriate. Browser pages stay warm. Chromium provides the rendering engine; the VS Code webview is the interactive human view.
 

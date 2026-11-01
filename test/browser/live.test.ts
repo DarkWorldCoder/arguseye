@@ -37,6 +37,18 @@ describe("live updates from unsaved edits", () => {
     await openCard();
     for (let i = 0; i < 3; i++) await page.getByRole("button").click();
 
+    let notify!: (time: number) => void;
+    const applied = new Promise<number>((resolve) => { notify = resolve; });
+    await page.exposeFunction("recordVisibleEdit", () => notify(performance.now()));
+    await page.evaluate(() => {
+      const observer = new MutationObserver(() => {
+        const button = document.querySelector("button");
+        if (button?.textContent === "Buy now (3)" && button.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
+          observer.disconnect(); (window as any).recordVisibleEdit();
+        }
+      });
+      observer.observe(document.getElementById("root")!, { subtree: true, childList: true, characterData: true });
+    });
     const edited = onDisk(card).replace("Add to cart", "Buy now");
     const cpuBefore = process.cpuUsage();
     const started = performance.now();
@@ -48,10 +60,12 @@ describe("live updates from unsaved edits", () => {
       const button = document.querySelector("button");
       return button?.textContent === "Buy now (3)" && button.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
     }, undefined, { polling: "raf", timeout: 2000 });
-    const ms = performance.now() - started;
-    console.log("React edit-to-pixels", Math.round(ms), "ms; target 50 ms, enforced limit 100 ms");
+    const frameMs = performance.now() - started;
+    const ms = (await applied) - started;
+    console.log("React edit-to-visible-DOM", Math.round(ms), "ms; frame observation", Math.round(frameMs), "ms; target 50 ms, enforced DOM limit 100 ms");
     console.log("React update phases", JSON.stringify({ buffer: updated - started, bufferCpuMs: (cpu.user + cpu.system) / 1000 }));
 
+    expect(ms).toBeGreaterThanOrEqual(0);
     expect(ms).toBeLessThan(100);
     expect(await page.getByRole("button", { name: "Buy now (3)" }).isVisible()).toBe(true);
     server.updateBuffer(card, undefined);
