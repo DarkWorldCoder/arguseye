@@ -28,6 +28,9 @@ jobs:
         run: for d in test/fixtures/*/; do (cd "$d" && npm ci --no-audit --no-fund); done
       - run: npx playwright-core install --with-deps chromium
       - run: npm run typecheck
+      - name: Profile native screenshot transport
+        if: runner.os == 'macOS'
+        run: node scripts/profileCapture.mjs
       - name: Native framework and MCP contracts
         run: npx vitest run test/browser/render.test.ts test/browser/vue.test.ts test/browser/svelte.test.ts test/browser/preact.test.ts test/browser/solid.test.ts test/browser/html.test.ts test/browser/mcp.test.ts --maxWorkers 1
       - if: ${{ !cancelled() }}

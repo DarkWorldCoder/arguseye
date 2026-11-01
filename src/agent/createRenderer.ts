@@ -92,7 +92,7 @@ export type RenderResult = {
   /** Caller-authored browser setup; overrides inferred providers/plugins, not the full application. */
   setupApplied?: string;
   /** Where the time went, in ms: bundling/crawl, page load or swap, settling (fonts, images), capture. */
-  timings?: { prepare: number; show: number; settle: number; capture: number; inspection?: number };
+  timings?: { prepare: number; show: number; settle: number; capture: number; layout: number; screenshot: number; accessibility: number; inspection?: number };
 };
 
 export type Changes = {
@@ -572,7 +572,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         };
       });
       // With portaled content the snapshot is the whole body, so an open dialog's text and buttons are in it.
-      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
+      const layoutAt = performance.now();
+      let screenshotAt = layoutAt, accessibilityAt = layoutAt;
+      const [png, snapshot] = await Promise.all([
+        capture(cdp.get(page)!, box).then((png) => { screenshotAt = performance.now(); return png; }),
+        page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot().then((snapshot) => { accessibilityAt = performance.now(); return snapshot; }),
+      ]);
 
       const capturedAt = performance.now();
       warnings.push(...runtimeWarnings);
@@ -598,7 +603,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         ...(logged.length ? { console: unique(logged.filter((l) => !allErrors.some((e) => e.includes(l)))).slice(0, 5) } : {}),
         layoutsApplied: server.layoutsFor(target.route),
         setupApplied: setup ? path.relative(options.root, setup) : undefined,
-        timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(capturedAt - marks[2]), ...(inspection || locations.length ? { inspection: Math.round(performance.now() - capturedAt) } : {}) },
+        timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(capturedAt - marks[2]), layout: Math.round(layoutAt - marks[2]), screenshot: Math.round(screenshotAt - layoutAt), accessibility: Math.round(accessibilityAt - layoutAt), ...(inspection || locations.length ? { inspection: Math.round(performance.now() - capturedAt) } : {}) },
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({
           file: rest.file, exportName: rest.exportName ?? "default", props,

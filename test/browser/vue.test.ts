@@ -46,12 +46,21 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
     try {
       await page.goto(renderer.server.url + renderer.server.pageUrl({ file, props: { title: "Lamp", price: 5 } }));
       await page.getByRole("button").click();
+      let observed = 0;
+      await page.exposeFunction("recordEdit", () => { observed = performance.now(); });
+      await page.evaluate(() => {
+        const observer = new MutationObserver(() => {
+          if (document.querySelector("button")?.textContent === "Buy (1)") {
+            observer.disconnect(); (window as any).recordEdit();
+          }
+        });
+        observer.observe(document.getElementById("root")!, { subtree: true, childList: true, characterData: true });
+      });
       const start = performance.now();
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy ("));
       await page.getByRole("button", { name: "Buy (1)" }).waitFor();
       const ms = performance.now() - start;
-      console.log("Vue edit-to-pixels", Math.round(ms), "ms; target 50 ms, enforced limit 100 ms");
-      expect(ms).toBeLessThan(100);
+      console.log("Vue edit-to-pixels", Math.round(ms), "ms; mutation delivered", Math.round(observed - start), "ms; target 50 ms, enforced limit 100 ms");
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy (").replace("rgb(0, 80, 120)", "rgb(255, 0, 0)"));
       await expect.poll(() => page.locator("h2").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 0, 0)");
       expect(await page.locator("button").innerText()).toBe("Buy (1)");
@@ -59,6 +68,7 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
       await page.getByRole("button", { name: "Add (7)" }).waitFor();
       expect(await page.evaluate(() => (window as any).__CP__.warnings.join())).toContain("reset");
       expect(await page.locator("body").evaluate((el) => getComputedStyle(el).fontFamily)).toContain("Georgia");
+      expect(ms).toBeLessThan(100);
     } finally { renderer.server.updateBuffer(file, undefined); await page.close(); }
   });
 });

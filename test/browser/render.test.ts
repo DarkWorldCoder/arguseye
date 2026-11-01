@@ -56,6 +56,8 @@ describe("headless render (what an agent gets back)", () => {
     expect(result.snapshot).toContain("$129.00");
     expect(result.snapshot).toContain("usb-c");
     expect(result.snapshot).toContain('button "Add to cart (0)"');
+    expect(result.timings).toEqual(expect.objectContaining({ layout: expect.any(Number), screenshot: expect.any(Number), accessibility: expect.any(Number) }));
+    for (const phase of [result.timings!.layout, result.timings!.screenshot, result.timings!.accessibility]) expect(phase).toBeGreaterThanOrEqual(0);
   });
 
   it("picks the component export itself when none is named and the file has no default export", async () => {
