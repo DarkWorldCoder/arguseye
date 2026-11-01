@@ -54,6 +54,8 @@ export type RenderResult = {
   elements?: ElementEvidence[];
   errorLocations?: ErrorLocation[];
   environment?: { locale: string; timezoneId: string; clock: "system" | "fixed"; random: "runtime" | "seeded" };
+  /** Scheduled application/dependency timers, distinct from observed instability or engine deadlines. */
+  scheduledTimers?: number;
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
@@ -275,7 +277,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     guard();
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready || (window as any).__CP__?.status === "error", null, { timeout: 15000 });
-    epochs.set(page, await page.evaluate(() => Promise.race([(window as any).__CP__.ready, new Promise((_, reject) => setTimeout(() => reject(new Error("Component setup did not become ready within 15 s")), 15000))]).then(() => (window as any).__CP__.epoch)));
+    epochs.set(page, await page.evaluate(() => Promise.race([(window as any).__CP__.ready, new Promise((_, reject) => (window as any).__CP__.setTimeout(() => reject(new Error("Component setup did not become ready within 15 s")), 15000))]).then(() => (window as any).__CP__.epoch)));
     guard();
     // Agents get the settled frame: transitions end instantly, animations hold still, no blinking caret.
     await page.addStyleTag({ content: FREEZE_MOTION });
@@ -526,7 +528,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         if (pending.length || document.fonts.status !== "loaded") {
           await Promise.race([
             Promise.allSettled([document.fonts.ready, ...pending.map((img) => img.decode())]),
-            new Promise((r) => setTimeout(r, 300)),
+            new Promise((r) => cp.setTimeout(r, 300)),
           ]);
         }
         return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0 };
@@ -534,7 +536,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (settled.assets.length) warnings.push("Assets did not settle: " + settled.assets.join(", "));
       if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");
       marks.push(performance.now());
-      const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, rootIntact } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, rootIntact, scheduledTimers } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
@@ -565,11 +567,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           // Nothing with a size and no text: the component returned null or empty elements for these props.
           empty: !portaled.length && !root.innerText.trim() && ![...root.querySelectorAll("*")].some((el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0; }),
           inPage: (window as any).__CP__.errors as string[],
+          scheduledTimers: (window as any).__CP__.pendingTimers(),
           runtimeWarnings: ((window as any).__CP__.warnings ?? []) as string[],
         };
       });
       // With portaled content the snapshot is the whole body, so an open dialog's text and buttons are in it.
-      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box, viewport), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
+      const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
 
       const capturedAt = performance.now();
       warnings.push(...runtimeWarnings);
@@ -588,7 +591,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (evidence?.network?.blocked.length) warnings.push("Unmatched network requests blocked by fixtures: " + evidence.network.blocked.join("; "));
       const setup = server.setupFor(rest.file);
       const result: RenderResult = {
-        png, snapshot, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        png, snapshot, scheduledTimers, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
         ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),
@@ -696,12 +699,12 @@ const FREEZE_MOTION = `*, *::before, *::after {
 }`;
 
 /** Screenshot through the DevTools protocol directly: no Playwright waiting, encoder tuned for speed. */
-async function capture(session: CDPSession, box: { x: number; y: number; width: number; height: number }, viewport: { width: number; height: number }): Promise<Buffer> {
+async function capture(session: CDPSession, box: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
   const { data } = await session.send("Page.captureScreenshot", {
     format: "png",
     clip: { ...box, scale: 1 },
     optimizeForSpeed: true,
-    captureBeyondViewport: box.x < 0 || box.y < 0 || box.x + box.width > viewport.width || box.y + box.height > viewport.height,
+    captureBeyondViewport: true,
   });
   return Buffer.from(data, "base64");
 }

@@ -103,6 +103,23 @@ window.process ??= { env: ${envJson} };
   };
   window.cancelAnimationFrame = (id) => { scheduled.delete(id); window.__CP__.rafPending = scheduled.size; return cancel(id); };
 }
+// Keep application timers visible without delaying static renders or counting the engine's own deadlines.
+{
+  const cp = window.__CP__, timeout = window.setTimeout.bind(window), interval = window.setInterval.bind(window);
+  const clear = window.clearTimeout.bind(window), scheduled = new Set();
+  cp.setTimeout = timeout; cp.setInterval = interval;
+  cp.pendingTimers = () => scheduled.size;
+  const schedule = (repeat, callback, delay, args) => {
+    const id = (repeat ? interval : timeout)(() => {
+      if (!repeat) scheduled.delete(id);
+      if (typeof callback === "function") callback.apply(window, args); else (0, eval)(String(callback));
+    }, delay);
+    scheduled.add(id); return id;
+  };
+  window.setTimeout = (callback, delay, ...args) => schedule(false, callback, delay, args);
+  window.setInterval = (callback, delay, ...args) => schedule(true, callback, delay, args);
+  window.clearTimeout = window.clearInterval = (id) => { scheduled.delete(id); return clear(id); };
+}
 // fetch() calls a component starts on mount, counted so every runtime can wait for its data before the capture.
 window.__CP__.net = { inFlight: 0, last: 0 };
 window.__CP__.realFetch = window.fetch.bind(window);
@@ -117,7 +134,7 @@ window.__CP__.realFetch = window.fetch.bind(window);
 window.__CP__.quiet = async (busy = () => false) => {
   const net = window.__CP__.net, until = performance.now() + 3000;
   const frame = () => new Promise((done) => requestAnimationFrame(done));
-  await new Promise((done) => setTimeout(done, 0));
+  await new Promise((done) => window.__CP__.setTimeout(done, 0));
   while (performance.now() < until && (net.inFlight > 0 || busy() || performance.now() - net.last < 32)) await frame();
   if (performance.now() < until) return true;
   window.__CP__.warnings = [...(window.__CP__.warnings ?? []), net.inFlight ? "Requests were still pending after 3 s; the capture shows the loading state." : "Part of the component was still loading after 3 s (a lazy or async part)."];
@@ -242,7 +259,7 @@ const settled = async () => {
   for (const img of document.getElementById("root").querySelectorAll("img[loading=lazy]")) img.loading = "eager";
   const images = [...document.getElementById("root").querySelectorAll("img")].filter((img) => !img.complete);
   const loads = images.map((img) => new Promise((done) => { img.addEventListener("load", done, { once: true }); img.addEventListener("error", done, { once: true }); }));
-  const timeout = new Promise((done) => setTimeout(done, Math.max(0, until - performance.now())));
+  const timeout = new Promise((done) => cp.setTimeout(done, Math.max(0, until - performance.now())));
   return Promise.race([Promise.all([document.fonts.ready, ...loads]), timeout]);
 };
 

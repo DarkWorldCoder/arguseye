@@ -57,7 +57,7 @@ cp.show = async (target, state) => {
     }), root);
     await cp.quiet();
     const images = [...root.querySelectorAll("img")].filter((img) => !img.complete);
-    await Promise.race([Promise.all([document.fonts.ready, ...images.map((img) => new Promise((done) => { img.onload = img.onerror = done; }))]), new Promise((done) => setTimeout(done, 3000))]);
+    await Promise.race([Promise.all([document.fonts.ready, ...images.map((img) => new Promise((done) => { img.onload = img.onerror = done; }))]), new Promise((done) => cp.setTimeout(done, 3000))]);
   } catch (error) {
     const served = await cp.realFetch("/@errors?since=" + since).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));

@@ -67,3 +67,36 @@ it("reports pending animation work inside shadow DOM and does not mistake cancel
     expect(steady.complete).toBe(true);
   } finally { await renderer.close(); }
 });
+
+it("reports application timers without counting engine deadlines or cancelled timers", async () => {
+  const renderer = await createRenderer({ root });
+  try {
+    renderer.server.updateBuffer(file, '<script type="module">setTimeout(() => {}, 60000); setInterval(() => {}, 60000);</script><p>Timer-backed state</p>');
+    const pending = await renderer.render({ file });
+    expect(pending.errors).toEqual([]);
+    expect(pending.scheduledTimers).toBe(2);
+    expect(pending.complete).toBe(true);
+    renderer.server.updateBuffer(file, '<script type="module">const timeout=setTimeout(() => {}, 60000); const interval=setInterval(() => {}, 60000); clearInterval(timeout); clearTimeout(interval);</script><p>Cancelled timers</p>');
+    const cancelled = await renderer.render({ file });
+    expect(cancelled.errors).toEqual([]);
+    expect(cancelled.scheduledTimers).toBe(0);
+    expect(cancelled.warnings).toEqual([]);
+    expect(cancelled.complete).toBe(true);
+  } finally { await renderer.close(); }
+});
+
+
+it("marks changing timer-backed captures incomplete when source and inputs did not change", async () => {
+  const renderer = await createRenderer({ root });
+  try {
+    const script = path.join(root, "card.ts");
+    renderer.server.updateBuffer(script, readFileSync(script, "utf8").replace('this.count = 0;', 'this.count = (globalThis.__cpTestCount = (globalThis.__cpTestCount ?? 0) + 1); setTimeout(() => {}, 60000);'));
+    const before = await renderer.render({ file });
+    const diff = await renderer.diff(before.captureId!);
+    expect(diff.after.errors).toEqual([]);
+    expect(diff.after.sourceRevision).toBe(before.sourceRevision);
+    expect(diff.changedPixels).toBeGreaterThan(0);
+    expect(diff.status).toBe("incomplete");
+    expect(diff.newWarnings.join()).toContain("application timers remain scheduled");
+  } finally { await renderer.close(); }
+});

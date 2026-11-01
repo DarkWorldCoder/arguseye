@@ -61,12 +61,14 @@ export async function compareCaptures(page: Page, before: RenderResult, after: R
   }, [before.png.toString("base64"), after.png.toString("base64")]);
   const { png, ...metrics } = pixels;
   const snapshotChanged = before.snapshot !== after.snapshot;
+  const timerVariance = (pixels.changedPixels > 0 || snapshotChanged) && (before.scheduledTimers || after.scheduledTimers) && before.sourceRevision === after.sourceRevision && JSON.stringify(before.target) === JSON.stringify(after.target) && JSON.stringify(before.viewport) === JSON.stringify(after.viewport);
+  const stabilityWarnings = timerVariance ? ["Pixels or accessibility text changed with unchanged source and inputs while application timers remain scheduled; capture stability is not established."] : [];
   return {
     ...metrics, diffPng: Buffer.from(png, "base64"), before, after, snapshotChanged,
-    status: !before.complete || !after.complete ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
+    status: !before.complete || !after.complete || timerVariance ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
     newErrors: after.errors.filter((e) => !before.errors.includes(e)),
     resolvedErrors: before.errors.filter((e) => !after.errors.includes(e)),
-    newWarnings: after.warnings.filter((w) => !before.warnings.includes(w)),
+    newWarnings: [...after.warnings.filter((w) => !before.warnings.includes(w)), ...stabilityWarnings],
     resolvedWarnings: before.warnings.filter((w) => !after.warnings.includes(w)),
   };
 }

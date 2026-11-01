@@ -24,6 +24,7 @@ export const renderOutputSchema = z.object({
   target: z.object({ file: z.string(), exportName: z.string(), props: record }).passthrough(),
   viewport, sourceRevision: z.string(), unresolved: z.array(z.string()), warnings: z.array(z.string()),
   complete: z.boolean(), snapshot: z.string(), ms: z.number(), reloaded: z.boolean(),
+  scheduledTimers: z.number().int().nonnegative().optional(),
   propsSource: z.enum(["given", "usage", "sample", "none"]),
   environment: z.object({ locale: z.string(), timezoneId: z.string(), clock: z.enum(["system", "fixed"]), random: z.enum(["runtime", "seeded"]) }).optional(),
   accessibility: z.object({ engine: z.string(), scope: z.string(), ms: z.number(), violations: z.array(record), incomplete: z.array(record), passes: z.number(), inapplicable: z.number(), note: z.string() }).optional(),

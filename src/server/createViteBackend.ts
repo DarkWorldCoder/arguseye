@@ -32,6 +32,7 @@ export async function createViteBackend(options: PreviewServerOptions, notify: (
   const viteEntry = resolver.resolveFileSync(path.join(root, "package.json"), "vite").path;
   if (!viteEntry) throw new Error(`Vite compatibility requires the project's own installed vite in ${root}; install it there or use native mode.`);
   const { createServer } = await import(pathToFileURL(viteEntry).href);
+  const viteClient = resolver.resolveFileSync(viteEntry, "../client/client.mjs").path;
   const cacheDir = mkdtempSync(path.join(os.tmpdir(), "arguseye-vite-"));
   const runtimeRefresh = ownRequire.resolve("react-refresh/runtime");
   const runtimeDir = path.dirname(runtimeRefresh);
@@ -131,6 +132,8 @@ export async function createViteBackend(options: PreviewServerOptions, notify: (
         load(id: string) {
           const file = id.split("?")[0];
           if (generated.has(file)) return generated.get(file);
+          // Vite's development transport is engine work, not a component's delayed UI state.
+          if (viteClient && path.normalize(file) === path.normalize(viteClient)) { access.assert(file); return readFileSync(file, "utf8").replace(/(?<![\w.$])set(Timeout|Interval)\s*\(/g, "window.__CP__.set$1("); }
           if (!path.isAbsolute(file) || !existsSync(file)) return;
           access.assert(file);
           if (!/[?&](vue|svelte)(?:&|=)/.test(id) && /\.(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass)$/.test(file)) return source(file);

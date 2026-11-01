@@ -8,12 +8,16 @@ export async function openPreview(root: string, target: PreviewTarget) {
   const browser: Browser = await chromium.launch({ channel: "chrome" });
   const page: Page = await browser.newPage();
   const errors: string[] = [];
+  const diagnostics: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on("requestfailed", (request) => diagnostics.push(`${request.url()}: ${request.failure()?.errorText}`));
+  page.on("console", (message) => { if (message.type() === "error") diagnostics.push(message.text()); });
+  page.on("response", (response) => { if (response.status() >= 400) diagnostics.push(`${response.status()} ${response.url()}`); });
   await page.goto(new URL(server.pageUrl(target), server.url).href);
-  await page.waitForFunction(() => (window as any).__CP__?.ready);
+  await page.waitForFunction(() => (window as any).__CP__?.ready || (window as any).__CP__?.status === "error");
   await page.evaluate(() => (window as any).__CP__.ready);
   errors.push(...(await page.evaluate(() => (window as any).__CP__.errors as string[])));
-  if (errors.length) errors.push(...server.errorsSince(0).map((error) => `${error.url}: ${error.message}`));
+  if (errors.length) errors.push(`Browser: ${browser.version()}`, ...diagnostics, ...server.errorsSince(0).map((error) => `${error.url}: ${error.message}`));
   const style = (selector: string, prop: string) =>
     page.locator(selector).first().evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), prop);
   return {

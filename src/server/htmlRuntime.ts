@@ -46,7 +46,7 @@ cp.show = async (target, state) => {
     const custom = [...into.querySelectorAll("*")].filter((el) => el.localName.includes("-"));
     const missing = [...new Set(custom.filter((el) => !customElements.get(el.localName)).map((el) => el.localName))];
     if (missing.length) {
-      await Promise.race([Promise.all(missing.map((name) => customElements.whenDefined(name))), new Promise((done) => setTimeout(done, 500))]);
+      await Promise.race([Promise.all(missing.map((name) => customElements.whenDefined(name))), new Promise((done) => cp.setTimeout(done, 500))]);
       const unresolved = missing.filter((name) => !customElements.get(name));
       if (unresolved.length) cp.warnings.push("Custom elements were not registered within 500 ms: " + unresolved.join(", "));
     }
@@ -64,7 +64,7 @@ cp.show = async (target, state) => {
       element.shadowRoot.append(style);
     }
     let settled = false;
-    await Promise.race([Promise.all(custom.map((el) => el.updateComplete)).then(() => { settled = true; }), new Promise((done) => setTimeout(done, 500))]);
+    await Promise.race([Promise.all(custom.map((el) => el.updateComplete)).then(() => { settled = true; }), new Promise((done) => cp.setTimeout(done, 500))]);
     if (!settled) cp.warnings.push("Custom element updates did not settle within 500 ms.");
     await cp.quiet();
   } catch (error) {

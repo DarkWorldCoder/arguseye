@@ -1,7 +1,8 @@
 import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, writeFile, access } from "node:fs/promises";
+import { mkdir, readFile, writeFile, access, rm } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import os from "node:os";
@@ -11,13 +12,15 @@ const yauzl = createRequire(require.resolve("@vscode/vsce"))("yauzl");
 const directory = path.resolve("artifacts/native-conformance"), target = `${process.platform}-${process.arch}`;
 const archive = path.join(directory, `arguseye-${target}.vsix`), extracted = path.join(directory, "extracted");
 await mkdir(directory, { recursive: true });
-const record = { platform: process.platform, arch: process.arch, node: process.version, os: os.release(), cpu: os.cpus()[0]?.model, target, status: "running", package: archive, codingClients: "Not executed; this job validates native rendering, MCP SDK contracts and the actual extracted VS Code extension." };
+const record = { platform: process.platform, arch: process.arch, node: process.version, os: os.release(), cpu: os.cpus()[0]?.model, target, status: "running", sourceCommit: execFileSync("git", ["rev-parse", "HEAD"], {encoding: "utf8"}).trim(), package: archive, codingClients: "Not executed; this job validates native rendering, MCP SDK contracts and the actual extracted VS Code extension." };
 const run = (command, args, env = process.env) => new Promise((resolve, reject) => {
   const child = spawn(command, args, { stdio: "inherit", env });
   child.on("error", reject); child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`)));
 });
 try {
   await run(process.execPath, [require.resolve("@vscode/vsce/vsce"), "package", "--target", target, "--allow-missing-repository", "--readme-path", "README.marketplace.md", "--out", archive]);
+  const bytes = await readFile(archive); record.bytes = bytes.length; record.sha256 = createHash("sha256").update(bytes).digest("hex");
+  await rm(extracted, { recursive: true, force: true });
   await new Promise((resolve, reject) => yauzl.open(archive, { lazyEntries: true }, (error, zip) => {
     if (error) return reject(error);
     zip.on("error", reject); zip.on("end", resolve);
