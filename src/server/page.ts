@@ -49,6 +49,8 @@ export type PageContext = {
   env: Record<string, string>;
   /** `import.meta.env` for Vite projects: mode flags and variables with an exposed prefix. */
   metaEnv?: Record<string, string | boolean>;
+  /** The project's JSX runtime: Preact projects render .jsx/.tsx with Preact. */
+  jsx?: "react" | "preact";
   /** vite.config `define` entries: global name → JS source of the value. */
   define?: Record<string, string>;
   htmlClass?: string;
@@ -67,7 +69,8 @@ export function themedClass(htmlClass: string | undefined, theme: PreviewTarget[
   return classes.join(" ") || undefined;
 }
 
-export function previewHtml(target: PreviewTarget, { state, env, metaEnv = {}, define = {}, htmlClass, bodyClass, globalCssUrls }: PageContext): string {
+export function previewHtml(target: PreviewTarget, { state, env, metaEnv = {}, define = {}, htmlClass, bodyClass, globalCssUrls, jsx = "react" }: PageContext): string {
+  const runtime = frameworkOf(target.file) === "react" && jsx === "preact" ? "preact" : frameworkOf(target.file);
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
   const envJson = JSON.stringify({ NODE_ENV: "development", ...env }).replace(/</g, "\\u003c");
@@ -84,8 +87,14 @@ window.process ??= { env: ${envJson} };
 {
   const raf = window.requestAnimationFrame.bind(window);
   window.__CP__.skew = 0;
+  // Frames the app has asked for and not yet received: none pending means no JavaScript animation is running.
+  window.__CP__.rafPending = 0;
   window.__CP__.fastForward = (ms) => { window.__CP__.skew += ms; };
-  window.requestAnimationFrame = (callback) => raf((time) => callback(time + window.__CP__.skew));
+  window.__CP__.frame = () => new Promise((done) => raf(done));
+  window.requestAnimationFrame = (callback) => {
+    window.__CP__.rafPending++;
+    return raf((time) => { window.__CP__.rafPending--; callback(time + window.__CP__.skew); });
+  };
 }
 // fetch() calls a component starts on mount, counted so every runtime can wait for its data before the capture.
 window.__CP__.net = { inFlight: 0, last: 0 };
@@ -122,9 +131,9 @@ const fail = (message) => { window.__CP__.errors.push(String(message)); window._
 addEventListener("error", (e) => fail(e.error?.stack ?? e.message));
 addEventListener("unhandledrejection", (e) => fail(e.reason?.stack ?? e.reason));
 </script>
-${frameworkOf(target.file) === "react" ? '<script type="module" src="/@refresh-setup"></script>' : ""}
+${runtime === "react" ? '<script type="module" src="/@refresh-setup"></script>' : ""}
 ${globals}
-<script type="module" src="/@runtime${frameworkOf(target.file) === "react" ? "" : "?framework=" + frameworkOf(target.file)}"></script>
+<script type="module" src="/@runtime${runtime === "react" ? "" : "?framework=" + runtime}"></script>
 </head><body${bodyClass ? ` class="${attr(bodyClass)}"` : ""}><div id="root"></div></body></html>`;
 }
 

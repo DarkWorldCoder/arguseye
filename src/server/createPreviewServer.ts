@@ -19,6 +19,7 @@ import { routerPackage } from "../project/routerPackage.js";
 import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
 import { nextFontModule } from "./nextFont.js";
 import { isShim } from "./shims.js";
+import { preactRuntime } from "./preactRuntime.js";
 import { vueEntry, vueSetupModule } from "../project/vueSetup.js";
 import { kitEnvModule } from "../project/svelteKit.js";
 import { autoComponentsModule, readAutoComponents } from "../project/autoImports.js";
@@ -164,7 +165,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     try {
       for (const file of await sourceFiles(options.root)) await graph.crawl(file);
       const app = appContext();
-      await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
+      await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router, jsx: graph.jsx }));
       await deps.ensureBuilt();
     } catch (error) {
       deps.restore(before);
@@ -178,16 +179,17 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     await warming;
     if (route) {
       const routed = appContext(route);
-      await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss, router }));
+      await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss, router, jsx: graph.jsx }));
     }
-    if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true }));
-    ({ vue: ["vue"], svelte: ["svelte"], react: ["react", "react-dom", "react-dom/client", "react-refresh/runtime"] })[frameworkOf(file)].forEach((spec) => deps.add(spec));
+    if (context?.wrappers.length) await graph.crawlVirtual(contextFile(context.file), wrapperModule(context.wrappers, { markInnermost: true, jsx: graph.jsx }));
+    const runtimeDeps = graph.jsx === "preact" ? ["preact", "preact/hooks", "preact/jsx-runtime", "preact/jsx-dev-runtime"] : ["react", "react-dom", "react-dom/client", "react-refresh/runtime"];
+    ({ vue: ["vue"], svelte: ["svelte"], react: runtimeDeps })[frameworkOf(file)].forEach((spec) => deps.add(spec));
     await graph.crawl(file);
     // The root layout's providers render around every component, so their packages belong in the same build
     // (only the providers: the layout itself may import server-only code).
     const app = appContext();
     if (app.entry) await readSource(app.entry);
-    if (frameworkOf(file) === "react") await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router }));
+    if (frameworkOf(file) === "react") await graph.crawlVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { router, jsx: graph.jsx }));
     if (frameworkOf(file) === "vue") {
       const setup = await vueSetup();
       if (setup) await graph.crawlVirtual(setup.file, setup.source, { refresh: false });
@@ -254,11 +256,11 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         const app = appContext();
         const globalCssUrls = globalStyles(app);
-        return send(res, 200, "text/html", previewHtml(target, { state, env: publicEnv(options.root), metaEnv: importMetaEnv(options.root, graph.vite.envPrefix), define: graph.vite.define, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
+        return send(res, 200, "text/html", previewHtml(target, { state, jsx: graph.jsx, env: publicEnv(options.root), metaEnv: importMetaEnv(options.root, graph.vite.envPrefix), define: graph.vite.define, globalCssUrls, htmlClass: app.htmlClass, bodyClass: app.bodyClass }));
       }
       if (url.pathname === "/@context") {
         const { file, wrappers } = decodeContext(url.searchParams.get("c") ?? "");
-        return send(res, 200, "text/javascript", await graph.loadVirtual(contextFile(file), wrapperModule(wrappers, { markInnermost: true })));
+        return send(res, 200, "text/javascript", await graph.loadVirtual(contextFile(file), wrapperModule(wrappers, { markInnermost: true, jsx: graph.jsx })));
       }
       if (url.pathname === "/@next-fonts") return send(res, 200, "text/javascript", `let style = document.getElementById("cp-next-fonts"); if (!style) { style = document.createElement("style"); style.id = "cp-next-fonts"; document.head.append(style); } style.textContent = ${JSON.stringify(fonts.stylesheet())};`);
       if (url.pathname === "/@next-font") {
@@ -280,7 +282,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         // Nested layouts' own global CSS (e.g. a template importing "swiper/css") loads with the wrapper.
         const rootCss = new Set(appContext().globalCss);
         const css = route ? app.globalCss.filter((f) => !rootCss.has(f)) : [];
-        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css, router })));
+        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css, router, jsx: graph.jsx })));
       }
       if (url.pathname === "/@graph") {
         // Everything a target will import, so the page can preload it in one parallel batch instead of a waterfall.
@@ -308,6 +310,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         deps.add("react-refresh/runtime");
         return send(res, 200, "text/javascript", refreshSetup);
       }
+      if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "preact") return send(res, 200, "text/javascript", preactRuntime);
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "vue") return send(res, 200, "text/javascript", vueRuntime);
       if (url.pathname === "/@runtime" && url.searchParams.get("framework") === "svelte") { deps.add("svelte"); return send(res, 200, "text/javascript", svelteRuntime); }
       if (url.pathname === "/@runtime") {

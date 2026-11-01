@@ -374,14 +374,16 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const settled = await page.evaluate(async () => {
         // JavaScript animations (charts drawing in, springs) move the DOM every frame and CSS freezing cannot stop
         // them: they are fast-forwarded, and anything still moving is waited out (at most 2.5 s).
-        const nextFrame = () => new Promise((done) => requestAnimationFrame(() => done(undefined)));
         const cp = (window as any).__CP__;
+        // The page's own frame wait, which does not count as the app asking for a frame.
+        const nextFrame = () => (cp.frame ? cp.frame() : new Promise((done) => requestAnimationFrame(() => done(undefined))));
         let moved = 0;
         const watcher = new MutationObserver((records) => { moved += records.length; });
         watcher.observe(document.body, { subtree: true, attributes: true, childList: true, characterData: true });
-        // One frame with animation time pushed ahead; if anything moved, keep pushing until two frames in a row are
-        // still: an animation started on mount reaches its end frame within a couple of frames.
-        cp.fastForward?.(60000); await nextFrame();
+        // When the app has frames pending (an animation), one frame with animation time pushed ahead; if anything
+        // moved, keep pushing until two frames in a row are still: an animation started on mount reaches its end
+        // frame within a couple of frames. No pending frame, no wait.
+        if (!cp.frame || cp.rafPending > 0) { cp.fastForward?.(60000); await nextFrame(); }
         let animating = false;
         if (moved) {
           const until = performance.now() + 2500;

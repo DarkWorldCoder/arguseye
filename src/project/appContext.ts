@@ -320,7 +320,7 @@ function memberRoot(n: any): string | undefined {
  * Source of a module whose default export nests `children` inside `wrappers`. With `markInnermost`, the innermost
  * element gets `data-cp-box`, which the capture uses as the box the component sits in.
  */
-export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css = [] as string[], router = undefined as string | undefined } = {}): string {
+export function wrapperModule(wrappers: Wrapper[], { markInnermost = false, css = [] as string[], router = undefined as string | undefined, jsx = "react" as "react" | "preact" } = {}): string {
   const imports: string[] = css.map((file) => `import ${JSON.stringify(file)};`);
   const exprs: string[] = [];
   const importOf = (local: string, importName: string, source: string) =>
@@ -363,7 +363,7 @@ export default function AppWrapper({ children }) {
 }
 `;
   }
-  return `import { createElement as h } from "react";
+  return `import { createElement as h } from ${JSON.stringify(jsx)};
 ${imports.join("\n")}
 ${declarations.join("\n")}
 export default function AppWrapper({ children }) { return ${tree}; }

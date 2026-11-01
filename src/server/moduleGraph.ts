@@ -16,6 +16,7 @@ import { applyAlias, readViteConfig, type ViteConfig } from "../project/viteConf
 import { nextFontUrl } from "./nextFont.js";
 import { readKitConfig, type KitConfig } from "../project/svelteKit.js";
 import { autoImportLines, readAutoImports } from "../project/autoImports.js";
+import { jsxRuntimeOf } from "../project/framework.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
@@ -30,6 +31,8 @@ export class ModuleGraph {
   private imagesAsObjects: boolean;
   /** React Fast Refresh only where React is: in a Vue or Svelte project, a `useX` composable is not a hook. */
   private react: boolean;
+  /** "preact" when the project renders JSX with Preact. */
+  readonly jsx: "react" | "preact";
   private vue: ReturnType<typeof createVueCompiler>;
   private svelte: ReturnType<typeof createSvelteCompiler>;
   private transformed = new Map<string, { source: string; code: string }>();
@@ -54,6 +57,7 @@ export class ModuleGraph {
     this.svelte = createSvelteCompiler(root, css);
     this.imagesAsObjects = importsImagesAsObjects(root);
     this.react = Boolean(this.resolver.resolveFileSync(pathJoin(root, "package.json"), "react").path);
+    this.jsx = jsxRuntimeOf(root);
   }
 
   /** Project dependencies reachable from a target's last transform, for scoped provenance and diagnostics. */
@@ -117,9 +121,9 @@ export class ModuleGraph {
 
   /** A generated module that resolves its imports as if it lived at `asFile` (e.g. next to the root layout). */
   async loadVirtual(asFile: string, source: string, { refresh = true } = {}): Promise<string> {
-    const { code, errors } = await transform(asFile, source, { sourceType: "module", jsx: { runtime: "automatic", development: true, refresh } });
+    const { code, errors } = await transform(asFile, source, { sourceType: "module", jsx: { runtime: "automatic", development: true, refresh: refresh && this.jsx === "react", ...(this.jsx === "preact" ? { importSource: "preact" } : {}) } });
     if (errors.length) throw new Error(errors.map((e) => e.message).join("\n"));
-    return this.rewriteImports(asFile, refresh ? this.withRefresh(asFile, code) : code);
+    return this.rewriteImports(asFile, refresh && this.jsx === "react" ? this.withRefresh(asFile, code) : code);
   }
 
   async load(file: string): Promise<string> {
@@ -137,7 +141,7 @@ export class ModuleGraph {
       const { code, errors } = await transform(vue ? file + ".ts" : svelte ? file + ".js" : file, modular, {
         // JSX in .js files is common (Create React App, older Vite and webpack setups): parse plain JS as JSX.
         ...(/\.(m|c)?js$/.test(file) && !sfc ? { lang: "jsx" as const } : {}),
-        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh },
+        sourceType: "module", jsx: { runtime: "automatic", development: true, refresh, ...(this.jsx === "preact" ? { importSource: "preact" } : {}) },
       });
       if (errors.length) throw new Error(errors.map((e) => `${file}: ${e.message}`).join("\n"));
       // Vite exposes env through import.meta.env; the page holds the values, each module that reads them gets them.
