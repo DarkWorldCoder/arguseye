@@ -109,4 +109,17 @@ describe("edge cases: every kind of component renders", () => {
     expect(result.errors).toEqual([]);
     expect(result.snapshot).toContain("Title by an author on Thu Jan 15 2026");
   });
+
+  it("requests that fail during the render are reported with method, path and status", async () => {
+    const result = await renderer.render({ file: at("FetchOnMount.tsx") });
+    expect(result.errors).toEqual([]);
+    expect(result.failedRequests).toEqual(["GET /api/user → 404"]);
+    expect(result.warnings.join("\n")).toContain("Requests failed");
+  });
+
+  it.each(["Spinner.tsx", "FadeIn.tsx", "SalesChart.tsx", "LiveClock.tsx", "VirtualRows.tsx"])("%s renders the same frame twice (deterministic capture)", async (file) => {
+    await renderer.render({ file: at(file) });
+    const again = await renderer.render({ file: at(file) });
+    expect(again.changes?.status).toBe("unchanged");
+  });
 });

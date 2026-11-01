@@ -42,6 +42,8 @@ describe("render evidence and edit verification", () => {
       expect(result.status).toBe("changed");
       expect(result.changedPixels).toBeGreaterThan(0);
       expect(result.changedPercent).toBeGreaterThan(0);
+      expect(result.changedRegion!.width).toBeGreaterThan(0);
+      expect(result.changedRegion!.height).toBeGreaterThan(0);
       expect(result.after.snapshot).toContain("Buy now");
       expect(result.after.snapshot).toContain("Desk");
       expect(result.after.sourceRevision).not.toBe(result.before.sourceRevision);

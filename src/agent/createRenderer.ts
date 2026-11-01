@@ -62,6 +62,8 @@ export type RenderResult = {
   canvases?: Array<{ width: number; height: number }>;
   /** Visible elements the component rendered outside itself (dialogs, menus, toasts in a portal), included in the capture and snapshot. */
   portals?: number;
+  /** Requests the render made that failed, as "GET /api/me → 404" (at most 10). */
+  failedRequests?: string[];
   /** console.error messages logged during the render (deduplicated, at most 5): often the reason behind an error. */
   console?: string[];
   /** How many of the requested actions ran before capture (all of them unless one failed). */
@@ -78,6 +80,8 @@ export type Changes = {
   status: "unchanged" | "changed" | "incomplete";
   changedPercent: number;
   changedPixels: number;
+  /** Where the pixels changed, in the new image. */
+  changedRegion: { x: number; y: number; width: number; height: number } | null;
   snapshotChanged: boolean;
   /** Accessibility-tree lines removed (-) and added (+) since the previous render. */
   snapshotDiff: string;
@@ -124,6 +128,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   const pageErrors = new WeakMap<Page, string[]>();
   /** console.error output of the current render: apps explain many failures there (env validation, prop types). */
   const pageConsole = new WeakMap<Page, string[]>();
+  /** Requests the component made that failed (4xx/5xx or no response): why it may show a loading or error state. */
+  const pageFailures = new WeakMap<Page, string[]>();
   const loadedModules = new WeakMap<Page, Set<string>>();
   const cdp = new WeakMap<Page, CDPSession>();
   /** Last result per target signature, so a re-render can say what changed without a baseline id. */
@@ -169,6 +175,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     const logged: string[] = [];
     pageConsole.set(page, logged);
     page.on("console", (m) => { if (m.type() === "error" && logged.length < 20) logged.push(m.text().slice(0, 500)); });
+    const failed: string[] = [];
+    pageFailures.set(page, failed);
+    const own = (url: URL) => url.pathname.startsWith("/@") || url.pathname === "/favicon.ico";
+    const where = (url: URL) => (url.host === new URL(server.url).host ? url.pathname + url.search : url.href).slice(0, 200);
+    page.on("response", (r) => { const url = new URL(r.url()); if (r.status() >= 400 && !own(url) && failed.length < 20) failed.push(`${r.request().method()} ${where(url)} → ${r.status()}`); });
+    page.on("requestfailed", (r) => { const url = new URL(r.url()); if (!own(url) && failed.length < 20) failed.push(`${r.method()} ${where(url)} → ${r.failure()?.errorText ?? "failed"}`); });
     await load(page, target);
     cdp.set(page, await page.context().newCDPSession(page));
     return page;
@@ -307,6 +319,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       errors.length = 0;
       const logged = pageConsole.get(page)!;
       logged.length = 0;
+      const failedRequests = pageFailures.get(page)!;
+      failedRequests.length = 0;
       let reloaded = false;
       const marks: number[] = [performance.now()];
       // Storage is per render: cleared, then seeded, so one render's state never leaks into the next.
@@ -357,6 +371,22 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (layout) warnings.push(`Rendered as the app uses it: the layout chain down to ${path.relative(options.root, rest.file)} (providers, elements, <html>/<body> classes) around ${JSON.stringify(target.props!.children)}.`);
 
       const settled = await page.evaluate(async () => {
+        // JavaScript animations (charts drawing in, springs) move the DOM every frame and CSS freezing cannot stop
+        // them: if anything changed during one frame, wait until two frames in a row are still (at most 2.5 s).
+        const nextFrame = () => new Promise((done) => requestAnimationFrame(() => done(undefined)));
+        let moved = 0;
+        const watcher = new MutationObserver((records) => { moved += records.length; });
+        watcher.observe(document.body, { subtree: true, attributes: true, childList: true, characterData: true });
+        await nextFrame();
+        let animating = false;
+        if (moved) {
+          const until = performance.now() + 2500;
+          // Two still frames in a row: chart libraries skip a frame now and then mid-animation.
+          let still = 0;
+          while (still < 2 && performance.now() < until) { moved = 0; await nextFrame(); still = moved ? 0 : still + 1; }
+          animating = still < 2;
+        }
+        watcher.disconnect();
         // ResizeObserver clients can debounce their first measurement, so the default 300×150 canvas can
         // briefly look settled. Require stable CSS/buffer sizes across frames before capturing, bounded at 60.
         let canvasesPending = false;
@@ -383,7 +413,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             new Promise((r) => setTimeout(r, 300)),
           ]);
         }
-        return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : []);
+        return [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []);
       });
       if (settled.length) warnings.push("Assets did not settle: " + settled.join(", "));
       marks.push(performance.now());
@@ -424,6 +454,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const [png, snapshot] = await Promise.all([capture(cdp.get(page)!, box), page.locator(portals || !rootIntact ? "body" : "#root").ariaSnapshot()]);
 
       warnings.push(...runtimeWarnings);
+      if (failedRequests.length) warnings.push(`Requests failed (the preview has no app server or backend; pass data as props or seed storage): ${unique(failedRequests).slice(0, 5).join("; ")}`);
       const allErrors = unique([...inPage, ...errors]);
       if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
       if (allErrors.some((e) => /provider|context/i.test(e))) warnings.push("Application providers could not be reconstructed completely; inspect the render errors.");
@@ -431,6 +462,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         png, snapshot, errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
+        ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),
         ...(logged.length ? { console: unique(logged.filter((l) => !allErrors.some((e) => e.includes(l)))).slice(0, 5) } : {}),
         layoutsApplied: server.layoutsFor(target.route),
         timings: { prepare: Math.round(marks[0] - started), show: Math.round(marks[1] - marks[0]), settle: Math.round(marks[2] - marks[1]), capture: Math.round(performance.now() - marks[2]) },
@@ -447,7 +479,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (previous) {
         const diff = await compareCaptures(page, { ...structuredClone(previous), png: Buffer.from(previous.png) }, result);
         result.changes = {
-          status: diff.status, changedPercent: diff.changedPercent, changedPixels: diff.changedPixels, snapshotChanged: diff.snapshotChanged,
+          status: diff.status, changedPercent: diff.changedPercent, changedPixels: diff.changedPixels, changedRegion: diff.changedRegion, snapshotChanged: diff.snapshotChanged,
           snapshotDiff: lineDiff(previous.snapshot, result.snapshot), newErrors: diff.newErrors, resolvedErrors: diff.resolvedErrors,
         };
       }
