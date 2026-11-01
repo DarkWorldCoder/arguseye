@@ -19,6 +19,7 @@ import { routerPackage } from "../project/routerPackage.js";
 import { importMetaEnv, publicEnv } from "../project/publicEnv.js";
 import { nextFontModule } from "./nextFont.js";
 import { vueEntry, vueSetupModule } from "../project/vueSetup.js";
+import { kitEnvModule } from "../project/svelteKit.js";
 import { sourceFiles } from "../project/sourceFiles.js";
 import { decodeContext, decodeTarget, encodeTarget, previewHtml, reactRuntime, refreshSetup, type PreviewTarget } from "./page.js";
 import type { Wrapper } from "../project/appContext.js";
@@ -253,6 +254,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (url.pathname === "/@next-fonts") return send(res, 200, "text/javascript", `let style = document.getElementById("cp-next-fonts"); if (!style) { style = document.createElement("style"); style.id = "cp-next-fonts"; document.head.append(style); } style.textContent = ${JSON.stringify(fonts.stylesheet())};`);
       if (url.pathname === "/@next-font") {
         return send(res, 200, "text/javascript", nextFontModule(url.searchParams.get("kind") ?? "google", url.searchParams.get("from") ?? options.root, (url.searchParams.get("names") ?? "").split(",").filter(Boolean)));
+      }
+      if (url.pathname === "/@sveltekit-env") {
+        return send(res, 200, "text/javascript", kitEnvModule(options.root, url.searchParams.get("m") ?? "", graph.kit.publicPrefix));
       }
       if (url.pathname === "/@vue-setup") {
         const setup = await vueSetup();

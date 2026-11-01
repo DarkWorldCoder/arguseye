@@ -14,6 +14,7 @@ import { modularizeBarrelImports } from "./modularize.js";
 import { createResolver } from "./resolver.js";
 import { applyAlias, readViteConfig, type ViteConfig } from "../project/viteConfig.js";
 import { nextFontUrl } from "./nextFont.js";
+import { readKitConfig, type KitConfig } from "../project/svelteKit.js";
 
 const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte)$/;
 
@@ -22,6 +23,8 @@ export class ModuleGraph {
   private resolver: ResolverFactory = createResolver();
   /** Aliases from the project's vite.config (tsconfig paths are handled by the resolver). */
   readonly vite: ViteConfig;
+  /** SvelteKit's `$lib`, `kit.alias` and env prefix, when the project uses Kit. */
+  readonly kit: KitConfig;
   private boundaries = new Set<string>();
   private imagesAsObjects: boolean;
   private vue: ReturnType<typeof createVueCompiler>;
@@ -43,6 +46,7 @@ export class ModuleGraph {
     private root: string,
   ) {
     this.vite = readViteConfig(root);
+    this.kit = readKitConfig(root);
     this.vue = createVueCompiler(root, css);
     this.svelte = createSvelteCompiler(root, css);
     this.imagesAsObjects = importsImagesAsObjects(root);
@@ -190,7 +194,9 @@ export class ModuleGraph {
     }
     // Shims live in this package but must use the project's react, so they resolve from the project root.
     const from = isShim(importer) ? pathJoin(this.root, "index.js") : importer;
-    const aliased = isShim(importer) ? undefined : applyAlias(this.vite.aliases, specifier);
+    // SvelteKit's $env modules come from the project's env files, generated per page.
+    if (this.kit.kit && specifier.startsWith("$env/")) return `/@sveltekit-env?m=${encodeURIComponent(specifier)}`;
+    const aliased = isShim(importer) ? undefined : applyAlias(this.vite.aliases, specifier) ?? applyAlias(this.kit.aliases, specifier);
     const { path, error } = this.resolver.resolveFileSync(from, aliased ?? specifier);
     if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer}: ${error}`);
     if (path.includes("/node_modules/") && !isStylesheet(path)) {

@@ -40,8 +40,13 @@ const ENTRIES = [
   "app/layout", "src/app/layout",
   "pages/_app", "src/pages/_app",
   "src/main", "src/index", "src/App",
+  // SvelteKit: the root layout imports the global stylesheet.
+  "src/routes/+layout",
 ];
-const EXTS = [".tsx", ".jsx", ".ts", ".js"];
+const EXTS = [".tsx", ".jsx", ".ts", ".js", ".svelte"];
+
+/** A .svelte file's <script> blocks, which hold its imports. */
+const svelteScripts = (code: string) => [...code.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join("\n");
 const STYLE = /\.(css|scss|sass)$/;
 
 /** Reads the project's root layout statically, so previews get the same global styles as the app. */
@@ -60,8 +65,9 @@ export function detectAppContext(
   const warnings: string[] = [];
   const context: AppContext = { entry, globalCss: [], wrappers: [], warnings, layouts: files.map((f) => path.relative(root, f)) };
   for (const file of files) {
-    const code = readSource(file);
-    const { program, module } = parseSync(file, code);
+    const svelte = file.endsWith(".svelte");
+    const code = svelte ? svelteScripts(readSource(file)) : readSource(file);
+    const { program, module } = parseSync(svelte ? file + ".ts" : file, code);
     context.globalCss.push(
       ...module.staticImports.map((imp) => imp.moduleRequest.value).filter((spec) => STYLE.test(spec)).flatMap((spec) => resolver.resolveFileSync(file, spec).path ?? []),
     );

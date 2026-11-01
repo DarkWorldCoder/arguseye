@@ -8,6 +8,13 @@ const SHIMS: Record<string, string> = {
   "next/image": "next/image.tsx",
   "next/navigation": "next/navigation.ts",
   "@remix-run/react": "remix/react.ts",
+  "$app/stores": "sveltekit/stores.js",
+  "$app/state": "sveltekit/state.js",
+  "$app/navigation": "sveltekit/navigation.js",
+  "$app/environment": "sveltekit/environment.js",
+  "$app/paths": "sveltekit/paths.js",
+  "$app/forms": "sveltekit/forms.js",
+  "$app/server": "sveltekit/server.js",
 };
 
 /** What a shim imports to reach the project's own data-router package (react-router or react-router-dom). */
