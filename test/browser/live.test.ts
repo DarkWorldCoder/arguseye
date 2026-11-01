@@ -37,11 +37,16 @@ describe("live updates from unsaved edits", () => {
     await openCard();
     for (let i = 0; i < 3; i++) await page.getByRole("button").click();
 
+    const edited = onDisk(card).replace("Add to cart", "Buy now");
+    const cpuBefore = process.cpuUsage();
     const started = performance.now();
-    server.updateBuffer(card, onDisk(card).replace("Add to cart", "Buy now"));
+    server.updateBuffer(card, edited);
+    const updated = performance.now();
+    const cpu = process.cpuUsage(cpuBefore);
     await page.getByRole("button", { name: "Buy now (3)" }).waitFor({ timeout: 2000 });
     const ms = performance.now() - started;
     console.log("React edit-to-pixels", Math.round(ms), "ms; target 50 ms, enforced limit 100 ms");
+    console.log("React update phases", JSON.stringify({ buffer: updated - started, bufferCpuMs: (cpu.user + cpu.system) / 1000 }));
 
     expect(ms).toBeLessThan(100);
     server.updateBuffer(card, undefined);

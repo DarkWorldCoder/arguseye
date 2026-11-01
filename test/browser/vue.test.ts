@@ -56,13 +56,16 @@ describe("Vue using the project's own runtime and SFC compiler", () => {
         });
         observer.observe(document.getElementById("root")!, { subtree: true, childList: true, characterData: true });
       });
+      const edited = original.replace("Add (", "Buy (");
+      const cpuBefore = process.cpuUsage();
       const start = performance.now();
-      renderer.server.updateBuffer(file, original.replace("Add (", "Buy ("));
+      renderer.server.updateBuffer(file, edited);
       const updated = performance.now();
+      const cpu = process.cpuUsage(cpuBefore);
       await page.getByRole("button", { name: "Buy (1)" }).waitFor();
       const ms = performance.now() - start;
       console.log("Vue edit-to-pixels", Math.round(ms), "ms; mutation delivered", Math.round(observed - start), "ms; target 50 ms, enforced limit 100 ms");
-      console.log("Vue update phases", JSON.stringify({ buffer: updated - start, resources: await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("Card.vue")).map((e) => ({ duration: e.duration, serverTiming: (e as PerformanceResourceTiming).serverTiming }))) }));
+      console.log("Vue update phases", JSON.stringify({ buffer: updated - start, bufferCpuMs: (cpu.user + cpu.system) / 1000, resources: await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("Card.vue")).map((e) => ({ duration: e.duration, serverTiming: (e as PerformanceResourceTiming).serverTiming }))) }));
       renderer.server.updateBuffer(file, original.replace("Add (", "Buy (").replace("rgb(0, 80, 120)", "rgb(255, 0, 0)"));
       await expect.poll(() => page.locator("h2").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 0, 0)");
       expect(await page.locator("button").innerText()).toBe("Buy (1)");
