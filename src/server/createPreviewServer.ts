@@ -372,7 +372,11 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return send(res, 200, "application/json", JSON.stringify(errorsSince(Number(url.searchParams.get("since") ?? 0))));
       }
       if (url.pathname === "/@events") {
-        res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+        // Live updates are small writes that must leave at once: no Nagle batching (which, against delayed ACKs, can
+        // hold a message for ~100 ms on macOS) and headers sent before the first event.
+        req.socket.setNoDelay(true);
+        res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+        res.flushHeaders();
         res.write(": connected\n\n");
         listeners.add(res);
         req.on("close", () => listeners.delete(res));

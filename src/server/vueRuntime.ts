@@ -72,6 +72,8 @@ cp.ready = cp.show(cp.target).then(cp.report);
 cp.updates = 0;
 let updates = Promise.resolve();
 if (cp.live) new EventSource("/@events").onmessage = (event) => {
+  // When the page received the update, so a slow live update can be split into delivery and application.
+  cp.lastUpdateReceived = performance.now();
   updates = updates.then(async () => {
     const update = JSON.parse(event.data);
     if (update.full) return location.reload();
