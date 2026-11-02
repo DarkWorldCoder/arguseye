@@ -145,6 +145,7 @@ describe("MCP tools (what a coding agent calls)", () => {
 
     expect(result.isError).toBeFalsy();
     expect(content[0]).toMatchObject({ type: "image", mimeType: "image/png" });
+    expect((result.structuredContent as any).environment.reducedMotion).toBe("reduce");
     expect(Buffer.from(content[0].data!, "base64").subarray(1, 4).toString()).toBe("PNG");
     const text = content[1].text!;
     expect(text).toContain("ProductCard · components/ProductCard.tsx · usage app/page.tsx:9");

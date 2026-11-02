@@ -26,7 +26,7 @@ export const renderOutputSchema = z.object({
   complete: z.boolean(), snapshot: z.string(), ms: z.number(), reloaded: z.boolean(),
   scheduledTimers: z.number().int().nonnegative().optional(),
   propsSource: z.enum(["given", "usage", "sample", "none"]),
-  environment: z.object({ locale: z.string(), timezoneId: z.string(), clock: z.enum(["system", "fixed"]), random: z.enum(["runtime", "seeded"]) }).optional(),
+  environment: z.object({ locale: z.string(), timezoneId: z.string(), reducedMotion: z.enum(["reduce", "no-preference"]).optional(), clock: z.enum(["system", "fixed"]), random: z.enum(["runtime", "seeded"]) }).optional(),
   accessibility: z.object({ engine: z.string(), scope: z.string(), ms: z.number(), violations: z.array(record), incomplete: z.array(record), passes: z.number(), inapplicable: z.number(), note: z.string() }).optional(),
   elements: z.array(z.object({ selector: z.string(), tag: z.string(), text: z.string(), source: z.object({ file: z.string(), kind: z.enum(["mapped", "component-file"]), line: z.number().optional(), column: z.number().optional() }).optional() }).passthrough()).optional(),
   errorLocations: z.array(z.object({ generated: z.object({ file: z.string(), line: z.number(), column: z.number() }), original: z.object({ file: z.string(), line: z.number(), column: z.number() }).nullable(), reason: z.string().optional() })).optional(),

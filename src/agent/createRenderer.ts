@@ -54,7 +54,7 @@ export type RenderResult = {
   accessibility?: AccessibilityEvidence;
   elements?: ElementEvidence[];
   errorLocations?: ErrorLocation[];
-  environment?: { locale: string; timezoneId: string; clock: "system" | "fixed"; random: "runtime" | "seeded" };
+  environment?: { locale: string; timezoneId: string; reducedMotion: "reduce" | "no-preference"; clock: "system" | "fixed"; random: "runtime" | "seeded" };
   /** Scheduled application/dependency timers, distinct from observed instability or engine deadlines. */
   scheduledTimers?: number;
   /** Immutable baseline id, absent when rendering failed. */
@@ -185,6 +185,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   /** One warm page per viewport: later renders swap the target in place instead of reloading. */
   const pages = new Map<string, Promise<Page>>();
+  const isolatedPages = new WeakSet<Page>();
   const pageErrors = new WeakMap<Page, string[]>();
   /** console.error output of the current render: apps explain many failures there (env validation, prop types). */
   const pageConsole = new WeakMap<Page, string[]>();
@@ -246,12 +247,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   async function warmPage(viewport: { width: number; height: number }, target: PreviewTarget, fixtures?: RenderFixtures, storage?: RenderRequest["storage"]): Promise<Page> {
     guard();
     const page = await browser.newPage({ viewport, locale: fixtures?.locale, timezoneId: fixtures?.timezoneId, serviceWorkers: "block" });
+    if (fixtures || storage) isolatedPages.add(page);
     jobs.getStore()?.openPages.add(page);
     try { guard(); } catch (error) { await page.close(); throw error; }
     const evidence = await installFixtures(page, server.url, fixtures, storage);
     if (evidence) fixtureEvidence.set(page, evidence);
     await page.mouse.move(-1, -1);
-    await page.emulateMedia({ colorScheme: target.theme ?? null });
+    // Scroll reveals respecting reduced motion stay visible without inventing a scroll journey or overriding styles.
+    await page.emulateMedia({ colorScheme: target.theme ?? null, reducedMotion: fixtures?.reducedMotion ?? "reduce" });
     schemes.set(page, target.theme);
     const errors: string[] = [];
     const loaded = new Set<string>(); loadedModules.set(page, loaded);
@@ -436,7 +439,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       // Classic scripts leave globals and "already loaded" guards behind: never run one on a page used before.
       if ((fixtures || storage || classic) && pages.has(key)) { const old = pages.get(key)!; pages.delete(key); await old.then((p) => p.close()).catch(() => {}); }
       let warm = pages.get(key);
-      if (warm && replacedRoots.has(await warm)) { pages.delete(key); await (await warm).close(); warm = undefined; }
+      // Explicit browser inputs cannot leak into the next ordinary render through its warm page.
+      if (warm && (replacedRoots.has(await warm) || isolatedPages.has(await warm))) { pages.delete(key); await (await warm).close(); warm = undefined; }
       const isNew = !warm;
       warm ??= warmPage(viewport, target, fixtures, storage);
       jobs.getStore()?.pages.add(warm);

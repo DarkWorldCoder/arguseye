@@ -36,6 +36,7 @@ const target = {
 const output = z.enum(["image", "summary", "both"]).optional().describe("Return images, compact evidence, or both (default)");
 const fixtureSchema = z.object({
   now: z.string().optional(), randomSeed: z.number().int().min(0).max(0xffffffff).optional(), locale: z.string().optional(), timezoneId: z.string().optional(),
+  reducedMotion: z.enum(["reduce", "no-preference"]).optional().describe("Static verification defaults to reduce. Use no-preference to inspect the normal-motion state; this does not automatically scroll or finish scroll-triggered reveals."),
   network: z.object({ policy: z.enum(["passthrough", "block-unmatched"]), responses: z.array(z.object({ url: z.string(), method: z.string().optional(), status: z.number().int().min(200).max(599).optional(), contentType: z.string().optional(), body: z.string() })).max(50) }).optional(),
 }).optional().describe("Explicit time/random/browser/network inputs replayed in a fresh context. Timers and crypto randomness remain real. Exact path/URL mocks; block-unmatched rejects other application requests.");
 const deadline = z.number().int().min(1).max(120000).optional().describe("Execution deadline in ms (default 30000); queued time is excluded");

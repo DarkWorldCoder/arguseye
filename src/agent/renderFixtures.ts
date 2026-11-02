@@ -7,14 +7,16 @@ export type RenderFixtures = {
   randomSeed?: number;
   locale?: string;
   timezoneId?: string;
+  reducedMotion?: "reduce" | "no-preference";
   network?: { policy: "passthrough" | "block-unmatched"; responses: Array<{ url: string; method?: string; status?: number; contentType?: string; body: string }> };
 };
 /** Records fixture identity and actual routing outcomes without duplicating response bodies. */
-export type FixtureProvenance = { digest: string; clock?: string; randomSeed?: number; locale?: string; timezoneId?: string; network?: { policy: "passthrough" | "block-unmatched"; matched: string[]; blocked: string[] } };
+export type FixtureProvenance = { digest: string; clock?: string; randomSeed?: number; locale?: string; timezoneId?: string; reducedMotion?: "reduce" | "no-preference"; network?: { policy: "passthrough" | "block-unmatched"; matched: string[]; blocked: string[] } };
 
 /** Rejects unbounded/ambiguous fixtures before starting browser effects. */
 export function validateFixtures(fixtures?: RenderFixtures): void {
   if (!fixtures) return;
+  if (fixtures.reducedMotion !== undefined && !["reduce", "no-preference"].includes(fixtures.reducedMotion)) throw new Error(`Invalid reducedMotion fixture "${fixtures.reducedMotion}"`);
   if (fixtures.now !== undefined && !Number.isFinite(Date.parse(fixtures.now))) throw new Error(`Invalid fixture time "${fixtures.now}"`);
   if (fixtures.randomSeed !== undefined && (!Number.isInteger(fixtures.randomSeed) || fixtures.randomSeed < 0 || fixtures.randomSeed > 0xffffffff)) throw new Error("randomSeed must be an unsigned 32-bit integer");
   if (fixtures.network) {
@@ -50,7 +52,7 @@ export async function installFixtures(page: Page, origin: string, fixtures: Rend
     } catch { /* about:blank has no storage origin. */ }
   }, { fixtures, storage });
   if (!fixtures) return;
-  const provenance: FixtureProvenance = { digest: createHash("sha256").update(JSON.stringify({ fixtures, storage })).digest("hex"), clock: fixtures.now, randomSeed: fixtures.randomSeed, locale: fixtures.locale, timezoneId: fixtures.timezoneId };
+  const provenance: FixtureProvenance = { digest: createHash("sha256").update(JSON.stringify({ fixtures, storage })).digest("hex"), clock: fixtures.now, randomSeed: fixtures.randomSeed, locale: fixtures.locale, timezoneId: fixtures.timezoneId, reducedMotion: fixtures.reducedMotion };
   if (fixtures.network) {
     const net = provenance.network = { policy: fixtures.network.policy, matched: [] as string[], blocked: [] as string[] };
     await page.route("**/*", async (route) => {
