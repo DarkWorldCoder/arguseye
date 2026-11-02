@@ -564,14 +564,15 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           }
           canvasesPending = stable < 6 || performance.now() - stableSince < 100;
         }
-        const pending = [...document.images].filter((img) => !img.complete);
-        if (pending.length || document.fonts.status !== "loaded") {
+        // A complete image can still be undecoded, especially async WebP below the viewport or inside an SVG.
+        const images = [...document.images], decoding = new Set(images), decodeFailed = new Set<HTMLImageElement>();
+        if (images.length || document.fonts.status !== "loaded") {
           await Promise.race([
-            Promise.allSettled([document.fonts.ready, ...pending.map((img) => img.decode())]),
-            new Promise((r) => cp.setTimeout(r, 300)),
+            Promise.allSettled([document.fonts.ready, ...images.map((img) => Promise.resolve().then(() => img.decode()).catch(() => { decodeFailed.add(img); }).finally(() => { decoding.delete(img); }))]),
+            new Promise((r) => cp.setTimeout(r, 1000)),
           ]);
         }
-        return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0, infiniteWebAnimation };
+        return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth || decoding.has(img) || decodeFailed.has(img)).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0, infiniteWebAnimation };
       });
       if (settled.assets.length) warnings.push("Assets did not settle: " + settled.assets.join(", "));
       if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");

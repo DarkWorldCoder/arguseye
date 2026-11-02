@@ -32,3 +32,16 @@ it("captures scroll-revealed content through reduced motion, with an explicit re
   expect(back.png.equals(still.png)).toBe(true);
   expect(back.environment).toMatchObject({ reducedMotion: "reduce" });
 });
+
+it("decodes below-fold images before capturing regular and SVG foreignObject media", async () => {
+  const target = { file: path.join(root, "ImagePage.tsx"), viewport: { width: 400, height: 600 } };
+  const reference = await renderer.render({ ...target, props: { images: false } });
+  const images = await renderer.render({ ...target, props: { images: true } });
+  expect(images.errors).toEqual([]);
+  expect(images.warnings.filter(w => w.startsWith("Assets did not settle:"))).toEqual([]);
+  expect(images.png.equals(reference.png)).toBe(true);
+  const broken = await renderer.render({ ...target, props: { images: true, broken: true } });
+  expect(broken.errors).toEqual([]);
+  expect(broken.warnings.join()).toContain("Assets did not settle: /missing.webp");
+  expect(broken.complete).toBe(false);
+});

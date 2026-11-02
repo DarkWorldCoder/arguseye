@@ -20,6 +20,8 @@ Ordinary verification keeps the browser and modules warm and remounts the compon
 
 Static verification emulates `prefers-reduced-motion: reduce` before project code runs and reports the actual preference in `environment.reducedMotion`. This lets pages that honor reduced motion display their content without waiting for scroll-triggered entrance animations. It does not force opacity, visibility or display styles, synthesize scrolls, or guarantee that libraries ignoring reduced motion reveal below-fold content. The interactive editor preview uses its browser's motion preference.
 
+Before taking the PNG, verification requests decoding for every document image, including already-downloaded async images below the viewport and inside SVG `foreignObject` content. Network completion alone does not establish that their pixels are available. The final image/font wait is bounded to one second; unfinished or failed decodes remain listed under `Assets did not settle` and make the evidence incomplete. Already-decoded images resolve immediately, so this is a deadline, not a fixed delay.
+
 To inspect normal-motion behavior explicitly, pass `fixtures: { "reducedMotion": "no-preference" }`, or put that object in the CLI `--fixtures` JSON file. Evidence records the preference and fixture digest, and comparisons replay it. Scroll-gated content can remain hidden in that mode until caller-authored scroll actions reveal it; pending animation work remains an explicit stability warning. Explicit fixture contexts are discarded before the next ordinary render, so motion, clock, locale and request overrides cannot leak into warm captures.
 
 ```json
