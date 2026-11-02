@@ -2,7 +2,7 @@
 
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 
-Version scope: 0.0.14 adds project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.
+Version scope: the 0.0.15 candidate adds plain-script widgets, project-owned Next.js browser polyfills, explicit reduced-motion evidence for static captures and bounded image decoding. It includes 0.0.14's project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.
 
 ## What is implemented
 
@@ -19,6 +19,7 @@ Version scope: 0.0.14 adds project inspection, explicit setup, revised MCP/bound
 - A VS Code panel with export/usage selection, typed React prop controls, viewport presets, capture and comparison controls. Verification uses the shared renderer and unsaved source.
 - Imported root Next Google font variables can reuse the project's matching cached font faces from `.next/static`. This does not download or compile fonts; absent cached font assets remain unresolved.
 - Visible portaled dialogs and menus are included in captures and accessibility text. Canvas pixels are included in the PNG and canvas dimensions are reported separately; bounded canvas settling adds latency and reports unsettled dimensions.
+- Static captures request reduced motion before project code runs and report the preference. Applications must implement that preference themselves; captures do not automatically scroll. Image decoding and fonts settle for at most one second, with unfinished work reported explicitly. See [rendering contracts](rendering.md).
 
 ## Product constraints
 
