@@ -49,7 +49,7 @@ function requireExportNames(file: string): string[] {
   }
 }
 /** Bump when the bundle output format changes, so stale on-disk bundles are not reused. */
-const BUNDLER_VERSION = 2;
+const BUNDLER_VERSION = 3;
 /** Builds with at least this many packages run in a worker process (memory), smaller ones in-process (latency). */
 const WORKER_THRESHOLD = 12;
 const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
@@ -68,6 +68,18 @@ function vendoredReact(root: string): Record<string, string> | undefined {
   if (!hasAppDir || !existsSync(path.join(compiled, "react", "index.js")) || !existsSync(path.join(compiled, "react-dom", "index.js"))) return undefined;
   return { react: path.join(compiled, "react"), "react-dom": path.join(compiled, "react-dom") };
 }
+
+/**
+ * The browser stand-ins Next's client build gives Node built-ins (`resolve.fallback` in next/dist/build/webpack-config.js),
+ * shipped inside `next` itself. A Next project's client code that reaches `buffer` or `crypto` (jsonwebtoken via an auth
+ * config, for one) loads in the real app, so it loads in the preview from the same files.
+ */
+const NEXT_FALLBACKS: Record<string, string> = {
+  assert: "assert", buffer: "buffer", constants: "constants-browserify", crypto: "crypto-browserify", domain: "domain-browser",
+  http: "stream-http", https: "https-browserify", os: "os-browserify", path: "path-browserify", punycode: "punycode",
+  querystring: "querystring-es3", stream: "stream-browserify", string_decoder: "string_decoder", sys: "util",
+  timers: "timers-browserify", tty: "tty-browserify", util: "util", vm: "vm-browserify", zlib: "browserify-zlib", events: "events",
+};
 
 /** Packages the preview runtime itself needs; resolved from this extension, not the user's project. */
 const OWN: Record<string, string> = { "react-refresh/runtime": ownRequire.resolve("react-refresh/runtime") };
@@ -100,8 +112,12 @@ export class DepBundler {
   /** Package aliases that mirror how the app's own bundler resolves them (vendored React in Next app router). */
   private aliases: Record<string, string>;
 
+  /** Node built-in → file, from the project's own `next` (empty when the project has no Next). */
+  private polyfills: Record<string, string>;
+
   constructor(private root: string) {
     this.aliases = vendoredReact(root) ?? {};
+    this.polyfills = this.nextPolyfills();
     this.cacheDir = path.join(root, "node_modules", ".arguseye", "deps");
     // Temp folders left by a process that died mid-write.
     try {
@@ -248,7 +264,7 @@ export class DepBundler {
 
   /** Same packages, same lockfile, same bundler: the same output. */
   private cacheKey(specs: string[]): string {
-    const hash = createHash("sha1").update(`${BUNDLER_VERSION}|${DepBundler.rolldownVersion}|${JSON.stringify(this.aliases)}|${specs.join(",")}`);
+    const hash = createHash("sha1").update(`${BUNDLER_VERSION}|${DepBundler.rolldownVersion}|${JSON.stringify(this.aliases)}|${JSON.stringify(this.polyfills)}|${specs.join(",")}`);
     for (const name of LOCKFILES) {
       const file = path.join(this.root, name);
       if (!existsSync(file)) continue;
@@ -281,7 +297,19 @@ export class DepBundler {
     this.generation++;
   }
 
+  /** Next's client fallbacks that this project's `next` actually ships, resolved the way Next resolves them. */
+  private nextPolyfills(): Record<string, string> {
+    const from = path.join(this.root, "index.js");
+    const found: Record<string, string> = {};
+    for (const [builtin, dir] of Object.entries(NEXT_FALLBACKS)) {
+      const file = this.resolver.resolveFileSync(from, `next/dist/compiled/${dir}`).path;
+      if (file) found[builtin] = found[`node:${builtin}`] = file;
+    }
+    return found;
+  }
+
   private options(specs: string[], facades: Map<string, string>, unresolved: string[] = []) {
+    const next = Object.keys(this.polyfills).length > 0;
     return {
       input: Object.fromEntries(specs.map((s) => [s, FACADE + s])),
       cwd: this.root,
@@ -294,11 +322,16 @@ export class DepBundler {
         if (log.code !== "MODULE_LEVEL_DIRECTIVE" && log.code !== "EMPTY_BUNDLE") defaultHandler(level, log);
       },
       resolve: { alias: { ...this.aliases, ...OWN } },
-      transform: { define: { "process.env.NODE_ENV": '"development"' } },
+      transform: {
+        // Next keeps webpack's web defaults for `node`: `global` is the global object, `__dirname`/`__filename` are mocked.
+        define: { "process.env.NODE_ENV": '"development"', ...(next && { global: "globalThis", __dirname: '"/"', __filename: '"/index.js"' }) },
+        // Next's ProvidePlugin: packages written for Node use `Buffer` without importing it.
+        ...(this.polyfills.buffer && { inject: { Buffer: ["buffer", "Buffer"] } }),
+      },
       plugins: [
         {
           name: "facades",
-          resolveId: (id) => (id.startsWith(FACADE) ? id : NODE_BUILTINS.has(id) ? EMPTY : null),
+          resolveId: (id) => (id.startsWith(FACADE) ? id : NODE_BUILTINS.has(id) ? (this.polyfills[id] ?? EMPTY) : null),
           load: (id) => (id.startsWith(FACADE) ? facades.get(id.slice(FACADE.length)) : id === EMPTY ? "module.exports = {};" : null),
         },
         {

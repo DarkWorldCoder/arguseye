@@ -199,6 +199,12 @@ describe("headless render (what an agent gets back)", () => {
     expect(result.errors).toEqual([]);
     expect(result.snapshot).toContain("cached 7");
   });
+
+  it("gives packages that use Node's Buffer the polyfill Next's client build gives them, from the project's next", async () => {
+    const result = await renderer.render({ file: path.join(root, "components/TokenBadge.tsx"), exportName: "TokenBadge" });
+    expect(result.errors).toEqual([]);
+    expect(result.snapshot).toContain("imported via next, global via next");
+  });
 });
 
 
