@@ -1,0 +1,5 @@
+{
+  "name": "widget-app",
+  "private": true,
+  "description": "A plain website embed widget: a classic script that mounts a chat bubble in a shadow root."
+}

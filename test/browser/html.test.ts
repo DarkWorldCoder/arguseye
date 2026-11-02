@@ -37,7 +37,7 @@ it("renders installed Lit components and shadow DOM without React, with props an
   } finally { await renderer.close(); }
 });
 
-it("runs inline modules through project import resolution and reports undefined elements and unsupported classic scripts", async () => {
+it("runs inline modules through project import resolution and reports undefined elements, and runs classic scripts", async () => {
   const renderer = await createRenderer({ root });
   try {
     renderer.server.updateBuffer(file, '<script type="module">import {html, LitElement} from "lit"; customElements.define("inline-card", class extends LitElement {render(){return html`<p>Inline module</p>`}});</script><inline-card></inline-card>');
@@ -49,7 +49,9 @@ it("runs inline modules through project import resolution and reports undefined 
     expect(missing.complete).toBe(false);
     expect(missing.warnings.join()).toContain("not-registered");
     renderer.server.updateBuffer(file, '<script>document.write("legacy");</script><p>Static content</p>');
-    expect((await renderer.render({ file })).errors.join()).toContain("Classic scripts");
+    const classic = await renderer.render({ file });
+    expect(classic.errors).toEqual([]);
+    expect(classic.snapshot).toContain("legacy");
   } finally { await renderer.close(); }
 });
 

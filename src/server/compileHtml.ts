@@ -2,10 +2,15 @@ import { parse, serialize } from "parse5";
 import path from "node:path";
 import { rawUrl, rewriteCssUrls } from "./assets.js";
 
-export type HtmlDocument = { html: string; scripts: Array<{ kind: "module" | "classic"; url: string }>; styles: string[]; warnings: string[] };
+/**
+ * A classic script keeps its place in the document as an inert placeholder (`data-cp-script`), so it runs where it
+ * was written, with its own attributes (`document.currentScript.dataset`). `url` is absent for inline scripts.
+ */
+export type ClassicScript = { kind: "classic"; src?: string; url?: string; text?: string; attrs: Record<string, string> };
+export type HtmlDocument = { html: string; scripts: Array<{ kind: "module"; url: string } | ClassicScript>; styles: string[]; warnings: string[] };
 
 /** Parses actual HTML instead of mounting it through JSX; scripts are loaded through the same project resolver. */
-export function compileHtml(file: string, source: string, moduleUrl: (specifier: string) => string, inlineUrl: (index: number, source: string) => string): HtmlDocument {
+export function compileHtml(file: string, source: string, moduleUrl: (specifier: string) => string, inlineUrl: (index: number, source: string) => string, classicUrl: (src: string) => string): HtmlDocument {
   const document = parse(source), scripts: HtmlDocument["scripts"] = [], styles: string[] = [], warnings: string[] = [];
   const external = (url: string) => /^(https?:|data:|\/\/|#)/.test(url);
   let index = 0;
@@ -15,8 +20,12 @@ export function compileHtml(file: string, source: string, moduleUrl: (specifier:
       const type = attr("type");
       if (type && type !== "module" && !/javascript|ecmascript/.test(type)) return false; // JSON-LD/data, not executable.
       const src = attr("src"), text = node.childNodes?.map((c: any) => c.value ?? "").join("") ?? "";
-      scripts.push({ kind: type === "module" ? "module" : "classic", url: src ? external(src) ? src : moduleUrl(src) : inlineUrl(index++, text) });
-      return true;
+      if (type === "module") { scripts.push({ kind: "module", url: src ? external(src) ? src : moduleUrl(src) : inlineUrl(index++, text) }); return true; }
+      const attrs = Object.fromEntries(node.attrs.filter((a: any) => a.name !== "src").map((a: any) => [a.name, a.value]));
+      scripts.push({ kind: "classic", attrs, ...(src ? { src, url: external(src) ? src : classicUrl(src) } : { text }) });
+      node.attrs = [{ name: "type", value: "arguseye/classic" }, { name: "data-cp-script", value: String(scripts.length - 1) }];
+      node.childNodes = [];
+      return false;
     }
     if (node.tagName === "link" && attr("rel") === "stylesheet") {
       const href = attr("href"); if (href) styles.push(external(href) ? href : moduleUrl(href)); return true;

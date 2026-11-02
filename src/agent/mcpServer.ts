@@ -135,7 +135,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
       annotations: EXECUTES_CODE,
       outputSchema: toolOutputSchema(renderOutputSchema),
       description:
-        "Inspect a UI edit using actual source, project packages and supported context, without starting the application: returns a cropped PNG, accessibility text and explicit completeness evidence. Pass `usage` (from list_usages) for discovered call-site props, or `props` as JSON; with neither, required props are sampled from the type (see describe_props). A successful mount does not establish full-app fidelity.",
+        "Inspect a UI edit using actual source, project packages and supported context, without starting the application: returns a cropped PNG, accessibility text and explicit completeness evidence. Pass `usage` (from list_usages) for discovered call-site props, or `props` as JSON; with neither, required props are sampled from the type (see describe_props). Embed widget scripts (.js without import/export) and .html files with classic <script>s run on a fresh page per render; the capture includes what they mount on <body> and in open shadow roots. A successful mount does not establish full-app fidelity.",
       inputSchema: {
         ...target,
         usage: z.string().optional().describe('Usage id from list_usages, e.g. "app/page.tsx:9"'),
@@ -145,7 +145,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
         storage: z.object({ local: z.record(z.string(), z.string()).optional(), session: z.record(z.string(), z.string()).optional() }).optional().describe("localStorage/sessionStorage seeded before mount (auth tokens, flags); cleared after"),
         inspection: z.object({ accessibility: z.boolean().optional(), sources: z.boolean().optional() }).optional().describe("Optional axe checks and element source references; adds separate analysis cost and does not prove correctness/accessibility conformance"),
         fixtures: fixtureSchema, timeoutMs: deadline,
-        props: z.record(z.string(), z.unknown()).optional().describe("Props to render with (merged over the usage's props)"),
+        props: z.record(z.string(), z.unknown()).optional().describe("Props to render with (merged over the usage's props). For a classic-script widget: its config, exposed as window.__ARGUSEYE_WIDGET_CONFIG__; data-* keys become attributes of its <script> tag"),
         ...look,
       },
     },

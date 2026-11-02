@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Plain-script website widgets render. A `.js`/`.cjs` file with no `import` or `export` (an embed/IIFE script such as a chat bubble or booking widget) runs as a classic script, and classic `<script>`/`<script src>` in `.html` files run in document order before module scripts instead of being rejected. Each such render gets a fresh page, so globals and "already loaded" guards never carry over between renders. The capture includes what the script mounts on `<body>` and inside open shadow roots, sized to the widget rather than the page; script, stylesheet and iframe loads and XHR count as pending requests while the widget settles. Widget `props` are exposed as `window.__ARGUSEYE_WIDGET_CONFIG__`, and `data-*` props become attributes on the script tag (`document.currentScript.dataset`). Thrown and syntax errors return with the script's file and line; a missing `src` is an error. Closed shadow roots are counted in a warning because their content is only in the PNG. `document.write` is emulated by inserting the markup where the parser would. Classic-script widgets use native build mode.
+
 ## 0.0.14 — 2026-11-01
 
 The tagged 0.0.13 candidate was withheld after a macOS timing failure; it was not published to npm or Marketplace. This release carries those changes forward.

@@ -182,11 +182,17 @@ export class ModuleGraph {
       }, (index, source) => {
         const script = { file: file + `.inline-${index}.ts`, source, url: `/@html-script?file=${encodeURIComponent(file)}&index=${index}&e=${encodeURIComponent(this.query(file))}` };
         this.htmlScripts.set(`${file}:${index}`, script); inline.push(script); return script.url;
+      }, (src) => {
+        // A classic src is a URL relative to the document (or the public dir), never a module specifier.
+        const target = src.split(/[?#]/)[0];
+        const script = target.startsWith("/") ? pathJoin(this.root, "public", target) : pathJoin(file, "..", target);
+        return fileUrl(script) + "?classic&" + this.query(script).slice(1);
       });
       for (const script of inline) await this.crawlVirtual(script.file, script.source, { refresh: false });
-      const urls = [...document.scripts.map((s) => s.url), ...document.styles];
+      const urls = [...document.scripts.flatMap((s) => s.url ? [s.url] : []), ...document.styles];
       this.projectImports.set(file, [...urls.filter((url) => url.startsWith("/@fs/")).map((url) => fileFromUrl(url.slice(4).split("?")[0])), ...inline.flatMap((script) => this.projectImports.get(script.file) ?? [])]);
-      this.importUrls.set(file, [...urls, ...inline.flatMap((script) => this.importUrls.get(script.file) ?? [])]);
+      // Classic scripts are not modules: nothing may preload them as one.
+      this.importUrls.set(file, [...urls.filter((url) => !url.includes("?classic")), ...inline.flatMap((script) => this.importUrls.get(script.file) ?? [])]);
       return `export default ${JSON.stringify(document)};`;
     }
     if (file.endsWith(".json")) return jsonModule(file, await this.readSource(file));

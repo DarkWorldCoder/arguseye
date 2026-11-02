@@ -17,6 +17,7 @@ import { propsSchema, sampleProps, componentMetadata, type PropSchema } from "..
 import { listExports, pickExport } from "../project/pickExport.js";
 import { readFileSync } from "node:fs";
 import { frameworkOf } from "../project/framework.js";
+import { classicKind } from "../project/classicKind.js";
 import { FileAccessError } from "../server/createFileAccess.js";
 
 export type RenderRequest = PreviewTarget & {
@@ -310,6 +311,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
 /** Settled frame: transitions end at once, finite animations jump to their final state, spinners stop, no caret. */
 
+  /** Classic scripts (a widget .js, an .html with classic <script>s) get a fresh page per render, under their own key. */
+  async function classicOf(file: string) {
+    return /\.(c?js|html)$/.test(file) ? classicKind(file, await server.readSource(path.resolve(options.root, file))) : undefined;
+  }
+  function pageKey(file: string, viewport: { width: number; height: number }, classic: ReturnType<typeof classicKind>) {
+    return `${classic ? "classic" : frameworkOf(file)}:${viewport.width}x${viewport.height}`;
+  }
+
   /** The export a caller means when they name none: the default, else the file's component (first PascalCase export). */
   async function exportOf(file: string): Promise<string | undefined> {
     return pickExport(file, await server.readSource(path.resolve(options.root, file)).catch(() => ""));
@@ -351,7 +360,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       after.complete &&= !after.unresolved.length && !inputWarnings.length;
       if (after.changes && !after.complete) after.changes.status = "incomplete";
       if (after.captureId && captures.has(after.captureId)) { captures.set(after.captureId, { ...structuredClone(after), png: Buffer.from(after.png) }); trim(); }
-      const page = await pages.get(`${frameworkOf(before.target.file)}:${before.viewport.width}x${before.viewport.height}`)!;
+      const page = await pages.get(pageKey(before.target.file, before.viewport, await classicOf(before.target.file)))!;
       return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
     }, control),
     async close() {
@@ -393,7 +402,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       rest.file = path.resolve(options.root, rest.file);
       server.assertAccess(rest.file);
       rest.exportName ??= await exportOf(rest.file);
-      const { props, propsSource, unresolved } = await resolveProps(rest, usage, resolved);
+      const classic = await classicOf(rest.file);
+      if (classic === "script" && server.build?.mode === "vite") throw new Error("Classic-script widgets currently use native mode; retry with --build-mode native.");
+      // A widget script has no props type to sample: its props are the config it is given, or none.
+      const { props, propsSource, unresolved } = classic === "script" && !usage
+        ? { props: rest.props ?? {}, propsSource: Object.keys(rest.props ?? {}).length ? "given" as const : "none" as const, unresolved: [] }
+        : await resolveProps(rest, usage, resolved);
       const target: PreviewTarget = { fresh: true, ...rest, props, frame };
       if (inContext && usage) {
         const found = resolved ?? (await usages.list(rest.file, rest.exportName)).find((u) => u.id === usage);
@@ -406,7 +420,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target.context = [{ kind: "component", source: "./" + path.basename(rest.file), importName: provider, props: {} }];
         target.contextFile = rest.file;
       }
-      target.route = resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
+      target.route = classic === "script" ? undefined : resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
       Object.assign(target, routePath(options.root, target.route));
       // A Next layout renders <html>/<body>, which cannot mount inside a preview. It is every preview's wrapper
       // already, so render its chain (providers, elements, html/body classes) down to this layout around its children.
@@ -418,8 +432,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       }
       const contextApplied = target.context?.flatMap((w) => w.kind === "prelude" ? [] : (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
       if (server.build?.mode === "vite") await server.prepare(target.file, prepareContext(target), target.route);
-      const key = `${frameworkOf(rest.file)}:${viewport.width}x${viewport.height}`;
-      if ((fixtures || storage) && pages.has(key)) { const old = pages.get(key)!; pages.delete(key); await old.then((p) => p.close()).catch(() => {}); }
+      const key = pageKey(rest.file, viewport, classic);
+      // Classic scripts leave globals and "already loaded" guards behind: never run one on a page used before.
+      if ((fixtures || storage || classic) && pages.has(key)) { const old = pages.get(key)!; pages.delete(key); await old.then((p) => p.close()).catch(() => {}); }
       let warm = pages.get(key);
       if (warm && replacedRoots.has(await warm)) { pages.delete(key); await (await warm).close(); warm = undefined; }
       const isNew = !warm;
@@ -565,16 +580,35 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         // A root layout renders <html>/<body>, which React 19 takes over, replacing #root: capture the body then.
         const root = document.getElementById("root") ?? document.body;
         const r = (framed ?? root).getBoundingClientRect();
-        let [left, right, top, bottom] = [r.left, r.right, r.top, r.bottom];
+        // Dialogs, menus, popovers and toasts render into a portal on <body>, outside #root: the capture grows to
+        // include whatever is visible there (a modal overlay makes it the whole viewport, as on screen).
+        // An embed widget's host is often an empty box whose (shadow) children are fixed-position: measure those.
+        const drawn = (el: Element): DOMRect[] => {
+          const own = el.getBoundingClientRect(), sized = (b: DOMRect) => b.width > 0 && b.height > 0;
+          if (sized(own) && !el.shadowRoot) return [own];
+          const boxes = sized(own) ? [own] : [];
+          let budget = 500;
+          const walk = (node: Element | ShadowRoot) => {
+            for (const child of node.children) {
+              if (budget-- <= 0) return;
+              const b = child.getBoundingClientRect();
+              if (sized(b)) boxes.push(b); else walk(child);
+              if (child.shadowRoot) walk(child.shadowRoot);
+            }
+          };
+          if (el.shadowRoot) walk(el.shadowRoot);
+          if (!boxes.length) walk(el);
+          return boxes;
+        };
+        const portaled = framed ? [] : [...document.body.children]
+          .filter((el) => el !== root && !["SCRIPT", "STYLE", "LINK", "TEMPLATE", "NOSCRIPT"].includes(el.tagName))
+          .flatMap(drawn);
+        // Nothing in the root (a widget that only mounts on <body>): the capture is what it mounted, not the top-left.
+        let [left, right, top, bottom] = !framed && !r.height && portaled.length ? [Infinity, -Infinity, Infinity, -Infinity] : [r.left, r.right, r.top, r.bottom];
         if (!framed) {
           const spans = [...root.children].map((c) => c.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
           if (spans.length) [left, right] = [Math.max(r.left, Math.min(...spans.map((b) => b.left))), Math.min(r.right, Math.max(...spans.map((b) => b.right)))];
         }
-        // Dialogs, menus, popovers and toasts render into a portal on <body>, outside #root: the capture grows to
-        // include whatever is visible there (a modal overlay makes it the whole viewport, as on screen).
-        const portaled = framed ? [] : [...document.body.children]
-          .filter((el) => el !== root && !["SCRIPT", "STYLE", "LINK", "TEMPLATE", "NOSCRIPT"].includes(el.tagName))
-          .map((el) => el.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
         for (const b of portaled) {
           left = Math.max(0, Math.min(left, b.left)); top = Math.max(0, Math.min(top, b.top));
           right = Math.min(innerWidth, Math.max(right, b.right)); bottom = Math.min(innerHeight, Math.max(bottom, b.bottom));
@@ -616,7 +650,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       guard();
       const evidence = fixtureEvidence.get(page);
       if (evidence?.network?.blocked.length) warnings.push("Unmatched network requests blocked by fixtures: " + evidence.network.blocked.join("; "));
-      const setup = server.setupFor(rest.file);
+      const setup = classic === "script" ? undefined : server.setupFor(rest.file);
       const result: RenderResult = {
         png, snapshot, scheduledTimers, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),

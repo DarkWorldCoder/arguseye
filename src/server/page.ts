@@ -24,6 +24,8 @@ export type PreviewTarget = {
    * also emulates `prefers-color-scheme`); `light` removes the class. Absent, the app renders as written.
    */
   theme?: "light" | "dark";
+  /** Set by the server for a classic-script widget: `file` runs as an embed script, `props` become its config. */
+  script?: boolean;
 };
 
 export type Frame = { width: number; height: number; background?: string; padding?: number };
@@ -72,7 +74,7 @@ export function themedClass(htmlClass: string | undefined, theme: PreviewTarget[
 }
 
 export function previewHtml(target: PreviewTarget, { state, env, metaEnv = {}, define = {}, htmlClass, bodyClass, globalCssUrls, jsx = "react" }: PageContext): string {
-  const runtime = frameworkOf(target.file) === "react" && jsx !== "react" ? jsx : frameworkOf(target.file);
+  const runtime = target.script ? "html" : frameworkOf(target.file) === "react" && jsx !== "react" ? jsx : frameworkOf(target.file);
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
   const envJson = JSON.stringify({ NODE_ENV: "development", ...env }).replace(/</g, "\\u003c");
@@ -152,7 +154,8 @@ for (const [key, source] of Object.entries(${JSON.stringify(define).replace(/</g
 }
 window.global ??= window;
 const fail = (message) => { window.__CP__.errors.push(String(message)); window.__CP__.status = "error"; };
-addEventListener("error", (e) => fail(e.error?.stack ?? e.message));
+// A classic script's syntax error has no location in its stack: add where it happened.
+addEventListener("error", (e) => fail((e.error?.stack ?? e.message) + (e.filename && !String(e.error?.stack).includes(e.filename) ? "\\n    at " + e.filename + ":" + e.lineno + ":" + e.colno : "")));
 addEventListener("unhandledrejection", (e) => fail(e.reason?.stack ?? e.reason));
 </script>
 ${runtime === "react" ? '<script type="module" src="/@refresh-setup"></script>' : ""}

@@ -4,6 +4,7 @@ import { buildInputs } from "../project/buildInputs.js";
 import { vueRuntime } from "./vueRuntime.js";
 import { svelteRuntime } from "./svelteRuntime.js";
 import { frameworkOf } from "../project/framework.js";
+import { classicKind } from "../project/classicKind.js";
 import http from "node:http";
 import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, statSync, watch } from "node:fs";
@@ -212,11 +213,15 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   const startupWarnings: string[] = [];
   let inputs = buildInputs(options.root), buildGeneration = 0;
 
+  const isClassicScript = async (file: string) => /\.c?js$/.test(file) && classicKind(file, await readSource(file)) === "script";
+
   async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }> {
     if (file !== "/@empty") access.assert(file);
     if (context) access.assert(context.file);
     if (route) access.assert(route);
     await warming;
+    // A classic script runs as written: no module graph, no framework runtime, no app wrappers.
+    if (await isClassicScript(file)) return { generation: buildGeneration + deps.generation, cached: deps.cached };
     if (route) {
       const routed = appContext(route);
       await graph.crawlVirtual(wrapperFile(routed.entry), wrapperModule(routed.wrappers, { css: routed.globalCss, router, jsx: graph.jsx }));
@@ -309,6 +314,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       if (url.pathname === "/") {
         const target = decodeTarget(url.searchParams.get("t") ?? "");
         await prepare(target.file);
+        if (await isClassicScript(target.file)) target.script = true;
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         const app = appContext();
         const globalCssUrls = globalStyles(app);
@@ -399,6 +405,13 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         const file = fileFromUrl(url.pathname.slice("/@fs".length));
         access.assert(file);
         return sendFile(res, file);
+      }
+      if (url.pathname.startsWith("/@fs/") && url.searchParams.has("classic")) {
+        // A classic script is served exactly as written (unsaved edits included); stacks keep pointing at its file.
+        const file = fileFromUrl(url.pathname.slice("/@fs".length));
+        access.assert(file);
+        if (!/\.c?js$/.test(file)) throw new Error(`Classic scripts must be .js or .cjs files: ${file}`);
+        return send(res, 200, "text/javascript", await readSource(file));
       }
       if (url.pathname.startsWith("/@fs/")) {
         const file = fileFromUrl(url.pathname.slice("/@fs".length));
