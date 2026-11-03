@@ -1,0 +1,10 @@
+<style>
+@font-face { font-family: "Template Mono"; src: url('/fonts/DejaVuSansMono.ttf') format('truetype'); font-display: swap; }
+h1 { font-family: "Template Mono", monospace; }
+</style>
+<h1>Hello {{name}}</h1><p id="font-evidence"></p>
+<script type="module">
+document.querySelector('h1').getBoundingClientRect();
+await document.fonts.ready;
+document.querySelector('#font-evidence').textContent = document.fonts.check('16px "Template Mono"') ? 'Font loaded' : 'Font fallback';
+</script>

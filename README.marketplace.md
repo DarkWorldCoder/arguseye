@@ -8,12 +8,18 @@ Preview React, browser-renderable Next.js, Vue 3, and Svelte components (includi
 
 1. Install **Arguseye** using the button on this page.
 2. Open your project and a `.tsx`, `.jsx`, `.vue`, `.svelte`, or `.html` component.
-3. Run **Arguseye: Preview Component** from the Command Palette, use the eye icon in the editor title, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
+3. Run **Arguseye: Preview Component** from the Command Palette, use the eye icon in the editor title, right-click the file in the editor, tab or Explorer, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
 4. Choose an export, usage, and viewport. Edit your component and inspect the preview beside it.
 
 Your project's dependencies must be installed. Headless CLI and MCP use also require Node.js 22+ and Chromium or Google Chrome. [Installation and prerequisites](https://darkworldcoder.github.io/arguseye/guide.html#install).
 
 Release builds target **Windows x64, macOS Apple Silicon, and Linux x64**. Screenshots below were captured in a real VS Code extension host on Linux; Windows and macOS builds are packaged separately. Images use public HTTPS URLs and load independently of your operating system.
+
+## Native template previews (development branch)
+
+Preview Django, Jinja2, Handlebars, Mustache, EJS, Pug, Nunjucks, LiquidJS and other native Node/Python/PHP/Ruby templates with explicit JSON context and your own installed engines. Right-click a template in VS Code, select **Preview Component**, choose its engine/data profile and compare unsaved edits against a baseline. No app server or stories are needed.
+
+This work is not in the published 0.0.15 packages yet. See the [engine matrix, configuration and native-adapter protocol](https://github.com/DarkWorldCoder/arguseye/blob/feat/template-previews/docs/templates.md) for exact scopes and limits. “All engines” means an extensible native bridge, not a claim that every framework runs automatically.
 
 ## A preview that follows your work
 

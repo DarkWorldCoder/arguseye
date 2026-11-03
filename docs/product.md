@@ -52,3 +52,7 @@ Added: render inside the call site's parent box (`list_usages` context, `render_
 
 ## Performance (2026-10-29, WiseAdmit latest-front, 1,197 files)
 Before: warm-up 32 s and skipped, first render 11–13 s, server 1.8–2.8 GB. After: ready 2–11 s, first render 1.5 s, section 0.9 s, warm 0.3 s, server ~500–750 MB. Levers: crawl once per file version, bundle worker process, cjs-module-lexer, package CSS inlined, minified bundles, modulepreload graph, route page pre-warm, usage index in warm-up, barrel rewrite, eager lazy images. Still open: server memory (transform cache + usage index + bundles in memory), V8 code cache via a persistent browser profile, HTTP/2 for module fetches.
+
+## Template preview work on the development branch
+
+Native template workers share the existing HTML renderer and evidence contracts. Context is explicit JSON, and includes/layouts use the real engine. VS Code adds URI-aware editor/tab/Explorer context actions, engine/profile controls and a JSON context editor. See [the tested scope and limitations](templates.md); these additions are not present in published 0.0.15 artifacts. Unknown engines require a native adapter and their own conformance evidence.

@@ -149,3 +149,28 @@ describe("dependency pre-bundling", () => {
     expect(add.body).not.toContain("__HUGE_MARKER__");
   });
 });
+
+
+it("uses the same-origin bounded native template bridge and recovers after crash, deadline and invalid replies", async () => {
+  const root = path.resolve("test/fixtures/template-app");
+  server = await createPreviewServer({ root });
+  server.updateBuffer(path.join(root, "arguseye.templates.json"), JSON.stringify({ version: 1, limits: { timeoutMs: 1000 }, adapters: { bridge: { command: [process.execPath, path.join(root, "protocol.cjs")], suffixes: [".bridge"] } } }));
+  const url = server.url + "/@template";
+  const request = (name: string, mode?: string) => ({ file: path.join(root, "protocol.bridge"), props: { name, mode } });
+  const post = async (body: unknown, signal?: AbortSignal) => {
+    const result = await fetch(url, { method: "POST", headers: { Origin: server!.url }, body: JSON.stringify(body), signal });
+    return result.json() as Promise<any>;
+  };
+  expect((await fetch(url, { method: "POST", body: JSON.stringify(request("Ada")) })).status).toBe(403);
+  const [a, b] = await Promise.all([post(request("Ada")), post(request("Grace"))]);
+  expect(a.html).toContain("Hello Ada"); expect(b.html).toContain("Hello Grace");
+  expect(a.template.runtime).toBe("custom");
+  const crashed = await post(request("Crash", "crash")); expect(crashed.errors.join(" ")).toContain("exited");
+  const invalid = await post(request("Bad", "invalid")); expect(invalid.errors.join(" ")).toContain("protocol");
+  const slow = await post(request("Slow", "hang")); expect(slow.errors.join(" ")).toContain("1000 ms");
+  const controller = new AbortController();
+  const cancelled = post(request("Cancelled", "hang"), controller.signal);
+  setTimeout(() => controller.abort(), 50);
+  await expect(cancelled).rejects.toThrow();
+  const recovered = await post(request("Recovered")); expect(recovered.errors).toEqual([]); expect(recovered.html).toContain("Hello Recovered");
+});

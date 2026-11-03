@@ -67,6 +67,7 @@
     "assets",
     "docs/install.md",
     "docs/product.md",
+    "docs/templates.md",
     "docs/setup.md",
     "docs/rendering.md",
     "docs/conformance.md",
@@ -102,7 +103,28 @@
         {
           "command": "componentPreview.open",
           "group": "navigation",
-          "when": "resourceExtname =~ /\\.(tsx|jsx|vue|svelte|html)$/"
+          "when": "isWorkspaceTrusted && resourceScheme == file && !explorerResourceIsFolder && resourceExtname =~ /\\.(tsx|jsx|vue|svelte|html|js|mjs|cjs|tpl|django|dtl|jinja2|jinja|j2|mako|tornado|handlebars|hbs|mustache|ejs|pug|jade|nunjucks|njk|liquid|eta|dot|jst|twig|php|smarty|latte|erb|haml|slim)$/"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "componentPreview.open",
+          "group": "navigation@20",
+          "when": "isWorkspaceTrusted && resourceScheme == file && !explorerResourceIsFolder && resourceExtname =~ /\\.(tsx|jsx|vue|svelte|html|js|mjs|cjs|tpl|django|dtl|jinja2|jinja|j2|mako|tornado|handlebars|hbs|mustache|ejs|pug|jade|nunjucks|njk|liquid|eta|dot|jst|twig|php|smarty|latte|erb|haml|slim)$/"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "componentPreview.open",
+          "group": "navigation@20",
+          "when": "isWorkspaceTrusted && resourceScheme == file && !explorerResourceIsFolder && resourceExtname =~ /\\.(tsx|jsx|vue|svelte|html|js|mjs|cjs|tpl|django|dtl|jinja2|jinja|j2|mako|tornado|handlebars|hbs|mustache|ejs|pug|jade|nunjucks|njk|liquid|eta|dot|jst|twig|php|smarty|latte|erb|haml|slim)$/"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "componentPreview.open",
+          "group": "navigation@20",
+          "when": "isWorkspaceTrusted && resourceScheme == file && !explorerResourceIsFolder && resourceExtname =~ /\\.(tsx|jsx|vue|svelte|html|js|mjs|cjs|tpl|django|dtl|jinja2|jinja|j2|mako|tornado|handlebars|hbs|mustache|ejs|pug|jade|nunjucks|njk|liquid|eta|dot|jst|twig|php|smarty|latte|erb|haml|slim)$/"
         }
       ]
     },

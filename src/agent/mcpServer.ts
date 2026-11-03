@@ -41,6 +41,8 @@ const fixtureSchema = z.object({
 }).optional().describe("Explicit time/random/browser/network inputs replayed in a fresh context. Timers and crypto randomness remain real. Exact path/URL mocks; block-unmatched rejects other application requests.");
 const deadline = z.number().int().min(1).max(120000).optional().describe("Execution deadline in ms (default 30000); queued time is excluded");
 const look = {
+  engine: z.string().optional().describe("Native template engine ID; select explicitly for ambiguous HTML/TPL files"),
+  profile: z.string().optional().describe("Named template data profile from arguseye.templates.json"),
   output,
   viewport: z.string().optional().describe('"mobile", "tablet", "desktop" (default) or "WIDTHxHEIGHT"'),
   theme: z.enum(["light", "dark"]).optional().describe('Force a colour scheme: "dark" adds the dark class to <html>, sets color-scheme and emulates prefers-color-scheme; "light" removes the class. Default: the app as written'),
@@ -152,7 +154,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
     },
     async (args, extra) => {
       try {
-        const request = { file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, inspection: args.inspection, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
+        const request = { engine: args.engine, profile: args.profile, file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, inspection: args.inspection, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
         const { result, content } = await renderContent(request, args.output, { signal: extra.signal, timeoutMs: args.timeoutMs });
         return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
       } catch (error) {

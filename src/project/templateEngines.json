@@ -1,0 +1,156 @@
+{
+  "django": {
+    "runtime": "python",
+    "suffixes": [
+      ".django",
+      ".dtl"
+    ],
+    "package": "django"
+  },
+  "jinja2": {
+    "runtime": "python",
+    "suffixes": [
+      ".jinja2",
+      ".jinja",
+      ".j2"
+    ],
+    "package": "jinja2"
+  },
+  "mako": {
+    "runtime": "python",
+    "suffixes": [
+      ".mako"
+    ],
+    "package": "mako"
+  },
+  "tornado": {
+    "runtime": "python",
+    "suffixes": [
+      ".tornado"
+    ],
+    "package": "tornado"
+  },
+  "handlebars": {
+    "runtime": "node",
+    "suffixes": [
+      ".handlebars",
+      ".hbs"
+    ],
+    "package": "handlebars"
+  },
+  "mustache": {
+    "runtime": "node",
+    "suffixes": [
+      ".mustache"
+    ],
+    "package": "mustache"
+  },
+  "ejs": {
+    "runtime": "node",
+    "suffixes": [
+      ".ejs"
+    ],
+    "package": "ejs"
+  },
+  "pug": {
+    "runtime": "node",
+    "suffixes": [
+      ".pug",
+      ".jade"
+    ],
+    "package": "pug"
+  },
+  "nunjucks": {
+    "runtime": "node",
+    "suffixes": [
+      ".nunjucks",
+      ".njk"
+    ],
+    "package": "nunjucks"
+  },
+  "liquidjs": {
+    "runtime": "node",
+    "suffixes": [
+      ".liquid"
+    ],
+    "package": "liquidjs"
+  },
+  "eta": {
+    "runtime": "node",
+    "suffixes": [
+      ".eta"
+    ],
+    "package": "eta"
+  },
+  "dot": {
+    "runtime": "node",
+    "suffixes": [
+      ".dot",
+      ".jst"
+    ],
+    "package": "dot"
+  },
+  "twig": {
+    "runtime": "php",
+    "suffixes": [
+      ".html.twig",
+      ".twig"
+    ],
+    "package": "twig/twig"
+  },
+  "blade": {
+    "runtime": "php",
+    "suffixes": [
+      ".blade.php"
+    ],
+    "package": "illuminate/view"
+  },
+  "smarty": {
+    "runtime": "php",
+    "suffixes": [
+      ".smarty"
+    ],
+    "package": "smarty/smarty"
+  },
+  "latte": {
+    "runtime": "php",
+    "suffixes": [
+      ".latte"
+    ],
+    "package": "latte/latte"
+  },
+  "php": {
+    "runtime": "php",
+    "suffixes": [
+      ".php"
+    ],
+    "package": "php"
+  },
+  "erb": {
+    "runtime": "ruby",
+    "suffixes": [
+      ".html.erb",
+      ".erb"
+    ],
+    "package": "erb"
+  },
+  "haml": {
+    "runtime": "ruby",
+    "suffixes": [
+      ".haml"
+    ],
+    "package": "haml"
+  },
+  "slim": {
+    "runtime": "ruby",
+    "suffixes": [
+      ".slim"
+    ],
+    "package": "slim"
+  },
+  "liquid": {
+    "runtime": "ruby",
+    "suffixes": [],
+    "package": "liquid"
+  }
+}

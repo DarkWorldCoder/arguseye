@@ -8,3 +8,9 @@ marketing/
 
 /artifacts/
 test/oss/
+
+# Installed native template fixture environments are local toolchains.
+test/fixtures/*/.venv/
+test/fixtures/*/vendor/
+test/fixtures/*/.bundle/
+test/fixtures/*/.runtime/

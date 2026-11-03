@@ -104,3 +104,28 @@ describe("live updates from unsaved edits", () => {
     server.updateBuffer(format, undefined);
   });
 });
+
+it("applies a native template partial edit within the live DOM budget while keeping its context", async () => {
+  const root = path.resolve("test/fixtures/template-app"), native = await createPreviewServer({ root });
+  const tab = await browser.newPage();
+  try {
+    await tab.goto(new URL(native.pageUrl({ file: path.join(root, "card.hbs"), engine: "handlebars", profile: "ada" }), native.url).href);
+    await tab.getByRole("heading", { name: "Hello Ada" }).waitFor();
+    let notify!: (time: number) => void;
+    const applied = new Promise<number>((resolve) => { notify = resolve; });
+    await tab.exposeFunction("recordTemplateEdit", () => notify(performance.now()));
+    await tab.evaluate(() => {
+      const observer = new MutationObserver(() => {
+        const node = [...document.querySelectorAll("p")].find((el) => el.textContent === "Unsaved Ada" && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+        if (node) { observer.disconnect(); (window as any).recordTemplateEdit(); }
+      });
+      observer.observe(document.getElementById("root")!, { subtree: true, childList: true, characterData: true });
+    });
+    const started = performance.now();
+    native.updateBuffer(path.join(root, "items.hbs"), "<p>Unsaved {{name}}</p>");
+    await tab.getByText("Unsaved Ada", { exact: true }).waitFor({ timeout: 2000 });
+    const ms = await Promise.race([applied.then((at) => at - started), new Promise<number>((_, reject) => setTimeout(() => reject(new Error("Native update replaced the live page before the observer received the edit")), 2000))]);
+    console.log("Native template edit-to-visible-DOM", Math.round(ms), "ms; enforced DOM limit 100 ms, physical target 50 ms measured separately");
+    expect(ms).toBeGreaterThanOrEqual(0); expect(ms).toBeLessThan(100);
+  } finally { await tab.close(); await native.close(); }
+});

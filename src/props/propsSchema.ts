@@ -1,3 +1,4 @@
+import { isTemplateFile } from "../project/templateEngines.js";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { parseSync } from "oxc-parser";
@@ -27,7 +28,7 @@ type Ctx = { file: string; code: string; program: Program; comments: ReturnType<
 
 /** Reads what props a component accepts from its TypeScript parameter type, without running the TypeScript compiler. */
 export async function propsSchema(file: string, exportName = "default", readSource: SourceReader = (file) => readFile(file, "utf8")): Promise<PropSchema[]> {
-  if (file.endsWith(".html")) return [];
+  if (file.endsWith(".html") || isTemplateFile(file)) return [];
   const ctx = await load(file, 0, readSource);
   if (file.endsWith(".vue")) return vueProps(ctx);
   const fn = componentFunction(ctx.program, exportName);

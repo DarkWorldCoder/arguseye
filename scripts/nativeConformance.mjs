@@ -40,7 +40,7 @@ try {
     }); zip.readEntry();
   }));
   const extension = path.join(extracted, "extension");
-  for (const file of ["dist/extension.cjs", "dist/cli.mjs", "dist/vite-compatibility-worker.mjs", "node_modules/axe-core/package.json", "node_modules/parse5/package.json", "shims/next/navigation.ts"]) await access(path.join(extension, file));
+  for (const file of ["dist/template-workers/node.mjs", "dist/template-workers/python.py", "dist/template-workers/php.php", "dist/template-workers/ruby.rb", "dist/extension.cjs", "dist/cli.mjs", "dist/vite-compatibility-worker.mjs", "node_modules/axe-core/package.json", "node_modules/parse5/package.json", "shims/next/navigation.ts"]) await access(path.join(extension, file));
   record.version = JSON.parse(await readFile(path.join(extension, "package.json"), "utf8")).version;
   await run(process.execPath, ["test/vscode/run.mjs"], { ...process.env, NODE_PATH: "", CP_EXTENSION_PATH: extension });
   record.status = "passed";

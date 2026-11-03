@@ -1,0 +1,1 @@
+->(engine) { {"modules" => [Module.new { define_method(:greet) { |name| "Hello " + name } }]} }

@@ -1,0 +1,1 @@
+<article><h1>Hello {{!it.name}}</h1><ul>{{~it.items:item}}<li>{{!item}}</li>{{~}}</ul></article>

@@ -74,15 +74,20 @@ const freezeShadowRoots = () => {
   }
 };
 cp.show = async (target, state) => {
-  if (cp.ranClassic) { location.replace("/?t=" + encodeTarget(target) + (cp.live ? "" : "&live=0")); return new Promise(() => {}); }
+  if (cp.ranClassic || cp.templateHasScripts) { location.replace("/?t=" + encodeTarget(target) + (cp.live ? "" : "&live=0")); return new Promise(() => {}); }
+  const sequence = cp.sequence = (cp.sequence ?? 0) + 1;
   const since = cp.now();
   if (state) Object.assign(cp, state);
-  cp.target = target; cp.errors = []; cp.warnings = []; cp.status = "loading";
+  cp.target = target; cp.errors = []; cp.warnings = []; cp.template = undefined; cp.status = "loading";
   try {
     // A widget script is a document with one classic script; data-* props become that script's attributes.
     const documentSource = target.script
       ? { html: "", styles: [], warnings: [], scripts: [{ kind: "classic", src: target.file.split(/[\\\\/]/).pop(), url: moduleUrl(target.file).replace("?", "?classic&"), attrs: Object.fromEntries(Object.entries(target.props ?? {}).filter(([name]) => name.startsWith("data-")).map(([name, value]) => [name, String(value)])) }] }
+      : target.engine ? await cp.realFetch("/@template", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(target) }).then(async (response) => { if (!response.ok) throw new Error(await response.text()); return response.json(); })
       : (await import(moduleUrl(target.file))).default;
+    if (sequence !== cp.sequence) return cp.status;
+    cp.template = documentSource.template;
+    cp.errors.push(...(documentSource.errors ?? []));
     cp.warnings.push(...documentSource.warnings);
     const parsed = new DOMParser().parseFromString(documentSource.html, "text/html");
     for (const [actual, source] of [[document.documentElement, parsed.documentElement], [document.body, parsed.body]]) {
@@ -115,6 +120,8 @@ cp.show = async (target, state) => {
       if (target.script) window.__ARGUSEYE_WIDGET_CONFIG__ = revive(target.props ?? {});
       for (const script of classic) await runClassic(script, into);
     }
+    // Native document scripts initialize real globals; another verification needs a fresh document realm.
+    cp.templateHasScripts = !!target.engine && documentSource.scripts.some((script) => script.kind === "module");
     for (const script of documentSource.scripts) if (script.kind === "module") await cp.importModule(script.url);
     const custom = [...into.querySelectorAll("*")].filter((el) => el.localName.includes("-"));
     const missing = [...new Set(custom.filter((el) => !customElements.get(el.localName)).map((el) => el.localName))];
@@ -126,7 +133,7 @@ cp.show = async (target, state) => {
     const name = target.exportName ?? "default";
     const selected = name === "default" ? custom.length === 1 ? custom[0] : undefined : custom.find((el) => el.localName === name);
     if (name !== "default" && !selected) throw new Error("No custom element " + JSON.stringify(name) + " in " + target.file);
-    if (Object.keys(target.props ?? {}).length && !target.script) {
+    if (Object.keys(target.props ?? {}).length && !target.script && !target.engine) {
       if (selected) Object.assign(selected, revive(target.props));
       else cp.warnings.push("HTML props require one custom element or its tag name as the export; no props were applied.");
     }
@@ -146,6 +153,7 @@ cp.show = async (target, state) => {
       if (closedRoots) cp.warnings.push(closedRoots + " closed shadow root(s): their content is in the image only, not in the accessibility snapshot.");
     }
   } catch (error) {
+    if (sequence !== cp.sequence) return cp.status;
     const served = await cp.realFetch("/@errors?since=" + since).then((r) => r.json()).catch(() => []);
     cp.errors.push(...(served.length ? served.map((e) => e.message) : [String(error?.stack ?? error)]));
   }
@@ -155,4 +163,8 @@ cp.report = () => { if (parent !== window) parent.postMessage({ source: "argusey
 addEventListener("message", async (event) => { if (event.source === parent && event.data?.type === "cp:show") { await cp.show(event.data.target); cp.report(); } });
 cp.ready = cp.show(cp.target).then(cp.report);
 cp.updates = 0;
-if (cp.live) new EventSource("/@events").onmessage = () => location.reload();`;
+if (cp.live) new EventSource("/@events").onmessage = async (event) => {
+  if (!cp.target.engine || cp.ranClassic || cp.templateHasScripts) { location.replace("/?t=" + encodeTarget(cp.target)); return; }
+  const update = JSON.parse(event.data); cp.epoch = update.epoch; cp.versions = update.versions;
+  await cp.show(cp.target); cp.report();
+};`;

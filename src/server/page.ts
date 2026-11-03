@@ -9,6 +9,11 @@ export type PreviewTarget = {
   params?: Record<string, string | string[]>;
   file: string;
   exportName?: string;
+  /** Native template engine and optional named preview-data profile. */
+  engine?: string;
+  profile?: string;
+  /** Resolved profile inputs are immutable when replaying a baseline. */
+  templateResolved?: boolean;
   props?: Record<string, unknown>;
   /** Remount instead of keeping component state (agents want a clean render; the editor panel doesn't). */
   fresh?: boolean;
@@ -74,7 +79,7 @@ export function themedClass(htmlClass: string | undefined, theme: PreviewTarget[
 }
 
 export function previewHtml(target: PreviewTarget, { state, env, metaEnv = {}, define = {}, htmlClass, bodyClass, globalCssUrls, jsx = "react" }: PageContext): string {
-  const runtime = target.script ? "html" : frameworkOf(target.file) === "react" && jsx !== "react" ? jsx : frameworkOf(target.file);
+  const runtime = target.script || target.engine ? "html" : frameworkOf(target.file) === "react" && jsx !== "react" ? jsx : frameworkOf(target.file);
   const json = JSON.stringify(target).replace(/</g, "\\u003c");
   const stateJson = JSON.stringify(state).replace(/</g, "\\u003c");
   const envJson = JSON.stringify({ NODE_ENV: "development", ...env }).replace(/</g, "\\u003c");

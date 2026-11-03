@@ -1,8 +1,9 @@
+import { isSingleFileComponent } from "./framework.js";
 import { parseSync } from "oxc-parser";
 
 /** Names of the value exports in a module, `"default"` first when present. */
 export function listExports(file: string, source: string): string[] {
-  if (/\.(vue|svelte|html)$/.test(file)) return ["default"];
+  if (isSingleFileComponent(file)) return ["default"];
   const { module } = parseSync(file, source);
   const names = new Set<string>();
   for (const exp of module.staticExports) {

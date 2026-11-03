@@ -62,13 +62,16 @@ export async function compareCaptures(page: Page, before: RenderResult, after: R
   const { png, ...metrics } = pixels;
   const snapshotChanged = before.snapshot !== after.snapshot;
   const timerVariance = (pixels.changedPixels > 0 || snapshotChanged) && (before.scheduledTimers || after.scheduledTimers) && before.sourceRevision === after.sourceRevision && JSON.stringify(before.target) === JSON.stringify(after.target) && JSON.stringify(before.viewport) === JSON.stringify(after.viewport);
+  const identity = (result: RenderResult) => result.template ? JSON.stringify([result.template.engine, result.template.runtime, result.template.engineVersion, result.template.runtimeVersion]) : undefined;
+  const incompatibleRuntime = identity(before) !== identity(after);
+  const runtimeWarnings = incompatibleRuntime ? ["Template engine or runtime identity changed since the baseline; capture a new baseline before treating this comparison as complete."] : [];
   const stabilityWarnings = timerVariance ? ["Pixels or accessibility text changed with unchanged source and inputs while application timers remain scheduled; capture stability is not established."] : [];
   return {
     ...metrics, diffPng: Buffer.from(png, "base64"), before, after, snapshotChanged,
-    status: !before.complete || !after.complete || timerVariance ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
+    status: !before.complete || !after.complete || timerVariance || incompatibleRuntime ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
     newErrors: after.errors.filter((e) => !before.errors.includes(e)),
     resolvedErrors: before.errors.filter((e) => !after.errors.includes(e)),
-    newWarnings: [...after.warnings.filter((w) => !before.warnings.includes(w)), ...stabilityWarnings],
+    newWarnings: [...after.warnings.filter((w) => !before.warnings.includes(w)), ...stabilityWarnings, ...runtimeWarnings],
     resolvedWarnings: before.warnings.filter((w) => !after.warnings.includes(w)),
   };
 }

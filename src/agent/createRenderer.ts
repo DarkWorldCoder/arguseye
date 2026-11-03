@@ -49,6 +49,8 @@ export type Target = { role?: string; name?: string; text?: string; label?: stri
 export type RenderResult = {
   /** PNG cropped to the rendered component. */
   png: Buffer;
+  /** Native template engine identity, actual dependencies and unresolved context. */
+  template?: import("../server/createTemplateRenderer.js").TemplateEvidence;
   fixtureProvenance?: FixtureProvenance;
   build?: PreviewServer["build"];
   accessibility?: AccessibilityEvidence;
@@ -60,7 +62,7 @@ export type RenderResult = {
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
-  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures" | "inspection">;
+  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures" | "inspection" | "engine" | "profile" | "templateResolved">;
   viewport: { width: number; height: number };
   sourceRevision: string;
   unresolved: string[];
@@ -277,7 +279,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
   /** Navigates a page to `target`; the server bundles the packages it needs before responding. */
   async function load(page: Page, target: PreviewTarget) {
-    const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
+    const { generation } = await server.prepare(target.file, prepareContext(target), target.route, target.engine);
     guard();
     await page.goto(new URL(server.pageUrl(target, { live: false }), server.url).href);
     await page.waitForFunction(() => (window as any).__CP__?.ready || (window as any).__CP__?.status === "error", null, { timeout: 15000 });
@@ -408,10 +410,11 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const classic = await classicOf(rest.file);
       if (classic === "script" && server.build?.mode === "vite") throw new Error("Classic-script widgets currently use native mode; retry with --build-mode native.");
       // A widget script has no props type to sample: its props are the config it is given, or none.
-      const { props, propsSource, unresolved } = classic === "script" && !usage
+      let { props, propsSource, unresolved } = classic === "script" && !usage
         ? { props: rest.props ?? {}, propsSource: Object.keys(rest.props ?? {}).length ? "given" as const : "none" as const, unresolved: [] }
         : await resolveProps(rest, usage, resolved);
-      const target: PreviewTarget = { fresh: true, ...rest, props, frame };
+      const target: PreviewTarget = server.templateTarget?.({ fresh: true, ...rest, props, frame }) ?? { fresh: true, ...rest, props, frame };
+      if (target.engine) { props = target.props ?? {}; propsSource = Object.keys(props).length ? "given" : "none"; }
       if (inContext && usage) {
         const found = resolved ?? (await usages.list(rest.file, rest.exportName)).find((u) => u.id === usage);
         if (found?.context?.length) {
@@ -423,7 +426,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target.context = [{ kind: "component", source: "./" + path.basename(rest.file), importName: provider, props: {} }];
         target.contextFile = rest.file;
       }
-      target.route = classic === "script" ? undefined : resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
+      target.route = classic === "script" || target.engine ? undefined : resolved ? path.resolve(options.root, resolved.id.split(":")[0]) : await routeFor(options.root, rest.file, rest.exportName, usage, (f, e) => usages.list(f, e));
       Object.assign(target, routePath(options.root, target.route));
       // A Next layout renders <html>/<body>, which cannot mount inside a preview. It is every preview's wrapper
       // already, so render its chain (providers, elements, html/body classes) down to this layout around its children.
@@ -434,8 +437,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target.props = { children: typeof props.children === "string" ? props.children : "Page content" };
       }
       const contextApplied = target.context?.flatMap((w) => w.kind === "prelude" ? [] : (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
-      if (server.build?.mode === "vite") await server.prepare(target.file, prepareContext(target), target.route);
-      const key = pageKey(rest.file, viewport, classic);
+      if (server.build?.mode === "vite") await server.prepare(target.file, prepareContext(target), target.route, target.engine);
+      const key = target.engine ? `html:${viewport.width}x${viewport.height}` : pageKey(rest.file, viewport, classic);
       // Classic scripts leave globals and "already loaded" guards behind: never run one on a page used before.
       if ((fixtures || storage || classic) && pages.has(key)) { const old = pages.get(key)!; pages.delete(key); await old.then((p) => p.close()).catch(() => {}); }
       let warm = pages.get(key);
@@ -460,8 +463,8 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         // A warm page may have been used for the other theme; re-emulate only on a change (it is a CDP round trip).
         if (schemes.get(page) !== rest.theme) { await page.emulateMedia({ colorScheme: rest.theme ?? null }); schemes.set(page, rest.theme); }
         const state = server.syncDisk();
-        const { generation } = await server.prepare(target.file, prepareContext(target), target.route);
-        if (generation !== generations.get(page) || frameworkOf(rest.file) === "html" && epochs.get(page) !== state.epoch) {
+        const { generation } = await server.prepare(target.file, prepareContext(target), target.route, target.engine);
+        if (generation !== generations.get(page) || (target.engine || frameworkOf(rest.file) === "html") && epochs.get(page) !== state.epoch) {
           reloaded = true;
           await load(page, target);
         } else {
@@ -572,7 +575,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
             new Promise((r) => cp.setTimeout(r, 1000)),
           ]);
         }
-        return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth || decoding.has(img) || decodeFailed.has(img)).map((img) => img.getAttribute("src") ?? "unknown image").concat(document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0, infiniteWebAnimation };
+        // FontFaceSet becomes "loaded" even when a face failed to decode; retain that fallback evidence.
+        const fontProblems = [...document.fonts].filter((font) => font.status === "error" || font.status === "loading").map((font) => `font ${font.family} (${font.status})`);
+        return { assets: [...document.images].filter((img) => !img.complete || !img.naturalWidth || decoding.has(img) || decodeFailed.has(img)).map((img) => img.getAttribute("src") ?? "unknown image").concat(fontProblems, document.fonts.status === "loaded" ? [] : ["fonts"], canvasesPending ? ["canvases"] : [], animating ? ["animations still running after 2.5 s"] : []), pendingFrames: cp.rafPending > 0, infiniteWebAnimation };
       });
       if (settled.assets.length) warnings.push("Assets did not settle: " + settled.assets.join(", "));
       if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");
@@ -656,7 +661,10 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const evidence = fixtureEvidence.get(page);
       if (evidence?.network?.blocked.length) warnings.push("Unmatched network requests blocked by fixtures: " + evidence.network.blocked.join("; "));
       const setup = classic === "script" ? undefined : server.setupFor(rest.file);
+      const template = target.engine ? await page.evaluate(() => (window as any).__CP__?.template) : undefined;
+      if (template?.unresolved?.length) unresolved.push(...template.unresolved);
       const result: RenderResult = {
+        ...(template ? { template } : {}),
         png, snapshot, scheduledTimers, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
@@ -668,6 +676,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         ...(actions.length ? { actionsApplied } : {}),
         target: structuredClone({
           file: rest.file, exportName: rest.exportName ?? "default", props,
+          ...(target.engine ? { engine: target.engine, profile: target.profile, templateResolved: true } : {}),
           ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}), ...(inspection ? { inspection } : {}),
         }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings: unique(warnings), complete: !allErrors.length && !warnings.length,
@@ -690,7 +699,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (png.byteLength <= limits.pngBytes) lastResults.set(signature, { ...structuredClone(result), png: Buffer.from(result.png) });
       trim();
       // The page's own React root is gone (a layout rendered <html>/<body>): later renders get a fresh page.
-      if (!rootIntact) replacedRoots.add(page);
+      if (!rootIntact || target.engine && await page.evaluate(() => !!((window as any).__CP__.ranClassic || (window as any).__CP__.templateHasScripts))) replacedRoots.add(page);
       return result;
   }
 }

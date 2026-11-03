@@ -31,9 +31,20 @@ jobs:
           sudo mdutil -a -i off || true
           sudo mdutil -a -s || true
       - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler: '4.0.23'
       - name: Install real fixture packages
         shell: bash
-        run: for d in test/fixtures/*/; do (cd "$d" && npm ci --no-audit --no-fund); done
+        run: node scripts/installFixtures.mjs
       - run: npx playwright-core install --with-deps chromium
       - run: npm run typecheck
       - name: Record native timing conditions
@@ -41,7 +52,7 @@ jobs:
         run: node scripts/prepareNativeBenchmark.mjs
       - name: Native framework and MCP contracts
         if: runner.os != 'Linux'
-        run: npx vitest run test/browser/render.test.ts test/browser/vue.test.ts test/browser/svelte.test.ts test/browser/preact.test.ts test/browser/solid.test.ts test/browser/html.test.ts test/browser/mcp.test.ts test/browser/theme.test.ts test/browser/live.test.ts test/browser/usageContext.test.ts test/browser/motion.test.ts --maxWorkers 1
+        run: npx vitest run test/browser/render.test.ts test/browser/vue.test.ts test/browser/svelte.test.ts test/browser/preact.test.ts test/browser/solid.test.ts test/browser/html.test.ts test/browser/mcp.test.ts test/browser/theme.test.ts test/browser/live.test.ts test/browser/usageContext.test.ts test/browser/motion.test.ts test/browser/templates.test.ts --maxWorkers 1
       - name: Full test suite on Linux
         if: runner.os == 'Linux'
         run: npm test

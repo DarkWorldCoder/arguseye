@@ -1,0 +1,8 @@
+{
+    "require": {
+        "twig/twig": "^3",
+        "latte/latte": "^3",
+        "smarty/smarty": "^5",
+        "illuminate/view": "^12"
+    }
+}

@@ -1,0 +1,1 @@
+{"name":"template-fixture","private":true,"dependencies":{"handlebars":"^4.7.8","mustache":"^4.2.0","ejs":"^3.1.10","pug":"^3.0.3","nunjucks":"^3.2.4","liquidjs":"^10.21.0","eta":"^3.5.0","dot":"^1.1.3"}}

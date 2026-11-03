@@ -1,0 +1,1 @@
+<article><h1>Hello ${name}</h1><%include file="items.mako"/></article>

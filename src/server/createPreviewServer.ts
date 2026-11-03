@@ -1,3 +1,4 @@
+import { createTemplateRenderer } from "./createTemplateRenderer.js";
 import { fileUrl, fileFromUrl } from "./fileUrl.js";
 import { htmlRuntime } from "./htmlRuntime.js";
 import { buildInputs } from "../project/buildInputs.js";
@@ -65,6 +66,9 @@ export type PreviewServer = {
   context(): { globalCssUrls: string[]; htmlClass?: string; bodyClass?: string };
   /** Reads the same unsaved source as the module graph. */
   readSource(file: string): Promise<string>;
+  /** Normalizes native template engine and named context inputs before saving a baseline. */
+  templateTarget?(target: PreviewTarget): PreviewTarget;
+  templateInfo?(file: string): { engine?: string; engines: string[]; profiles: string[] };
   moduleUrl(file: string): string;
   /** URL of a page that renders `target` and reports `window.__CP__.status`. `live: false` skips pushed updates. */
   pageUrl(target: PreviewTarget, options?: { live?: boolean }): string;
@@ -76,7 +80,7 @@ export type PreviewServer = {
    * Makes sure every package `file` needs is bundled, and returns the bundle generation. A page loaded
    * under an older generation must be reloaded before showing `file`, or it would mix two React copies.
    */
-  prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }>;
+  prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string, engine?: string): Promise<{ generation: number; cached: boolean }>;
   /** Layout and template files that wrap a render for `route` (root first, project-relative). */
   layoutsFor(route?: string): string[];
   /** Explicit browser setup selected for this component's framework, if present at startup. */
@@ -157,6 +161,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     hashes.set(file, createHash("sha256").update(source).digest("hex"));
     return source;
   };
+  const templates = createTemplateRenderer(options.root, readContextSource, (file) => access.assert(file), overlay);
   let css = new CssPipeline(options.root);
   let graph = new ModuleGraph(readSource, deps, query, css, options.root, { fileExists: (file) => { access.assert(file); return overlay.has(path.normalize(file)) || existsSync(file); }, readFile: readContextSource });
   const listeners = new Set<http.ServerResponse>();
@@ -215,11 +220,12 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
 
   const isClassicScript = async (file: string) => /\.c?js$/.test(file) && classicKind(file, await readSource(file)) === "script";
 
-  async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string): Promise<{ generation: number; cached: boolean }> {
+  async function prepare(file: string, context?: { file: string; wrappers: Wrapper[] }, route?: string, engine?: string): Promise<{ generation: number; cached: boolean }> {
     if (file !== "/@empty") access.assert(file);
     if (context) access.assert(context.file);
     if (route) access.assert(route);
     await warming;
+    if (templates.select({ file, engine }).engine) return { generation: buildGeneration + deps.generation, cached: true };
     // A classic script runs as written: no module graph, no framework runtime, no app wrappers.
     if (await isClassicScript(file)) return { generation: buildGeneration + deps.generation, cached: deps.cached };
     if (route) {
@@ -261,6 +267,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   function syncDisk(): VersionState {
     const current = buildInputs(options.root);
     if (current !== inputs) {
+      templates.invalidate();
       inputs = current; buildGeneration += 100000; epoch++;
       access = createFileAccess(options.root, options.allowedRoots);
       setupFiles = previewSetup(options.root); fonts = createFontContext(options.root, readContextSource);
@@ -310,10 +317,24 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       const host = new URL(`http://${req.headers.host ?? ""}`);
       if (!["127.0.0.1", "localhost", "[::1]"].includes(host.hostname)) return send(res, 403, "text/plain", "Unexpected preview host");
       if (req.headers.origin && req.headers.origin !== host.origin) return send(res, 403, "text/plain", "Unexpected preview origin");
+      if (req.method === "POST" && url.pathname === "/@template") {
+        if (req.headers.origin !== host.origin) return send(res, 403, "text/plain", "Template rendering requires the preview origin");
+        const chunks: Buffer[] = []; let bytes = 0;
+        for await (const chunk of req) { bytes += chunk.length; if (bytes > 1024 * 1024) return send(res, 413, "text/plain", "Template request exceeds 1 MiB"); chunks.push(Buffer.from(chunk)); }
+        const target = templates.select(JSON.parse(Buffer.concat(chunks).toString("utf8"))); access.assert(target.file);
+        if (!target.engine) throw new Error(`Choose a template engine for ${target.file}`);
+        const controller = new AbortController(); res.once("close", () => controller.abort());
+        try {
+          const rendered = await templates.render(target, controller.signal);
+          const revision = createHash("sha256").update(rendered.html).digest("hex").slice(0, 20);
+          const document = await graph.htmlDocument(target.file, rendered.html, revision, (url) => templates.asset(url));
+          return send(res, 200, "application/json", JSON.stringify({ ...document, errors: rendered.errors, template: rendered.template, warnings: [...document.warnings, ...rendered.warnings, ...rendered.unresolved.map((value) => `Unresolved template context: ${value}`)] }));
+        } catch (error) { return send(res, 200, "application/json", JSON.stringify({ html: "", scripts: [], styles: [], warnings: [], errors: [`${target.file}: ${(error as Error).stack ?? error}`] })); }
+      }
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "Preview requests must use GET or HEAD");
       if (url.pathname === "/") {
-        const target = decodeTarget(url.searchParams.get("t") ?? "");
-        await prepare(target.file);
+        const target = templates.select(decodeTarget(url.searchParams.get("t") ?? ""));
+        await prepare(target.file, undefined, undefined, target.engine);
         if (await isClassicScript(target.file)) target.script = true;
         const state = { epoch, versions, live: url.searchParams.get("live") !== "0" };
         const app = appContext();
@@ -322,8 +343,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       }
       if (url.pathname === "/@html-script") {
         const file = url.searchParams.get("file") ?? ""; access.assert(file);
-        if (!file.endsWith(".html")) throw new Error(`Inline module source must be HTML: ${file}`);
-        return send(res, 200, "text/javascript", await graph.loadHtmlScript(file, Number(url.searchParams.get("index"))));
+        if (!file.endsWith(".html") && !templates.select({file}).engine) throw new Error(`Inline module source must be HTML: ${file}`);
+        return send(res, 200, "text/javascript", await graph.loadHtmlScript(file, Number(url.searchParams.get("index")), url.searchParams.get("render") ?? ""));
       }
       if (url.pathname === "/@context") {
         const { file, wrappers } = decodeContext(url.searchParams.get("c") ?? "");
@@ -426,6 +447,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         if (code !== undefined) return send(res, 200, "text/javascript", code);
       }
       // Anything else is a public/ asset referenced by absolute path, as the app's server would serve it.
+      const templateAsset = templates.asset(decodeURIComponent(url.pathname));
+      if (templateAsset && existsSync(templateAsset)) return sendFile(res, templateAsset);
       const publicFile = path.join(options.root, "public", path.normalize(decodeURIComponent(url.pathname)));
       if (existsSync(publicFile)) { access.assert(publicFile, true); return sendFile(res, publicFile); }
       send(res, 404, "text/plain", "not found");
@@ -469,6 +492,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     version: (file) => versions[file] ?? 0,
     sourceRevision: () => createHash("sha256").update(JSON.stringify([...hashes].sort(([a], [b]) => a.localeCompare(b)))).digest("hex"),
     readSource,
+    templateTarget: templates.select,
+    templateInfo: templates.info,
     moduleUrl: fileUrl,
     pageUrl: (target, { live = true } = {}) => `/?t=${encodeTarget(target)}${live ? "" : "&live=0"}`,
     updateBuffer,
@@ -478,7 +503,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     ready: () => warming,
     layoutsFor: (route) => appContext(route).layouts,
     setupFor: (file) => frameworkOf(file) === "vue" ? setupFiles.vue : frameworkOf(file) === "react" ? setupFiles.jsx : frameworkOf(file) === "svelte" ? setupFiles.svelte : undefined,
-    close: () => new Promise((r) => { watcher?.close(); server.closeAllConnections(); server.close(() => r()); }),
+    close: () => new Promise((r) => { templates.close(); watcher?.close(); server.closeAllConnections(); server.close(() => r()); }),
   };
 }
 

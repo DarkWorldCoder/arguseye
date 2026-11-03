@@ -1,0 +1,1 @@
+<article><h1>Hello <?= htmlspecialchars($name) ?></h1><ul><?php foreach($items as $item): ?><li><?= htmlspecialchars($item) ?></li><?php endforeach ?></ul></article>

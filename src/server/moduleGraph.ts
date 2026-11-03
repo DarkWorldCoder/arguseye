@@ -165,27 +165,28 @@ export class ModuleGraph {
   }
 
   /** Inline modules are selected from the actual bounded HTML source, never supplied through HTTP text. */
-  async loadHtmlScript(file: string, index: number): Promise<string> {
-    await this.load(file);
-    const script = this.htmlScripts.get(`${file}:${index}`);
+  async loadHtmlScript(file: string, index: number, render = ""): Promise<string> {
+    if (!render) await this.load(file);
+    const script = this.htmlScripts.get(`${file}:${render}:${index}`);
     if (!script) throw new Error(`Unknown inline module ${index} in ${file}`);
     return this.loadVirtual(script.file, script.source, { refresh: false });
   }
 
-  async load(file: string): Promise<string> {
-    if (file.endsWith(".html")) {
-      const source = await this.readSource(file);
-      const inline: Array<{ file: string; source: string; url: string }> = [];
+  /** Parses native template output with the same asset and script semantics as ordinary HTML. */
+  async htmlDocument(file: string, source: string, render = "", asset?: (url: string) => string | undefined) {
+    const inline: Array<{ file: string; source: string; url: string }> = [];
       const document = compileHtml(file, source, (specifier) => {
-        if (specifier.startsWith("/")) specifier = pathJoin(this.root, "public", specifier);
+        if (specifier.startsWith("/")) specifier = asset?.(specifier) ?? pathJoin(this.root, "public", specifier);
         return this.urlFor(file, specifier);
       }, (index, source) => {
-        const script = { file: file + `.inline-${index}.ts`, source, url: `/@html-script?file=${encodeURIComponent(file)}&index=${index}&e=${encodeURIComponent(this.query(file))}` };
-        this.htmlScripts.set(`${file}:${index}`, script); inline.push(script); return script.url;
+        const script = { file: file + `.inline-${render}-${index}.ts`, source, url: `/@html-script?file=${encodeURIComponent(file)}&index=${index}&render=${encodeURIComponent(render)}&e=${encodeURIComponent(this.query(file))}` };
+        this.htmlScripts.set(`${file}:${render}:${index}`, script);
+        if (this.htmlScripts.size > 256) { const key = this.htmlScripts.keys().next().value!; const old = this.htmlScripts.get(key)!; this.htmlScripts.delete(key); this.projectImports.delete(old.file); }
+        inline.push(script); return script.url;
       }, (src) => {
         // A classic src is a URL relative to the document (or the public dir), never a module specifier.
         const target = src.split(/[?#]/)[0];
-        const script = target.startsWith("/") ? pathJoin(this.root, "public", target) : pathJoin(file, "..", target);
+        const script = target.startsWith("/") ? asset?.(target) ?? pathJoin(this.root, "public", target) : pathJoin(file, "..", target);
         return fileUrl(script) + "?classic&" + this.query(script).slice(1);
       });
       for (const script of inline) await this.crawlVirtual(script.file, script.source, { refresh: false });
@@ -193,8 +194,11 @@ export class ModuleGraph {
       this.projectImports.set(file, [...urls.filter((url) => url.startsWith("/@fs/")).map((url) => fileFromUrl(url.slice(4).split("?")[0])), ...inline.flatMap((script) => this.projectImports.get(script.file) ?? [])]);
       // Classic scripts are not modules: nothing may preload them as one.
       this.importUrls.set(file, [...urls.filter((url) => !url.includes("?classic")), ...inline.flatMap((script) => this.importUrls.get(script.file) ?? [])]);
-      return `export default ${JSON.stringify(document)};`;
-    }
+    return document;
+  }
+
+  async load(file: string): Promise<string> {
+    if (file.endsWith(".html")) return `export default ${JSON.stringify(await this.htmlDocument(file, await this.readSource(file)))};`;
     if (file.endsWith(".json")) return jsonModule(file, await this.readSource(file));
     if (!SCRIPT_EXT.test(file) && !isStylesheet(file)) return assetModule(file, this.imagesAsObjects);
 

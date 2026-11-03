@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isPreviewable, isTemplateFile } from "../project/templateEngines.js";
 import { findUsages } from "../usages/findUsages.js";
 import { routeFor } from "../project/routeFor.js";
 import { existsSync } from "node:fs";
@@ -28,6 +29,10 @@ export type PanelState = {
   file: string;
   exportName?: string;
   exports: string[];
+  engine?: string;
+  engines?: string[];
+  profile?: string;
+  profiles?: string[];
   props: Record<string, unknown>;
   propsSource: "usage" | "sample" | "given" | "none";
   schema: PropSchema[];
@@ -44,6 +49,7 @@ export type PreviewApi = {
   state(): PanelState | undefined;
   /** Re-renders the shown component with these props (what the props form does). */
   setProps(props: Record<string, unknown>): Promise<void>;
+  setTemplate(engine: string, profile?: string): Promise<void>;
   setExport(exportName: string): Promise<void>;
   setUsage(id: string): Promise<void>;
   setViewport(preset: keyof typeof VIEWPORTS): Promise<void>;
@@ -52,14 +58,18 @@ export type PreviewApi = {
   compareChanges(): Promise<DiffResult>;
 };
 
-const PREVIEWABLE = /\.(tsx|jsx|vue|svelte|html)$/;
 /** Typing pause before the preview re-renders; short enough to feel live, long enough to batch keystrokes. */
 const TYPING_DEBOUNCE_MS = 30;
 
 export function activate(context: vscode.ExtensionContext): PreviewApi {
   const panel = new PreviewPanel();
   context.subscriptions.push(
-    vscode.commands.registerCommand("componentPreview.open", () => panel.open(vscode.window.activeTextEditor?.document)),
+    vscode.commands.registerCommand("componentPreview.open", async (uri?: vscode.Uri) => {
+      if (!vscode.workspace.isTrusted) { void vscode.window.showWarningMessage("Trust this workspace before executing its preview code."); return; }
+      if (uri !== undefined && (!(uri instanceof vscode.Uri) || uri.scheme !== "file")) { void vscode.window.showInformationMessage("Choose a local component file to preview."); return; }
+      try { await panel.open(uri ? await vscode.workspace.openTextDocument(uri) : vscode.window.activeTextEditor?.document); }
+      catch (error) { void vscode.window.showErrorMessage(`Preview could not open: ${String((error as Error).message ?? error)}`); }
+    }),
     vscode.window.onDidChangeActiveTextEditor((editor) => editor && panel.follow(editor.document)),
     vscode.workspace.onDidChangeTextDocument((event) => panel.edited(event.document)),
     vscode.workspace.onDidSaveTextDocument((document) => panel.restored(document)),
@@ -90,6 +100,7 @@ class PreviewPanel implements vscode.Disposable {
     status: () => this.current,
     state: () => this.state,
     setProps: (props) => this.setProps(props),
+    setTemplate: (engine, profile) => this.setTemplate(engine, profile),
     setExport: (exportName) => this.setExport(exportName),
     setUsage: (id) => this.setUsage(id),
     setViewport: (preset) => this.setViewport(preset),
@@ -113,8 +124,8 @@ class PreviewPanel implements vscode.Disposable {
   };
 
   async open(document: vscode.TextDocument | undefined) {
-    if (!document || !PREVIEWABLE.test(document.fileName)) {
-      vscode.window.showInformationMessage("Open a .tsx, .jsx, .vue, .svelte or .html component file to preview it.");
+    if (!document || !isPreviewable(document.fileName)) {
+      vscode.window.showInformationMessage("Open a supported component, HTML document or template file to preview it.");
       return;
     }
     this.panel ??= this.createPanel();
@@ -123,7 +134,8 @@ class PreviewPanel implements vscode.Disposable {
 
   /** Follow mode: the panel tracks whichever component file is active. */
   follow(document: vscode.TextDocument) {
-    if (this.panel && PREVIEWABLE.test(document.fileName) && document.uri.scheme === "file") void this.show(document);
+    if (this.state?.file === document.fileName) return;
+    if (this.panel && isPreviewable(document.fileName) && document.uri.scheme === "file") void this.show(document).catch((error) => vscode.window.showErrorMessage(`Preview could not follow this file: ${String(error.message ?? error)}`));
   }
 
   edited(document: vscode.TextDocument) {
@@ -157,7 +169,7 @@ class PreviewPanel implements vscode.Disposable {
     this.servers.clear();
   }
 
-  private async show(document: vscode.TextDocument, exportName?: string) {
+  private async show(document: vscode.TextDocument, exportName?: string, engine?: string, profile?: string) {
     const sequence = ++this.showSequence;
     const file = document.fileName;
     const root = projectRoot(file);
@@ -166,17 +178,23 @@ class PreviewPanel implements vscode.Disposable {
     if (document.isDirty && this.buffers.get(file) !== source) { server.updateBuffer(file, source); this.buffers.set(file, source); }
     let index = this.indexes.get(root);
     if (!index) { index = createUsageIndex(root, { readSource: server.readSource, version: server.version }); this.indexes.set(root, index); }
-    const target = await this.targetFor(root, file, source, exportName);
-    target.route = await routeFor(root, file, target.exportName, undefined, (f: string, x?: string) => findUsages(root, f, x));
+    const templateLike = isTemplateFile(file) || file.endsWith(".html");
+    const info = templateLike ? server.templateInfo?.(file) : undefined;
+    if (!engine && file.endsWith(".tpl") && !info?.engine) engine = await vscode.window.showQuickPick(info?.engines ?? [], { placeHolder: "Choose this template's native engine" });
+    if (file.endsWith(".tpl") && !engine && !info?.engine) return;
+    const native = engine ?? info?.engine;
+    const target = native ? { ...server.templateTarget!({ file, engine: native, profile }), propsSource: "given" as const } : await this.targetFor(root, file, source, exportName);
+    target.route = native ? undefined : await routeFor(root, file, target.exportName, undefined, (f: string, x?: string) => findUsages(root, f, x));
     target.theme = this.forcedTheme();
-    const usages = await index.list(file, target.exportName);
+    const usages = native ? [] : await index.list(file, target.exportName);
     const schema = await propsSchema(file, target.exportName, server.readSource).catch(() => []);
     if (sequence !== this.showSequence || !this.panel) return;
     this.baseline = undefined;
     this.state = {
       file,
       exportName: target.exportName,
-      exports: listExports(file, source),
+      exports: native ? [] : listExports(file, source),
+      engine: native, engines: info?.engines, profile, profiles: info?.profiles,
       props: target.props ?? {},
       propsSource: target.propsSource,
       schema, usages, usage: target.propsSource === "usage" ? usages.find((u) => JSON.stringify(u.props) === JSON.stringify(target.props))?.id : undefined,
@@ -184,7 +202,7 @@ class PreviewPanel implements vscode.Disposable {
       theme: this.state?.theme ?? "auto",
     };
     this.current = { file, status: "loading", errors: [], text: "" };
-    const { generation } = await server.prepare(file);
+    const { generation } = await server.prepare(file, undefined, undefined, target.engine);
     if (sequence !== this.showSequence || !this.panel) return;
     if (this.shownRoot !== root || this.shownGeneration !== generation) {
       this.shownRoot = root;
@@ -202,9 +220,14 @@ class PreviewPanel implements vscode.Disposable {
     if (!this.state || !this.panel) return;
     this.baseline = undefined;
     this.state = { ...this.state, props, propsSource: "given", usage: undefined };
-    const target: PreviewTarget = { file: this.state.file, exportName: this.state.exportName, props, fresh: false, theme: this.forcedTheme() };
+    const target: PreviewTarget = { file: this.state.file, engine: this.state.engine, profile: this.state.profile, templateResolved: true, exportName: this.state.exportName, props, fresh: false, theme: this.forcedTheme() };
     void this.panel.webview.postMessage({ type: "show", target });
     void this.panel.webview.postMessage({ type: "state", state: this.state });
+  }
+
+  private async setTemplate(engine: string, profile?: string) {
+    if (!this.state) return;
+    await this.show(await vscode.workspace.openTextDocument(this.state.file), undefined, engine || undefined, profile);
   }
 
   private async setExport(exportName: string) {
@@ -249,7 +272,7 @@ class PreviewPanel implements vscode.Disposable {
     this.baseline = undefined;
     this.state = { ...this.state, theme };
     // `auto` after a forced theme reloads the page, since the app's own <html> class is only known at load.
-    const target: PreviewTarget = { file: this.state.file, exportName: this.state.exportName, props: this.state.props, fresh: false, theme: this.forcedTheme() };
+    const target: PreviewTarget = { file: this.state.file, engine: this.state.engine, profile: this.state.profile, templateResolved: true, exportName: this.state.exportName, props: this.state.props, fresh: false, theme: this.forcedTheme() };
     await this.panel.webview.postMessage({ type: "show", target });
     await this.panel.webview.postMessage({ type: "state", state: this.state });
   }
@@ -285,7 +308,7 @@ class PreviewPanel implements vscode.Disposable {
   private async captureBaseline(): Promise<RenderResult> {
     if (!this.state) throw new Error("Open a preview first.");
     const renderer = await this.verificationRenderer();
-    const result = await renderer.render({ file: this.state.file, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport], theme: this.forcedTheme() });
+    const result = await renderer.render({ file: this.state.file, engine: this.state.engine, profile: this.state.profile, templateResolved: true, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport], theme: this.forcedTheme() });
     this.baseline = result.captureId;
     await this.panel?.webview.postMessage({ type: "verification", message: result.captureId ? "Baseline captured" + (result.warnings.length ? ": " + result.warnings.join("; ") : ".") : result.errors.join("\n"), baseline: !!this.baseline });
     return result;
@@ -308,6 +331,7 @@ class PreviewPanel implements vscode.Disposable {
     panel.webview.onDidReceiveMessage((message: any) => {
       if (message.type === "ready" && this.state) return void panel.webview.postMessage({ type: "state", state: this.state });
       const act = (work: Promise<unknown>) => void work.catch((error) => panel.webview.postMessage({ type: "verification", message: String(error.message ?? error), baseline: !!this.baseline }));
+      if (message.type === "template") return act(this.setTemplate(message.engine, message.profile));
       if (message.type === "usage") return act(this.setUsage(message.id));
       if (message.type === "viewport") return act(this.setViewport(message.preset));
       if (message.type === "theme") return act(this.setTheme(message.theme));
@@ -330,7 +354,15 @@ class PreviewPanel implements vscode.Disposable {
   private server(root: string): Promise<PreviewServer> {
     let server = this.servers.get(root);
     if (!server) {
-      server = import("../server/createPreviewServer.js").then((m) => m.createPreviewServer({ root, buildMode: vscode.workspace.getConfiguration("arguseye").get<"native" | "vite">("buildMode", "native") }));
+      server = import("../server/createPreviewServer.js").then(async (m) => {
+        const server = await m.createPreviewServer({ root, buildMode: vscode.workspace.getConfiguration("arguseye").get<"native" | "vite">("buildMode", "native") });
+        // Edits made before a preview server existed must also be the source of the first preview.
+        for (const document of vscode.workspace.textDocuments) if (document.uri.scheme === "file" && document.isDirty && document.fileName.startsWith(root + path.sep)) {
+          try { server.assertAccess(document.fileName); } catch { continue; }
+          const source = document.getText(); server.updateBuffer(document.fileName, source); this.buffers.set(document.fileName, source);
+        }
+        return server;
+      });
       this.servers.set(root, server);
     }
     return server;
@@ -342,11 +374,15 @@ class PreviewPanel implements vscode.Disposable {
   }
 }
 
-/** The nearest ancestor with a package.json: where node_modules, tsconfig and the app's layout live. */
+/** Native projects use their own manifest or explicit preview configuration as the runtime root. */
 function projectRoot(file: string): string {
   let dir = path.dirname(file);
-  while (!existsSync(path.join(dir, "package.json")) && path.dirname(dir) !== dir) dir = path.dirname(dir);
-  return dir;
+  const fallback = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file))?.uri.fsPath ?? dir;
+  const markers = ["arguseye.templates.json", "package.json", "pyproject.toml", "requirements.txt", "manage.py", "composer.json", "Gemfile"];
+  while (true) {
+    if (markers.some((name) => existsSync(path.join(dir, name)))) return dir;
+    const parent = path.dirname(dir); if (parent === dir) return fallback; dir = parent;
+  }
 }
 
 function webviewHtml(origin: string, pageUrl: string): string {
@@ -387,6 +423,8 @@ function webviewHtml(origin: string, pageUrl: string): string {
 </style>
 </head><body>
 <div id="bar">
+  <select id="engine" aria-label="Template engine" hidden></select>
+  <select id="profile" aria-label="Template data profile" hidden></select>
   <select id="export" title="Export" aria-label="Component export"></select>
   <select id="usage" title="Usage" aria-label="Component usage"></select>
   <select id="viewport" aria-label="Viewport"><option value="mobile">Mobile · 390</option><option value="tablet">Tablet · 820</option><option value="desktop" selected>Desktop · 1280</option></select>
@@ -449,6 +487,8 @@ addEventListener("message", (event) => {
   else if (data?.type === "state") { state = data.state; renderBar(); renderForm(); }
 });
 document.getElementById("toggle").onclick = () => form.classList.toggle("open");
+document.getElementById("engine").onchange = (event) => vscode.postMessage({ type: "template", engine: event.target.value });
+document.getElementById("profile").onchange = (event) => vscode.postMessage({ type: "template", engine: state.engine, profile: event.target.value || undefined });
 document.getElementById("usage").onchange = (event) => { if (event.target.value) vscode.postMessage({ type: "usage", id: event.target.value }); };
 document.getElementById("viewport").onchange = (event) => vscode.postMessage({ type: "viewport", preset: event.target.value });
 document.getElementById("theme").onchange = (event) => vscode.postMessage({ type: "theme", theme: event.target.value });
@@ -457,7 +497,12 @@ document.getElementById("compare").onclick = () => vscode.postMessage({ type: "c
 exportSelect.onchange = () => vscode.postMessage({ type: "export", exportName: exportSelect.value });
 
 function renderBar() {
-  const usageSelect = document.getElementById("usage"); usageSelect.replaceChildren();
+  for (const [id, values, selected, empty] of [["engine", state.engines, state.engine, "Plain HTML"], ["profile", state.profiles, state.profile, "Explicit context"]]) {
+    const select = document.getElementById(id); select.hidden = !values || (id === "profile" && !state.engine); select.replaceChildren();
+    for (const value of ["", ...(values || [])]) { const option = document.createElement("option"); option.value = value; option.textContent = value || empty; option.selected = (selected || "") === value; select.append(option); }
+  }
+  exportSelect.hidden = !!state.engine;
+  const usageSelect = document.getElementById("usage"); usageSelect.hidden = !!state.engine; usageSelect.replaceChildren();
   const custom = document.createElement("option"); custom.value = ""; custom.textContent = "Custom props"; usageSelect.append(custom);
   for (const usage of state.usages) { const option = document.createElement("option"); option.value = usage.id; option.textContent = usage.id + (usage.unresolved.length ? " (runtime inputs)" : ""); option.selected = usage.id === state.usage; usageSelect.append(option); }
   document.getElementById("viewport").value = state.viewport;
@@ -474,6 +519,14 @@ function renderBar() {
 /** One control per prop, by kind; function props are not editable from here. */
 function renderForm() {
   form.innerHTML = "";
+  if (state.engine) {
+    const label = document.createElement("label"); label.textContent = "Template context (JSON)";
+    const editor = document.createElement("textarea"); editor.setAttribute("aria-label", "Template JSON context"); editor.style.minHeight = "220px"; editor.value = JSON.stringify(state.props, null, 2);
+    const error = document.createElement("div"); error.setAttribute("role", "status");
+    editor.onchange = () => { try { const props = JSON.parse(editor.value); if (!props || Array.isArray(props) || typeof props !== "object") throw new Error("Enter a JSON object"); error.textContent = ""; vscode.postMessage({ type: "props", props }); } catch (e) { error.textContent = e.message; } };
+    const note = document.createElement("p"); note.textContent = "Uses your project's native engine. Template edits replace the document and reset its interactive state.";
+    form.append(label, editor, error, note); return;
+  }
   if (!state.schema.length) { form.innerHTML = '<div class="empty">No typed props found.</div>'; return; }
   for (const prop of state.schema) {
     const value = state.props[prop.name] ?? prop.default;

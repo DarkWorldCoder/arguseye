@@ -1,0 +1,4 @@
+source "https://rubygems.org"
+gem "haml", "~> 7.5"
+gem "slim", "~> 5.2"
+gem "liquid", "~> 5.7"

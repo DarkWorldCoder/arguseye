@@ -1,0 +1,1 @@
+<ul><% it.items.forEach(item => { %><li><%= item %></li><% }) %></ul>

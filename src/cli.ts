@@ -25,7 +25,7 @@ const HELP = `arguseye: inspect components and verify UI edits, no application s
       Render once: writes a PNG and prints the accessibility snapshot and errors
       --in-context renders inside the usage's parent elements; --frame WxH[:background] inside a stand-in box
 
-  arguseye shot FILE [--build-mode native|vite] [--capture-dir DIR] [--json] [--output image|summary|both]
+  arguseye shot FILE [--engine ENGINE] [--profile NAME] [--build-mode native|vite] [--capture-dir DIR] [--json] [--output image|summary|both]
       Save an immutable baseline and optional PNG; JSON reports metadata without image bytes
       --fixtures FILE.json replays explicit browser inputs; --timeout-ms N bounds execution
 
@@ -41,12 +41,14 @@ const HELP = `arguseye: inspect components and verify UI edits, no application s
   arguseye audit [DIR] [--limit N] [--cursor TOKEN] [--json] [--out report.json] [--root DIR]
       Render every component under DIR once with sample props: what renders, what errors, what comes out empty
 
-  arguseye serve FILE [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
+  arguseye serve FILE [--engine ENGINE] [--profile NAME] [--export NAME] [--usage ID] [--props JSON] [--port N] [--root DIR]
       Start the preview server and print a URL that shows the component live (updates as files change)`;
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
+    engine: { type: "string" },
+    profile: { type: "string" },
     "build-mode": { type: "string", default: "native" },
     root: { type: "string", default: process.cwd() },
     export: { type: "string" },
@@ -105,7 +107,7 @@ if (values.help || !command) {
   }
 } else if (command === "serve" && file) {
   const server = await createPreviewServer({ root, buildMode, port: values.port ? Number(values.port) : undefined, watch: true, warmup: true });
-  const target = { file: path.resolve(root, file), exportName: values.export };
+  const target = { file: path.resolve(root, file), exportName: values.export, engine: values.engine, profile: values.profile };
   let props = values.props ? JSON.parse(values.props) : undefined;
   if (values.usage) props = { ...(await findUsages(root, target.file, target.exportName)).find((u) => u.id === values.usage)?.props, ...props };
   const route = await routeFor(root, target.file, target.exportName, values.usage, (f, e) => findUsages(root, f, e));
@@ -143,7 +145,7 @@ if (values.help || !command) {
 } else if ((command === "shot" || command === "usages") && file) {
   const renderer = await createRenderer({ root, buildMode });
   try {
-    const target = { file: path.resolve(root, file), exportName: values.export };
+    const target = { file: path.resolve(root, file), exportName: values.export, engine: values.engine, profile: values.profile };
     if (command === "usages") {
       console.log(JSON.stringify(await renderer.listUsages(target.file, target.exportName), null, 2));
     } else {

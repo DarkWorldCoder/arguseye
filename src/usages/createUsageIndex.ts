@@ -11,7 +11,7 @@ import type { Wrapper } from "../project/appContext.js";
 type Import = { source: string; name: string; local: string };
 type Call = { local: string; offset: number; props: Record<string, unknown>; unresolved: string[]; context?: Wrapper[] };
 type Parsed = { code: string; imports: Import[]; exports: Array<{ name: string; local: string; source?: string }>; calls: Call[] };
-const SKIP = new Set(["node_modules", ".git", ".next", "dist", "build", "out", "coverage", ".turbo", ".cache", ".vscode-test", "dist-test"]);
+const SKIP = new Set([".venv", "venv", "vendor", ".bundle", ".runtime", "__pycache__", "node_modules", ".git", ".next", "dist", "build", "out", "coverage", ".turbo", ".cache", ".vscode-test", "dist-test"]);
 const SOURCE = /\.(?:[jt]sx?|vue|svelte)$/;
 
 /** An incremental source index shared across usage queries and renders; only edited modules are parsed again. */

@@ -14,8 +14,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler: '4.0.23'
       - name: Install fixture apps
-        run: for d in test/fixtures/*/; do (cd "$d" && npm ci --no-audit --no-fund); done
+        run: node scripts/installFixtures.mjs
       - run: npx playwright-core install --with-deps chromium
       - run: npm run typecheck
       - run: npm test

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "mappings": [
+    {
+      "pattern": "**/*.html",
+      "engine": "django"
+    },
+    {
+      "pattern": "**/*.jinja",
+      "engine": "jinja2"
+    },
+    {
+      "pattern": "**/*.mako",
+      "engine": "mako"
+    },
+    {
+      "pattern": "**/*.tornado",
+      "engine": "tornado"
+    }
+  ],
+  "roots": [
+    "."
+  ],
+  "profiles": {
+    "ada": {
+      "name": "Ada",
+      "items": [
+        "Tea",
+        "Coffee"
+      ]
+    }
+  },
+  "options": {
+    "jinja2": {
+      "autoescape": true
+    }
+  }
+}
