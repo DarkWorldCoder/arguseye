@@ -89,7 +89,7 @@ export async function run(): Promise<void> {
   };
   const shell = 'import { TenantShell } from "@/components/TenantShell"; export default function Layout({ children }) { return ';
   await replaceLayout(shell + '<TenantShell tenant={authenticatedTenant}>{children}</TenantShell>; }');
-  const deal = path.join(nextRoot, "components/DealBadge.tsx");
+  const deal = vscode.Uri.file(path.join(nextRoot, "components/DealBadge.tsx")).fsPath;
   await vscode.commands.executeCommand("componentPreview.open", vscode.Uri.file(deal));
   const isolated = await api.waitForStatus((s) => s.file === deal && s.status === "mounted" && !!s.warnings?.some((w) => w.includes("Skipped inferred wrapper TenantShell")), 20000);
   assert.deepEqual(isolated.errors, []);

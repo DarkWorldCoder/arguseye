@@ -8,12 +8,12 @@
     "source": "github"
   },
   "websiteUrl": "https://darkworldcoder.github.io/arguseye/",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@ayushniroula/arguseye",
-      "version": "0.0.17",
+      "version": "0.0.18",
       "transport": {
         "type": "stdio"
       },

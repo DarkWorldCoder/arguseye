@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.0.17 — 2026-11-03
+## 0.0.18 — 2026-11-03
+
+The 0.0.17 candidate was withheld after its new Windows VS Code test compared an unnormalized drive-letter path with VS Code’s normalized URI path. The component mounted successfully; this release corrects the assertion without changing time limits. Version 0.0.17 was not published to npm or the extension registries.
 
 - Skip automatically inferred JSX wrappers whose runtime attributes or spreads cannot be reconstructed, so an authenticated dashboard shell does not crash an otherwise renderable component. Keep usable providers and styles, report the skipped wrapper and inputs as incomplete context, and expose those warnings in VS Code. Unsaved layout repairs rebuild the inferred chain; errors in the target and explicit setup remain errors.
 

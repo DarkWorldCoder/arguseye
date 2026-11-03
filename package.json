@@ -2,7 +2,7 @@
   "name": "arguseye",
   "displayName": "Arguseye",
   "description": "Preview real components and native Django, Jinja2, Handlebars, PHP and Ruby templates. Inspect UI edits from coding agents and VS Code without starting the app.",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "mcpName": "io.github.DarkWorldCoder/arguseye",
   "publisher": "ayushniroula",
   "license": "MIT",
