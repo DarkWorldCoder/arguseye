@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.16 — 2026-11-03
+
+Preview native templates using the project’s real engine and explicit JSON context, then inspect the same capture and comparison evidence in coding agents and VS Code.
+
+- Add 21 installed engine adapters: Handlebars, Mustache, EJS, Pug, Nunjucks, LiquidJS, Eta, doT; Django, Jinja2, Mako, Tornado; Twig, standalone Blade, Smarty, Latte, PHP views; ERB, Haml, Slim and native Ruby Liquid. Projects supply their own runtimes and packages. Other engines need a native JSON-lines harness and separate validation.
+- Add `arguseye.templates.json` for engine mappings, native runtime paths, roots, static assets, JSON data profiles and explicit setup. MCP and CLI accept `engine` and `profile`; baseline comparisons replay resolved context, viewport and engine identity. Missing lookups and unavailable tracing remain explicit.
+- Add editor, editor-tab and Explorer right-click previews, selecting the clicked file even when another editor is active. Unsaved templates, partials and supported setup imports reach the shared engine; engine/profile controls and JSON context are available in the VS Code panel. Template edits reset DOM state. Script-bearing templates use a fresh document so initialization runs again.
+- Package bounded persistent native workers with cancellation, deadlines, source provenance and canonical template/static loaders. These are trusted local programs, not an OS sandbox. Django views, Laravel services, Rails controllers, authentication and backend state are not reconstructed. Arbitrary PHP imports read saved files.
+- Report missing, corrupt and still-loading font faces as incomplete evidence instead of accepting fallback fonts. Test an actual licensed font, font failures and unchanged baseline replay. Keep the one-second asset-settling bound.
+- Normalize native PHP overlay paths and Ruby canonical roots on Windows. Validate native engine fixtures, MCP and extracted VSIX workflows on Linux x64, Windows x64 and macOS 15 ARM64 without loosening performance limits.
+
 ## 0.0.15 — 2026-11-02
 
 Plain-script website widgets render, and Next.js components whose imports reach Node's `Buffer` or `crypto` (for example through a NextAuth config) load with Next's own browser polyfills.

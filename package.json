@@ -1,8 +1,8 @@
 {
   "name": "arguseye",
   "displayName": "Arguseye",
-  "description": "Render React, browser-compatible Next.js, Vue and Svelte components from real source. Visual evidence for coding agents and VS Code, without starting the app.",
-  "version": "0.0.15",
+  "description": "Preview real components and native Django, Jinja2, Handlebars, PHP and Ruby templates. Inspect UI edits from coding agents and VS Code without starting the app.",
+  "version": "0.0.16",
   "mcpName": "io.github.DarkWorldCoder/arguseye",
   "publisher": "ayushniroula",
   "license": "MIT",
@@ -172,7 +172,11 @@
     "screenshot",
     "lit",
     "web-components",
-    "html"
+    "html",
+    "django",
+    "jinja2",
+    "handlebars",
+    "templates"
   ],
   "icon": "assets/icon.png",
   "galleryBanner": {

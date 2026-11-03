@@ -1,4 +1,4 @@
-# Adapter and client conformance (0.0.14)
+# Adapter and client conformance (0.0.16)
 
 Support means the bounded behaviors below have installed fixtures. It does not mean every package, backend, framework plugin or coding client is certified.
 
@@ -38,6 +38,6 @@ Live-update timing checks measure the notification of the expected visible DOM m
 
 Local execution on this workstation proves Linux only. Windows/macOS results must come from their native jobs. The SDK's success does not establish that a particular coding-client version displays all fields correctly. Keep actual client/version/transport checks distinct from installation-format tests and from the VS Code extension. Do not turn unexecuted platform/client checks into release claims.
 
-## Native template adapters on the development branch
+## Native template adapters
 
-[Native template contracts](templates.md) define the Node/Python/PHP/Ruby engine matrix and custom JSON-lines bridge. Installed fixtures exercise source escaping, includes, dependency edits, setup code overlays, error recovery and baseline context replay. A licensed DejaVu Sans Mono fixture checks real font loading; missing and corrupt font faces keep captures incomplete. Workers are packaged with the shared renderer; a local Linux result does not establish Windows/macOS native execution. Handlebars has its own p95 warm-render check over 20 renders at the unchanged 100 ms limit. Interpreters, explicit setup and compiled server harnesses have separate cold-start costs. Unknown runtimes require an actual adapter and installed conformance evidence. No universal server-template support is claimed.
+[Native template contracts](templates.md) define the Node/Python/PHP/Ruby engine matrix and custom JSON-lines bridge. Installed fixtures exercise source escaping, includes, dependency edits, setup code overlays, error recovery and baseline context replay. A licensed DejaVu Sans Mono fixture checks real font loading; missing and corrupt font faces keep captures incomplete. Workers are packaged with the shared renderer. [Run 41601692386](https://github.com/DarkWorldCoder/arguseye/actions/runs/41601692386) passed native framework/MCP checks and extracted VSIX integration on Linux x64, Windows x64 and macOS 15 ARM64 at source `d048e1a`. Exact release packages are checked again by the release workflow; local Linux evidence alone does not establish another platform’s behavior. Handlebars has its own p95 warm-render check over 20 renders at the unchanged 100 ms limit. Interpreters, explicit setup and compiled server harnesses have separate cold-start costs. Unknown runtimes require an actual adapter and installed conformance evidence. No universal server-template support is claimed.

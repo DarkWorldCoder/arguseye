@@ -2,7 +2,7 @@
 
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 
-Version scope: the 0.0.15 candidate adds plain-script widgets, project-owned Next.js browser polyfills, explicit reduced-motion evidence for static captures and bounded image decoding. It includes 0.0.14's project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.
+Version scope: 0.0.16 adds native Node/Python/PHP/Ruby template previews, JSON context profiles, template right-click actions and explicit failed-font evidence. It retains 0.0.15’s plain-script widgets, project-owned Next.js browser polyfills, explicit reduced-motion evidence for static captures and bounded image decoding. It includes 0.0.14's project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.
 
 ## What is implemented
 
@@ -53,6 +53,6 @@ Added: render inside the call site's parent box (`list_usages` context, `render_
 ## Performance (2026-10-29, WiseAdmit latest-front, 1,197 files)
 Before: warm-up 32 s and skipped, first render 11–13 s, server 1.8–2.8 GB. After: ready 2–11 s, first render 1.5 s, section 0.9 s, warm 0.3 s, server ~500–750 MB. Levers: crawl once per file version, bundle worker process, cjs-module-lexer, package CSS inlined, minified bundles, modulepreload graph, route page pre-warm, usage index in warm-up, barrel rewrite, eager lazy images. Still open: server memory (transform cache + usage index + bundles in memory), V8 code cache via a persistent browser profile, HTTP/2 for module fetches.
 
-## Template preview work on the development branch
+## Native template previews (0.0.16+)
 
-Native template workers share the existing HTML renderer and evidence contracts. Context is explicit JSON, and includes/layouts use the real engine. VS Code adds URI-aware editor/tab/Explorer context actions, engine/profile controls and a JSON context editor. See [the tested scope and limitations](templates.md); these additions are not present in published 0.0.15 artifacts. Unknown engines require a native adapter and their own conformance evidence.
+Native template workers share the existing HTML renderer and evidence contracts. Context is explicit JSON, and includes/layouts use the real engine. VS Code adds URI-aware editor/tab/Explorer context actions, engine/profile controls and a JSON context editor. See [the tested scope and limitations](templates.md); these additions require 0.0.16 or later. Unknown engines require a native adapter and their own conformance evidence.

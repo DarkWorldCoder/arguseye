@@ -1,6 +1,6 @@
 # Native template previews
 
-Implementation on `feat/template-previews`; this does not change the published 0.0.15 packages. Native template adapters require native compilation mode; Vite compatibility mode does not implement this bridge. Templates use the project's real engine and interpreter, then the existing Chromium renderer, screenshot, accessibility snapshot and baseline comparison. No application server or story is required. A browser preview does not reproduce an email client's rendering.
+Native template previews require 0.0.16 or later; 0.0.15 does not include them. Native template adapters require native compilation mode; Vite compatibility mode does not implement this bridge. Templates use the project's real engine and interpreter, then the existing Chromium renderer, screenshot, accessibility snapshot and baseline comparison. No application server or story is required. A browser preview does not reproduce an email client's rendering.
 
 ## Choose an engine and supply data
 
@@ -42,7 +42,7 @@ Profiles can also name a JSON file, for example `"example": "preview-data/exampl
 
 ## Built-in adapters and limits
 
-Installed fixtures exercise these engine families on the development machine; cross-platform CI is configured separately and must pass before release.
+Installed fixtures exercise these engine families. Native rendering, MCP contracts and extracted VS Code integration passed on Linux x64, Windows x64 and macOS 15 ARM64 for source `d048e1a` ([retained run](https://github.com/DarkWorldCoder/arguseye/actions/runs/41601692386)); each release separately validates its exact packages.
 
 | Runtime | Engines and fixture versions | Scope |
 | --- | --- | --- |

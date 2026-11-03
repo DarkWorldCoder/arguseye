@@ -15,11 +15,11 @@ Your project's dependencies must be installed. Headless CLI and MCP use also req
 
 Release builds target **Windows x64, macOS Apple Silicon, and Linux x64**. Screenshots below were captured in a real VS Code extension host on Linux; Windows and macOS builds are packaged separately. Images use public HTTPS URLs and load independently of your operating system.
 
-## Native template previews (development branch)
+## Native template previews
 
 Preview Django, Jinja2, Handlebars, Mustache, EJS, Pug, Nunjucks, LiquidJS and other native Node/Python/PHP/Ruby templates with explicit JSON context and your own installed engines. Right-click a template in VS Code, select **Preview Component**, choose its engine/data profile and compare unsaved edits against a baseline. No app server or stories are needed.
 
-This work is not in the published 0.0.15 packages yet. See the [engine matrix, configuration and native-adapter protocol](https://github.com/DarkWorldCoder/arguseye/blob/feat/template-previews/docs/templates.md) for exact scopes and limits. “All engines” means an extensible native bridge, not a claim that every framework runs automatically.
+Native template previews require 0.0.16 or later. See the [engine matrix, configuration and native-adapter protocol](https://github.com/DarkWorldCoder/arguseye/blob/main/docs/templates.md) for exact scopes and limits. “All engines” means an extensible native bridge, not a claim that every framework runs automatically.
 
 ## A preview that follows your work
 
