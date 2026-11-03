@@ -71,7 +71,7 @@ export function detectAppContext(
     context.globalCss.push(
       ...module.staticImports.map((imp) => imp.moduleRequest.value).filter((spec) => STYLE.test(spec)).flatMap((spec) => resolver.resolveFileSync(file, spec).path ?? []),
     );
-    context.wrappers.push(...wrapperChain(program, code, warnings));
+    context.wrappers.push(...wrapperChain(program, code, warnings, path.relative(root, file)));
     if (file === entry) readHtmlBodyClasses(program, context, entry, warnings, resolveClass);
   }
   return context;
@@ -144,10 +144,10 @@ const HOST_SKIP = new Set(["html", "body", "head"]);
 
 /**
  * The JSX ancestors of `{children}` in the layout's default export. Providers are kept with the literal props
- * the layout passes; props that need runtime values are dropped. Elements defined in the layout file itself
- * cannot be imported, so they are skipped.
+ * the layout passes. Wrappers with missing runtime inputs cannot be reconstructed safely and are skipped,
+ * as are elements defined in the layout file itself, which cannot be imported.
  */
-function wrapperChain(program: any, code: string, warnings: string[]): Wrapper[] {
+function wrapperChain(program: any, code: string, warnings: string[], file: string): Wrapper[] {
   const imports = new Map<string, { source: string; importName: string }>();
   for (const node of program.body) {
     if (node.type !== "ImportDeclaration") continue;
@@ -215,26 +215,32 @@ function wrapperChain(program: any, code: string, warnings: string[]): Wrapper[]
     const name = el.openingElement.name;
     const props: Record<string, unknown> = {};
     const refs: Record<string, Ref> = {};
+    const unresolved: string[] = [];
     // Root attributes are handled separately, including imported font classes.
     const attributes = name.type === "JSXIdentifier" && HOST_SKIP.has(name.name) ? [] : el.openingElement.attributes;
     for (const attr of attributes) {
-      if (attr.type !== "JSXAttribute" || attr.name.type !== "JSXIdentifier") { warnings.push("Runtime provider input omitted: " + code.slice(attr.start, attr.end)); continue; }
+      if (attr.type !== "JSXAttribute" || attr.name.type !== "JSXIdentifier") { unresolved.push(code.slice(attr.start, attr.end)); continue; }
       const expr = attr.value?.type === "JSXExpressionContainer" ? attr.value.expression : undefined;
       const ref = expr ? importedRef(expr, imports, code) ?? localRef(expr) : undefined;
       if (ref) { refs[attr.name.name] = ref; continue; }
       try {
         props[attr.name.name] = attr.value === null ? true : expr ? literal(expr) : literal(attr.value);
       } catch {
-        warnings.push("Runtime provider input omitted: " + code.slice(attr.start, attr.end));
+        unresolved.push(code.slice(attr.start, attr.end));
       }
     }
+    warnings.push(...unresolved.map((input) => "Runtime provider input omitted: " + input));
     if (name.type === "JSXIdentifier" && /^[a-z]/.test(name.name)) {
       if (!HOST_SKIP.has(name.name)) wrappers.push({ kind: "host", tag: name.name, props });
     } else {
       const rootName = name.type === "JSXMemberExpression" ? memberRoot(name) : name.type === "JSXIdentifier" ? name.name : undefined;
       const imported = rootName ? imports.get(rootName) : undefined;
       if (!imported) warnings.push("Local layout wrapper could not be imported: " + (rootName ?? "unknown"));
-      else {
+      else if (unresolved.length) {
+        // Mounting a partially inferred shell can crash before the target mounts (e.g. tenant.logo_key).
+        // Keep reconstructable ancestors/descendants, but never invent authenticated application data.
+        warnings.push(`${file}: Skipped inferred wrapper ${code.slice(name.start, name.end)} because runtime inputs could not be reconstructed: ${unresolved.join(", ")}. Use an explicit preview setup to supply application context.`);
+      } else {
         const member = name.type === "JSXMemberExpression" ? code.slice(name.start, name.end).split(".").slice(1).join(".") : undefined;
         wrappers.push({ kind: "component", source: imported.source, importName: imported.importName, member, props, ...(Object.keys(refs).length ? { refs } : {}) });
       }

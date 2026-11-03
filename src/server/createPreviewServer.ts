@@ -138,9 +138,10 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     return source;
   };
   let fonts = createFontContext(options.root, readContextSource);
+  const contextFiles = new Set<string>();
   const appContext = (route?: string) => {
     if (route) access.assert(route);
-    const context = detectAppContext(options.root, readContextSource, route, fonts.resolveClass);
+    const context = detectAppContext(options.root, (file) => { contextFiles.add(file); return readContextSource(file); }, route, fonts.resolveClass);
     if (!setupFiles.jsx) return context;
     readContextSource(setupFiles.jsx);
     return { ...context, entry: setupFiles.jsx, wrappers: [{ kind: "component" as const, source: setupFiles.jsx, importName: "default", props: {} }], layouts: [path.relative(options.root, setupFiles.jsx)] };
@@ -299,7 +300,8 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         return deps.ensureBuilt().then(() => broadcast({ kind: "reload", file, epoch: ++epoch, versions: { ...versions }, full: true }));
       }).catch((error) => { serveErrors.push({ url: file, message: String(error), at: Date.now() }); });
     }
-    const kind = isStylesheet(file) ? "css" : graph.isRefreshBoundary(file) ? "refresh" : "reload";
+    // Inferred wrappers are generated from layout source: refreshing the raw layout would keep the old chain.
+    const kind = isStylesheet(file) ? "css" : !contextFiles.has(file) && graph.isRefreshBoundary(file) ? "refresh" : "reload";
     if (kind === "reload") epoch++;
     const update: Update = { kind, file, epoch, versions: { ...versions } };
     broadcast(update);
@@ -379,7 +381,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
         // Nested layouts' own global CSS (e.g. a template importing "swiper/css") loads with the wrapper.
         const rootCss = new Set(appContext().globalCss);
         const css = route ? app.globalCss.filter((f) => !rootCss.has(f)) : [];
-        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css, router, jsx: graph.jsx })));
+        return send(res, 200, "text/javascript", await graph.loadVirtual(wrapperFile(app.entry), wrapperModule(app.wrappers, { css, router, jsx: graph.jsx }) + `\nexport const warnings = ${JSON.stringify(app.warnings)};`));
       }
       if (url.pathname === "/@graph") {
         // Everything a target will import, so the page can preload it in one parallel batch instead of a waterfall.

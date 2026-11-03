@@ -20,6 +20,8 @@ export type PreviewStatus = {
   file: string;
   status: "loading" | "mounted" | "error";
   errors: string[];
+  /** Missing inferred context remains visible even when the component mounts. */
+  warnings?: string[];
   /** Visible text of the rendered component. */
   text: string;
 };
@@ -340,7 +342,7 @@ class PreviewPanel implements vscode.Disposable {
       if (message.type === "props") return void this.setProps(message.props);
       if (message.type === "export") return void this.setExport(message.exportName);
       if (message.source !== "arguseye") return;
-      this.current = { file: message.file, status: message.status, errors: message.errors, text: message.text };
+      this.current = { file: message.file, status: message.status, errors: message.errors, warnings: message.warnings ?? [], text: message.text };
       this.statusChanged.fire(this.current);
     });
     panel.onDidDispose(() => {
@@ -404,6 +406,8 @@ function webviewHtml(origin: string, pageUrl: string): string {
   iframe { display: block; border: 0; background: #fff; width: 1280px; height: 800px; transform-origin: top left; }
   #status { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   #status.error { background: var(--vscode-errorForeground); color: #fff; }
+  #contextWarnings { padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); }
+  #contextWarnings pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 120px; overflow: auto; }
   #bar .group { display: inline-flex; gap: 4px; align-items: center; }
   #bar button.on { outline: 1px solid var(--vscode-focusBorder); }
   #verification { padding: 8px; border-top: 1px solid var(--vscode-panel-border); max-height: 45%; overflow: auto; }
@@ -436,6 +440,7 @@ function webviewHtml(origin: string, pageUrl: string): string {
   <span class="group"><button id="capture">Capture Baseline</button><button id="compare" disabled>Compare Changes</button></span>
   <button id="toggle" title="Edit props">Props</button>
 </div>
+<details id="contextWarnings" hidden><summary>Incomplete preview context</summary><pre></pre></details>
 <div id="main">
   <div id="stage"><div id="frameBox"><iframe id="preview" title="Component preview" src="${pageUrl}" allow="clipboard-read; clipboard-write"></iframe></div></div>
   <div id="props"></div>
@@ -468,8 +473,13 @@ addEventListener("message", (event) => {
   const data = event.data;
   if (event.source === frame.contentWindow && data?.source === "arguseye") {
     vscode.postMessage(data);        // from the preview page
-    statusChip.textContent = data.status === "error" ? (data.errors?.length ?? 1) + " error" + ((data.errors?.length ?? 1) === 1 ? "" : "s") : data.status === "mounted" ? "rendered" : data.status;
+    const warnings = data.warnings ?? [];
+    statusChip.textContent = data.status === "error" ? (data.errors?.length ?? 1) + " error" + ((data.errors?.length ?? 1) === 1 ? "" : "s") : data.status === "mounted" ? warnings.length ? "rendered · context incomplete" : "rendered" : data.status;
     statusChip.className = data.status === "error" ? "error" : "";
+    statusChip.title = warnings.join("\\n") || "Render status";
+    const contextWarnings = document.getElementById("contextWarnings");
+    contextWarnings.hidden = !warnings.length;
+    contextWarnings.querySelector("pre").textContent = warnings.join("\\n");
   }
   else if (data?.type === "show") frame.contentWindow.postMessage({ type: "cp:show", target: data.target }, "*");
   else if (data?.type === "verification") {

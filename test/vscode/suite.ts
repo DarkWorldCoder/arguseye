@@ -78,6 +78,24 @@ export async function run(): Promise<void> {
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(page));
   const followed = await api.waitForStatus((s) => s.file === page && s.status === "mounted", 10000);
   assert.match(followed.text, /Hi Ayush/);
+
+  // An inferred authenticated shell must not blank its target; an unsaved layout repair restores the shell.
+  const nextRoot = path.resolve(root, "../next-app");
+  const layout = await vscode.workspace.openTextDocument(path.join(nextRoot, "app/(shop)/layout.tsx"));
+  const replaceLayout = async (source: string) => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(layout.uri, new vscode.Range(layout.positionAt(0), layout.positionAt(layout.getText().length)), source);
+    assert.ok(await vscode.workspace.applyEdit(edit));
+  };
+  const shell = 'import { TenantShell } from "@/components/TenantShell"; export default function Layout({ children }) { return ';
+  await replaceLayout(shell + '<TenantShell tenant={authenticatedTenant}>{children}</TenantShell>; }');
+  const deal = path.join(nextRoot, "components/DealBadge.tsx");
+  await vscode.commands.executeCommand("componentPreview.open", vscode.Uri.file(deal));
+  const isolated = await api.waitForStatus((s) => s.file === deal && s.status === "mounted" && !!s.warnings?.some((w) => w.includes("Skipped inferred wrapper TenantShell")), 20000);
+  assert.deepEqual(isolated.errors, []);
+  assert.match(isolated.text, /15% off/);
+  await replaceLayout(shell + '<TenantShell tenant={{ logo_key: "North" }}>{children}</TenantShell>; }');
+  await api.waitForStatus((s) => s.file === deal && s.status === "mounted" && !s.warnings?.some((w) => w.includes("Skipped inferred wrapper")), 10000);
   console.log("SUITE OK:", JSON.stringify({ first: `${first.usage}: ${shown.text.slice(0, 40)}`, headphones: headphones.text.slice(0, 40), updated: updated.text.slice(0, 40), followed: followed.text.slice(0, 20) }));
 
   // Native templates use the same URI command, JSON data, baseline and unsaved-dependency path.

@@ -4,6 +4,8 @@ Use setup when Arguseye cannot reconstruct the providers or plugins a component 
 
 Run `npx @ayushniroula/arguseye doctor --root . --json` first, or call MCP `inspect_project {}`. Confirm that the selected root is the application package and read installed-version and configuration diagnostics. Inspection does not execute setup or launch Chromium.
 
+Inferred JSX wrappers with unresolved runtime attributes or spreads are skipped, rather than mounted with missing inputs (for example, a dashboard shell that requires an authenticated tenant). Reconstructable providers, host elements and global styles still apply. The warning names the skipped wrapper, layout and expressions; evidence remains incomplete. The VS Code status and expandable context details expose the same gap. Use an explicit setup to supply the real context your component needs. Errors in the target component or explicit setup still appear as render errors.
+
 ## JSX providers
 
 Create `arguseye.setup.tsx` in the selected project root. Its default export is a wrapper component accepting `children`. This replaces inferred provider/layout wrappers; global styles and root classes still come from the application's detected entry. Reuse real provider modules rather than copying their implementation.

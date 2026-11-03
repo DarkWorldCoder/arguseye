@@ -292,14 +292,18 @@ const parentBox = async (target, since) => {
 };
 
 /** The root layout's providers, loaded once per epoch; a broken layout is reported and the component still renders. */
-let wrapperKey = "", wrapper;
+let wrapperKey = "", wrapper, wrapperWarnings = [];
 const appWrapper = async (since) => {
   const route = cp.target.route ? "&route=" + encodeURIComponent(cp.target.route) : "";
   const key = cp.epoch + route;
-  if (wrapperKey === key && wrapper) return wrapper;
   try {
-    wrapper = (await import("/@wrapper?e=" + cp.epoch + route)).default;
-    wrapperKey = key;
+    if (wrapperKey !== key || !wrapper) {
+      const mod = await import("/@wrapper?e=" + cp.epoch + route);
+      wrapper = mod.default;
+      wrapperWarnings = mod.warnings ?? [];
+      wrapperKey = key;
+    }
+    cp.warnings.push(...wrapperWarnings);
   } catch (error) {
     cp.errors.push(...(await explain(error, since)).map((e) => "Root layout providers could not be loaded: " + e));
     wrapper = ({ children }) => children;
@@ -356,7 +360,7 @@ cp.report = () => {
   if (window.parent === window) return;
   const root = document.getElementById("root");
   window.parent.postMessage(
-    { source: "arguseye", file: cp.target.file, status: cp.status, errors: [...cp.errors], text: root.innerText },
+    { source: "arguseye", file: cp.target.file, status: cp.status, errors: [...cp.errors], warnings: [...cp.warnings], text: root.innerText },
     "*",
   );
 };
