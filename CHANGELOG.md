@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.17 — 2026-11-03
 
 - Skip automatically inferred JSX wrappers whose runtime attributes or spreads cannot be reconstructed, so an authenticated dashboard shell does not crash an otherwise renderable component. Keep usable providers and styles, report the skipped wrapper and inputs as incomplete context, and expose those warnings in VS Code. Unsaved layout repairs rebuild the inferred chain; errors in the target and explicit setup remain errors.
 
