@@ -4,14 +4,18 @@ require 'digest'
 require 'stringio'
 $cp_state = nil
 $cp_cache = {}
+def cp_key(file)
+  expanded = File.expand_path(file)
+  File::ALT_SEPARATOR ? expanded.downcase : expanded
+end
 def cp_read(file, code=false)
   file = File.expand_path(file)
   $cp_state['dependencies'][file] = true
   physical = File.exist?(file) ? File.realpath(file) : File.join(File.realpath(File.dirname(file)), File.basename(file))
-  unless (code ? [File.realpath($cp_state['root'])] : $cp_state['roots']).any? { |root| physical == root || physical.start_with?(root + File::SEPARATOR) }
+  unless (code ? [File.realpath($cp_state['root'])] : $cp_state['roots']).any? { |root| physical == File.realpath(root) || physical.start_with?(File.realpath(root) + File::SEPARATOR) }
     raise IOError, 'Template include is outside approved roots: ' + file
   end
-  source = $cp_state['overlays'].fetch(file) { File.read(file, encoding: 'UTF-8') }
+  source = $cp_state['overlays'].fetch(cp_key(file)) { File.read(file, encoding: 'UTF-8') }
   raise IOError, 'Template source exceeds 1 MiB: ' + file if source.bytesize > 1048576
   $cp_state['sources'][file] = Digest::SHA256.hexdigest(source)
   source
@@ -19,7 +23,7 @@ end
 def cp_locate(name)
   $cp_state['dirs'].each do |dir|
     file = File.expand_path(name, dir)
-    return file if File.file?(file) || $cp_state['overlays'].key?(file)
+    return file if File.file?(file) || $cp_state['overlays'].key?(cp_key(file))
   end
   raise IOError, 'Template not found: ' + name
 end
@@ -27,6 +31,7 @@ STDIN.each_line do |line|
   req = nil
   begin
     req = JSON.parse(line)
+    req['overlays'] = req['overlays'].to_h { |file, source| [cp_key(file), source] }
     $cp_state = req.merge('dependencies' => {}, 'sources' => {})
     original_stdout = $stdout; $stdout = $stderr
     if File.file?(File.join(req['root'], 'Gemfile'))

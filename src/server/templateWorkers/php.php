@@ -1,6 +1,7 @@
 <?php
 /** Native Composer engines. Project code is trusted; template loader reads are bounded and overlay-aware. */
 $state = [];
+function cp_key($file) { $file = str_replace('\\', '/', $file); return PHP_OS_FAMILY === 'Windows' ? strtolower($file) : $file; }
 function cp_read($file, $code = false) {
     global $state;
     $file = str_replace('\\', '/', $file);
@@ -11,7 +12,7 @@ function cp_read($file, $code = false) {
     $allowed = false;
     foreach (($code ? [realpath($state['root'])] : $state['roots']) as $root) { $root = rtrim(str_replace('\\', '/', $root), '/'); if ($real === $root || str_starts_with($real, $root . '/')) $allowed = true; }
     if (!$allowed) throw new RuntimeException('Template include is outside approved roots: ' . $file);
-    if (array_key_exists($file, $state['overlays'])) { $state['sources'][$file] = hash('sha256', $state['overlays'][$file]); return $state['overlays'][$file]; }
+    if (array_key_exists(cp_key($file), $state['overlays'])) { $state['sources'][$file] = hash('sha256', $state['overlays'][cp_key($file)]); return $state['overlays'][cp_key($file)]; }
     if (!is_file($file)) throw new RuntimeException('Template not found: ' . $file);
     $source = file_get_contents($file);
     if (strlen($source) > 1048576) throw new RuntimeException('Template source exceeds 1 MiB: ' . $file);
@@ -23,7 +24,7 @@ function cp_locate($name, $parent = null) {
     $dirs = $parent ? array_merge([dirname($parent)], $state['dirs']) : $state['dirs'];
     foreach ($dirs as $dir) {
         $file = preg_match('~^(?:[A-Za-z]:[/\\\\]|/)~', $name) ? $name : $dir . '/' . $name;
-        if (is_file($file) || array_key_exists(str_replace('\\', '/', $file), $state['overlays'])) { cp_read($file); return $file; }
+        if (is_file($file) || array_key_exists(cp_key($file), $state['overlays'])) { cp_read($file); return $file; }
     }
     throw new RuntimeException('Template not found: ' . $name);
 }
@@ -50,13 +51,15 @@ while (($line = fgets(STDIN)) !== false) {
     $req = null; $level = ob_get_level();
     try {
         $req = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+        // PHP loaders use forward slashes; Node supplies native Windows separators in buffer keys.
+        $req['overlays'] = array_combine(array_map('cp_key', array_keys($req['overlays'])), array_values($req['overlays']));
         $state = $req + ['dependencies' => []]; $state['dependencies'] = []; $state['sources'] = [];
         ob_start();
         $autoload = $req['root'] . '/vendor/autoload.php';
         if (is_file($autoload)) require_once $autoload;
         $options = $req['options'] ?? []; $data = $req['props'] ?? [];
         $helpers = [];
-        if (!empty($req['setup'])) { $setupSource = cp_read($req['setup'], true); $setup = array_key_exists(str_replace('\\', '/', $req['setup']), $state['overlays']) ? eval(cp_eval_source($setupSource, $req['setup'])) : require $req['setup']; $helpers = is_callable($setup) ? $setup($req['engine']) : ($setup ?? []); }
+        if (!empty($req['setup'])) { $setupSource = cp_read($req['setup'], true); $setup = array_key_exists(cp_key($req['setup']), $state['overlays']) ? eval(cp_eval_source($setupSource, $req['setup'])) : require $req['setup']; $helpers = is_callable($setup) ? $setup($req['engine']) : ($setup ?? []); }
         $engine = $req['engine']; $package = null;
         if ($engine === 'twig') {
             if (!class_exists('Twig\Environment')) throw new RuntimeException("Install this project's twig/twig package with Composer.");
@@ -110,7 +113,7 @@ while (($line = fgets(STDIN)) !== false) {
             $html = $factory->file($req['file'], $data)->render(); $package = 'illuminate/view';
         } elseif ($engine === 'php') {
             $source = cp_read($req['file']);
-            $overlay = array_key_exists(str_replace('\\', '/', $req['file']), $state['overlays']);
+            $overlay = array_key_exists(cp_key($req['file']), $state['overlays']);
             $html = (static function($source, $data, $file, $overlay) { extract($data, EXTR_SKIP); ob_start(); try { if ($overlay) eval(cp_eval_source($source, $file)); else require $file; return ob_get_contents(); } finally { ob_end_clean(); } })($source, $data, $req['file'], $overlay);
         } else throw new RuntimeException('Unsupported PHP engine: ' . $engine);
         $printed = ob_get_clean(); if ($printed !== '') fwrite(STDERR, $printed);

@@ -82,7 +82,7 @@ export async function run(): Promise<void> {
 
   // Native templates use the same URI command, JSON data, baseline and unsaved-dependency path.
   const templates = process.env.CP_TEMPLATE_ROOT!;
-  const templateFile = path.join(templates, "card.hbs");
+  const templateFile = vscode.Uri.file(path.join(templates, "card.hbs")).fsPath;
   const partial = await vscode.workspace.openTextDocument(path.join(templates, "items.hbs"));
   const earlyEdit = new vscode.WorkspaceEdit();
   earlyEdit.replace(partial.uri, new vscode.Range(partial.positionAt(0), partial.positionAt(partial.getText().length)), '<p>Before-open {{name}}</p>');
