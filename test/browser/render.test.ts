@@ -114,9 +114,10 @@ describe("headless render (what an agent gets back)", () => {
     await renderer.render({ file: card, exportName: "ProductCard", props: { title: "Warm-up", price: 1 } });
 
     const timings: number[] = [];
+    const phases: string[] = [];
     let last;
     for (const price of Array.from({ length: 20 }, (_, i) => i + 1)) {
-      last = await renderer.render({ file: card, exportName: "ProductCard", props: { title: "Lamp", price } });
+      last = await renderer.render({ file: card, exportName: "ProductCard", props: { title: "Lamp", price } }, { onProgress: (event) => { phases.push(event.phase); } });
       timings.push(last.ms);
       if (last.ms > 100) console.log("warm render over budget", JSON.stringify(last.timings));
     }
@@ -125,6 +126,7 @@ describe("headless render (what an agent gets back)", () => {
     const p95 = [...timings].sort((a, b) => a - b)[Math.ceil(timings.length * 0.95) - 1];
     console.log("warm render p95", p95, "ms; samples", timings.join(","));
     expect(p95).toBeLessThanOrEqual(100);
+    expect(phases.filter((phase) => phase === "capture")).toHaveLength(20);
   });
 
   it("finds where a component is used and the real props each usage passes", async () => {

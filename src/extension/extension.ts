@@ -22,6 +22,8 @@ export type PreviewStatus = {
   errors: string[];
   /** Missing inferred context remains visible even when the component mounts. */
   warnings?: string[];
+  /** Current real work phase, cleared when the rendered page reports its final status. */
+  message?: string;
   /** Visible text of the rendered component. */
   text: string;
 };
@@ -174,48 +176,69 @@ class PreviewPanel implements vscode.Disposable {
   private async show(document: vscode.TextDocument, exportName?: string, engine?: string, profile?: string) {
     const sequence = ++this.showSequence;
     const file = document.fileName;
-    const root = projectRoot(file);
-    const server = await this.server(root);
-    const source = document.getText();
-    if (document.isDirty && this.buffers.get(file) !== source) { server.updateBuffer(file, source); this.buffers.set(file, source); }
-    let index = this.indexes.get(root);
-    if (!index) { index = createUsageIndex(root, { readSource: server.readSource, version: server.version }); this.indexes.set(root, index); }
-    const templateLike = isTemplateFile(file) || file.endsWith(".html");
-    const info = templateLike ? server.templateInfo?.(file) : undefined;
-    if (!engine && file.endsWith(".tpl") && !info?.engine) engine = await vscode.window.showQuickPick(info?.engines ?? [], { placeHolder: "Choose this template's native engine" });
-    if (file.endsWith(".tpl") && !engine && !info?.engine) return;
-    const native = engine ?? info?.engine;
-    const target = native ? { ...server.templateTarget!({ file, engine: native, profile }), propsSource: "given" as const } : await this.targetFor(root, file, source, exportName);
-    target.route = native ? undefined : await routeFor(root, file, target.exportName, undefined, (f: string, x?: string) => findUsages(root, f, x));
-    target.theme = this.forcedTheme();
-    const usages = native ? [] : await index.list(file, target.exportName);
-    const schema = await propsSchema(file, target.exportName, server.readSource).catch(() => []);
-    if (sequence !== this.showSequence || !this.panel) return;
-    this.baseline = undefined;
-    this.state = {
-      file,
-      exportName: target.exportName,
-      exports: native ? [] : listExports(file, source),
-      engine: native, engines: info?.engines, profile, profiles: info?.profiles,
-      props: target.props ?? {},
-      propsSource: target.propsSource,
-      schema, usages, usage: target.propsSource === "usage" ? usages.find((u) => JSON.stringify(u.props) === JSON.stringify(target.props))?.id : undefined,
-      viewport: this.state?.viewport ?? "desktop",
-      theme: this.state?.theme ?? "auto",
+    if (!this.panel) return;
+    if (!this.shownRoot) this.panel.webview.html = loadingHtml();
+    const progress = (message: string) => {
+      if (sequence !== this.showSequence || !this.panel) return;
+      this.current = { file, status: "loading", errors: [], text: "", message };
+      this.statusChanged.fire(this.current);
+      void this.panel.webview.postMessage({ type: "progress", message });
     };
-    this.current = { file, status: "loading", errors: [], text: "" };
-    const { generation } = await server.prepare(file, undefined, undefined, target.engine);
-    if (sequence !== this.showSequence || !this.panel) return;
-    if (this.shownRoot !== root || this.shownGeneration !== generation) {
-      this.shownRoot = root;
-      this.shownGeneration = generation;
-      const origin = (await vscode.env.asExternalUri(vscode.Uri.parse(server.url))).toString().replace(/\/$/, "");
-      this.panel!.webview.html = webviewHtml(origin, `${origin}${server.pageUrl(target)}`);
-    } else {
-      void this.panel!.webview.postMessage({ type: "show", target });
+    progress("Reading component");
+    try {
+      const root = projectRoot(file);
+      const server = await this.server(root);
+      progress("Resolving usage props");
+      const source = document.getText();
+      if (document.isDirty && this.buffers.get(file) !== source) { server.updateBuffer(file, source); this.buffers.set(file, source); }
+      let index = this.indexes.get(root);
+      if (!index) { index = createUsageIndex(root, { readSource: server.readSource, version: server.version }); this.indexes.set(root, index); }
+      const templateLike = isTemplateFile(file) || file.endsWith(".html");
+      const info = templateLike ? server.templateInfo?.(file) : undefined;
+      if (!engine && file.endsWith(".tpl") && !info?.engine) engine = await vscode.window.showQuickPick(info?.engines ?? [], { placeHolder: "Choose this template's native engine" });
+      if (file.endsWith(".tpl") && !engine && !info?.engine) return;
+      const native = engine ?? info?.engine;
+      const target = native ? { ...server.templateTarget!({ file, engine: native, profile }), propsSource: "given" as const } : await this.targetFor(root, file, source, exportName);
+      target.route = native ? undefined : await routeFor(root, file, target.exportName, undefined, (f: string, x?: string) => findUsages(root, f, x));
+      target.theme = this.forcedTheme();
+      const usages = native ? [] : await index.list(file, target.exportName);
+      const schema = await propsSchema(file, target.exportName, server.readSource).catch(() => []);
+      if (sequence !== this.showSequence || !this.panel) return;
+      this.baseline = undefined;
+      this.state = {
+        file,
+        exportName: target.exportName,
+        exports: native ? [] : listExports(file, source),
+        engine: native, engines: info?.engines, profile, profiles: info?.profiles,
+        props: target.props ?? {},
+        propsSource: target.propsSource,
+        schema, usages, usage: target.propsSource === "usage" ? usages.find((u) => JSON.stringify(u.props) === JSON.stringify(target.props))?.id : undefined,
+        viewport: this.state?.viewport ?? "desktop",
+        theme: this.state?.theme ?? "auto",
+      };
+      progress("Preparing dependencies and styles");
+      const { generation } = await server.prepare(file, undefined, undefined, target.engine);
+      if (sequence !== this.showSequence || !this.panel) return;
+      progress("Rendering preview");
+      if (this.shownRoot !== root || this.shownGeneration !== generation) {
+        this.shownRoot = root;
+        this.shownGeneration = generation;
+        const origin = (await vscode.env.asExternalUri(vscode.Uri.parse(server.url))).toString().replace(/\/$/, "");
+        this.panel!.webview.html = webviewHtml(origin, `${origin}${server.pageUrl(target)}`);
+      } else {
+        void this.panel!.webview.postMessage({ type: "show", target });
+      }
+      void this.panel!.webview.postMessage({ type: "state", state: this.state });
+      this.panel!.title = `Preview: ${path.basename(file)}`;
+    } catch (error) {
+      if (sequence === this.showSequence) {
+        const message = String((error as Error).message ?? error);
+        this.current = { file, status: "error", errors: [message], text: "", message };
+        this.statusChanged.fire(this.current);
+        void this.panel?.webview.postMessage({ type: "progress", message, status: "error" });
+      }
+      throw error;
     }
-    void this.panel!.webview.postMessage({ type: "state", state: this.state });
-    this.panel!.title = `Preview: ${path.basename(file)}`;
   }
 
   private async setProps(props: Record<string, unknown>) {
@@ -310,7 +333,7 @@ class PreviewPanel implements vscode.Disposable {
   private async captureBaseline(): Promise<RenderResult> {
     if (!this.state) throw new Error("Open a preview first.");
     const renderer = await this.verificationRenderer();
-    const result = await renderer.render({ file: this.state.file, engine: this.state.engine, profile: this.state.profile, templateResolved: true, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport], theme: this.forcedTheme() });
+    const result = await renderer.render({ file: this.state.file, engine: this.state.engine, profile: this.state.profile, templateResolved: true, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport], theme: this.forcedTheme() }, { onProgress: this.verificationProgress() });
     this.baseline = result.captureId;
     await this.panel?.webview.postMessage({ type: "verification", message: result.captureId ? "Baseline captured" + (result.warnings.length ? ": " + result.warnings.join("; ") : ".") : result.errors.join("\n"), baseline: !!this.baseline });
     return result;
@@ -319,9 +342,14 @@ class PreviewPanel implements vscode.Disposable {
   private async compareChanges(): Promise<DiffResult> {
     if (!this.baseline) throw new Error("Capture a baseline before comparing changes.");
     const renderer = await this.verificationRenderer();
-    const result = await renderer.diff(this.baseline);
+    const result = await renderer.diff(this.baseline, { onProgress: this.verificationProgress() });
     await this.panel?.webview.postMessage({ type: "verification", evidence: diffEvidence(result), images: [result.before.png, result.after.png, result.diffPng].map((png) => "data:image/png;base64," + png.toString("base64")), baseline: true });
     return result;
+  }
+
+  private verificationProgress(): NonNullable<import("../agent/createRenderer.js").RenderControl["onProgress"]> {
+    const sequence = this.showSequence;
+    return ({ message }) => { if (sequence === this.showSequence) void this.panel?.webview.postMessage({ type: "progress", message }); };
   }
 
   private createPanel(): vscode.WebviewPanel {
@@ -331,7 +359,11 @@ class PreviewPanel implements vscode.Disposable {
       retainContextWhenHidden: true,
     });
     panel.webview.onDidReceiveMessage((message: any) => {
-      if (message.type === "ready" && this.state) return void panel.webview.postMessage({ type: "state", state: this.state });
+      if (message.type === "ready") {
+        if (this.state) void panel.webview.postMessage({ type: "state", state: this.state });
+        if (this.current?.message) void panel.webview.postMessage({ type: "progress", message: this.current.message, status: this.current.status });
+        return;
+      }
       const act = (work: Promise<unknown>) => void work.catch((error) => panel.webview.postMessage({ type: "verification", message: String(error.message ?? error), baseline: !!this.baseline }));
       if (message.type === "template") return act(this.setTemplate(message.engine, message.profile));
       if (message.type === "usage") return act(this.setUsage(message.id));
@@ -342,6 +374,7 @@ class PreviewPanel implements vscode.Disposable {
       if (message.type === "props") return void this.setProps(message.props);
       if (message.type === "export") return void this.setExport(message.exportName);
       if (message.source !== "arguseye") return;
+      if (message.file !== this.current?.file) return;
       this.current = { file: message.file, status: message.status, errors: message.errors, warnings: message.warnings ?? [], text: message.text };
       this.statusChanged.fire(this.current);
     });
@@ -385,6 +418,18 @@ function projectRoot(file: string): string {
     if (markers.some((name) => existsSync(path.join(dir, name)))) return dir;
     const parent = path.dirname(dir); if (parent === dir) return fallback; dir = parent;
   }
+}
+
+/** Gives cold startup a readable status before a preview origin or iframe exists. */
+function loadingHtml(): string {
+  const nonce = Math.random().toString(36).slice(2);
+  return `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}';">
+<style nonce="${nonce}">body { margin: 0; padding: 24px; font: 13px var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); }</style>
+</head><body><p id="status" role="status" aria-live="polite" aria-atomic="true">Reading component</p>
+<script nonce="${nonce}">const vscode = acquireVsCodeApi();
+addEventListener("message", (event) => { if (event.data?.type === "progress") document.getElementById("status").textContent = event.data.message; });
+vscode.postMessage({ type: "ready" });</script></body></html>`;
 }
 
 function webviewHtml(origin: string, pageUrl: string): string {
@@ -435,7 +480,7 @@ function webviewHtml(origin: string, pageUrl: string): string {
   <select id="theme" aria-label="Theme" title="Force light or dark (the dark class and color-scheme on html)"><option value="auto" selected>Theme · app</option><option value="light">Light</option><option value="dark">Dark</option></select>
   <span class="source" id="source"></span>
   <span class="spacer"></span>
-  <span id="status" title="Render status">loading</span>
+  <span id="status" title="Render status" role="status" aria-live="polite" aria-atomic="true">Rendering preview</span>
   <span class="group"><button id="fit" class="on" title="Scale the preview to fit the panel">Fit</button><button id="full" title="Show at the real size">1:1</button></span>
   <span class="group"><button id="capture">Capture Baseline</button><button id="compare" disabled>Compare Changes</button></span>
   <button id="toggle" title="Edit props">Props</button>
@@ -450,7 +495,7 @@ function webviewHtml(origin: string, pageUrl: string): string {
 const vscode = acquireVsCodeApi();
 const frame = document.getElementById("preview");
 const stage = document.getElementById("stage"), frameBox = document.getElementById("frameBox"), statusChip = document.getElementById("status");
-let fitMode = true;
+let fitMode = true, renderedStatus = "Rendering preview";
 /** Scales the real-size iframe to the panel width (or 1:1), so wide viewports stay readable in a narrow panel. */
 function layout() {
   const vw = frame.offsetWidth || 1280, vh = frame.offsetHeight || 800;
@@ -474,15 +519,21 @@ addEventListener("message", (event) => {
   if (event.source === frame.contentWindow && data?.source === "arguseye") {
     vscode.postMessage(data);        // from the preview page
     const warnings = data.warnings ?? [];
-    statusChip.textContent = data.status === "error" ? (data.errors?.length ?? 1) + " error" + ((data.errors?.length ?? 1) === 1 ? "" : "s") : data.status === "mounted" ? warnings.length ? "rendered · context incomplete" : "rendered" : data.status;
+    renderedStatus = data.status === "error" ? (data.errors?.length ?? 1) + " error" + ((data.errors?.length ?? 1) === 1 ? "" : "s") : data.status === "mounted" ? warnings.length ? "rendered · context incomplete" : "rendered" : data.status;
+    statusChip.textContent = renderedStatus;
     statusChip.className = data.status === "error" ? "error" : "";
     statusChip.title = warnings.join("\\n") || "Render status";
     const contextWarnings = document.getElementById("contextWarnings");
     contextWarnings.hidden = !warnings.length;
     contextWarnings.querySelector("pre").textContent = warnings.join("\\n");
   }
-  else if (data?.type === "show") frame.contentWindow.postMessage({ type: "cp:show", target: data.target }, "*");
+  else if (data?.type === "progress") {
+    statusChip.textContent = data.message;
+    statusChip.className = data.status === "error" ? "error" : "";
+  }
+  else if (data?.type === "show") { statusChip.textContent = "Rendering preview"; frame.contentWindow.postMessage({ type: "cp:show", target: data.target }, "*"); }
   else if (data?.type === "verification") {
+    statusChip.textContent = renderedStatus;
     const host = document.getElementById("verification"); host.replaceChildren();
     document.getElementById("compare").disabled = !data.baseline;
     const summary = document.createElement("p");

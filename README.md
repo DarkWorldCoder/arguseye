@@ -40,6 +40,10 @@ If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorl
   <a href="#performance-and-boundaries">Performance & boundaries</a>
 </p>
 
+## In development
+
+Source-branch preview: the next release adds real progress messages, recovery diagnostics, audit completeness, opt-in scroll captures and actual-font/layout inspection. These options are **not in published 0.0.18**. See the [unreleased rendering contracts](docs/rendering.md#unreleased-render-evidence).
+
 ## Native template previews
 
 Preview Django, Jinja2, Handlebars, Mustache, EJS, Pug, Nunjucks, LiquidJS and other native Node/Python/PHP/Ruby templates with explicit JSON context and your own installed engines. Right-click a template in VS Code, select **Preview Component**, choose its engine/data profile and compare unsaved edits against a baseline. No app server or stories are needed.

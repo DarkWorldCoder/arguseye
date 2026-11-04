@@ -23,6 +23,28 @@ afterAll(async () => close?.());
 
 type Content = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 
+it("reports real render phases when the client requests progress", async () => {
+  const progress: Array<{ progress: number; message?: string }> = [];
+  const result = await client.callTool({ name: "render_component", arguments: { file: "components/ProductCard.tsx", export: "ProductCard", props: { title: "Progress", price: 3 }, output: "summary", capturePolicy: { scroll: {} }, inspection: { layout: true, fonts: true } } }, undefined, { onprogress: (event) => { progress.push(event); } });
+  expect(result.isError).toBeFalsy();
+  expect(progress.map((event) => event.message)).toEqual(expect.arrayContaining(["Reading component", "Rendering preview", "Checking fonts and images", "Capturing preview"]));
+  expect(progress.every((event, i) => i === 0 || event.progress > progress[i - 1].progress)).toBe(true);
+  expect((result.structuredContent as any).scrollCapture).toMatchObject({ complete: true, restored: true });
+  expect((result.structuredContent as any).elements.some((element: any) => element.font?.status === "available" && element.bounds?.width > 0)).toBe(true);
+});
+
+it("distinguishes a successful audit mount from complete render evidence", async () => {
+  const result = await client.callTool({ name: "audit_components", arguments: { dir: "audit-cases" } });
+  const report = result.structuredContent as any;
+  expect(result.isError).toBeFalsy();
+  expect(report).toMatchObject({ total: 2, ok: 2, complete: 1, incomplete: 1 });
+  expect(report.entries.find((entry: any) => entry.file.endsWith("Complete.tsx"))).toMatchObject({ status: "ok", complete: true, unresolved: [] });
+  const sampled = report.entries.find((entry: any) => entry.file.endsWith("Sampled.tsx"));
+  expect(sampled).toMatchObject({ status: "ok", complete: false, unresolved: [] });
+  expect(sampled.warnings.join()).toContain("Sample props were generated from types");
+  expect((result.content as Content).find((block) => block.type === "text")?.text).toContain("1 complete, 1 incomplete");
+});
+
 it("continues a bounded audit without repeating components and rejects malformed cursors", async () => {
   const first = await client.callTool({ name: "audit_components", arguments: { dir: "components", limit: 1 } });
   const a = first.structuredContent as any;
@@ -133,7 +155,7 @@ describe("MCP tools (what a coding agent calls)", () => {
     const report = result.structuredContent as any;
     expect(report.total).toBeGreaterThan(0);
     expect(report.ok).toBeGreaterThan(0);
-    expect((result.content as Content)[0].text).toMatch(/^\d+ components: \d+ ok/);
+    expect((result.content as Content)[0].text).toMatch(/^\d+ components: \d+ mounted/);
   });
 
   it("render_component returns a PNG and a compact text snapshot for a real usage, by project-relative path", async () => {

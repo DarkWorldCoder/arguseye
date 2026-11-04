@@ -16,7 +16,10 @@ export async function run(): Promise<void> {
   const document = await vscode.workspace.openTextDocument(card);
   // Context menus pass the clicked URI, which need not be the active editor.
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(path.join(root, "app/page.tsx")));
-  await vscode.commands.executeCommand("componentPreview.open", vscode.Uri.file(card));
+  const reading = api.waitForStatus((s) => s.file === card && s.status === "loading" && s.message === "Reading component", 20000);
+  const opening = vscode.commands.executeCommand("componentPreview.open", vscode.Uri.file(card));
+  await reading;
+  await opening;
   const shown = await api.waitForStatus((s) => s.status === "mounted", 20000);
   assert.equal(shown.file, card);
   assert.deepEqual(shown.errors, []);

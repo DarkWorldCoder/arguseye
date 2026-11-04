@@ -1,5 +1,47 @@
 # Reproducible and bounded verification (0.0.14)
 
+## Unreleased render evidence
+
+The following options are implemented on the feature branch and are not included in published 0.0.18 packages.
+
+Render results add `diagnostics` with an observed message, target file, phase, severity, code and recovery advice. Original errors, unresolved inputs and warnings remain authoritative. A recovery suggestion does not change source, synthesize authentication or establish correctness. MCP summary output includes bounded next steps. Audits retain `ok` as a mount status and separately count complete/incomplete evidence; skipped targets have no completeness verdict.
+
+MCP clients that request progress through a `progressToken` receive monotonically increasing notifications for actual renderer work. The JS renderer accepts an optional `onProgress` observer alongside `signal` and `timeoutMs`; observer failures do not fail the render. Cancellation stops further progress for that request. The VS Code panel shows real reading/preparation/render phases during startup, plus renderer phases during baseline capture and comparison. No estimated percentages or simulated thinking are used.
+
+### Scroll traversal
+
+Ordinary captures retain their current behavior. For below-fold observers and lazy content, opt in:
+
+```json
+{
+  "file": "app/page.tsx",
+  "capturePolicy": {
+    "scroll": { "maxSteps": 20, "timeoutMs": 2000, "maxDistance": 20000 }
+  },
+  "inspection": { "layout": true, "fonts": true }
+}
+```
+
+`scroll.selector` optionally identifies exactly one nested HTML scroll container. Otherwise traversal uses the document. It visits overlapping vertical positions, lets real observers run, then restores the original horizontal/vertical scroll position. It does not force opacity, transform, visibility or application motion settings. Limits are at most 64 positions, a 10-second traversal budget and 100,000 CSS pixels of vertical distance. Browser command dispatch and restoration add overhead beyond the traversal budget; the existing request deadline remains the outer execution bound. The result's `scrollCapture` records positions, elapsed time, restoration and range coverage. Exhausted limits remain warnings and make render evidence incomplete.
+
+`scrollCapture.complete` means the range was traversed, not that every animation finished or every section is visible. Reversible scroll effects can hide content again after restoration. Hidden sections require review; infinite pages and content appended later are not universally covered. Policies are saved with baselines and replayed by `render_diff`; they also work with paginated usage rendering.
+
+CLI equivalents:
+
+```bash
+node dist/cli.mjs shot app/page.tsx --scroll --layout --fonts --json
+node dist/cli.mjs shot app/page.tsx --scroll --scroll-container '#results' --json
+node dist/cli.mjs shot app/page.tsx --capture-policy capture-policy.json --json
+```
+
+The policy file contains the `capturePolicy` object itself, for example `{"scroll":{"maxSteps":8}}`. These examples run a built source checkout; do not assume an older registry version supports these flags.
+
+### Layout and actual fonts
+
+`inspection.layout` adds element bounds, selected computed styles and observations for overflow, clipping, ellipsis, hidden ancestry and zero size. Those observations can describe intentional design and do not become correctness failures. `inspection.fonts` adds the CSS family/weight/size and Chromium's actually used font families, custom-font flags and glyph counts. This distinguishes requested fonts from fallback glyphs; a difference is not automatically a font defect.
+
+This selector-based inspection is limited to the first 100 descendants of the captured scope and excludes shadow trees and iframe documents. `styleInspection` records total/inspected counts, coverage completeness and elapsed time. Unsupported font inspection or a changing node remains explicitly unavailable with a reason. `timings.inspection` reports the extra analysis cost; scroll cost is recorded separately in `scrollCapture.ms` and included in the overall settle stage. Neither option is enabled on the ordinary warm-render path.
+
 ## Project build plugins
 
 Native mode remains the default. It uses the fast per-file compiler, supported literal config, and explicit warnings for virtual stand-ins. For code that needs actual project plugins, use `--build-mode vite` with `mcp`, `shot`, `serve` or `audit`. The JS server/renderer factories accept `buildMode: "vite"`. VS Code exposes `arguseye.buildMode`; reload the window after changing it.
@@ -49,7 +91,7 @@ MCP execution cancellation is forwarded to the renderer. The JS API also accepts
 
 Each renderer retains at most four warm pages, 64 captures, 16 previous-target results, and 64 MiB of PNG buffers across captures and history. Old pages are closed and old evidence evicted. The JS `limits` option can lower these budgets, and `resources()` reports retained counts and PNG bytes. This does not bound Chromium's own heap, transient response buffers or project module caches. A single PNG over the budget is returned but not retained; the response explains how to save it externally. CLI capture directories persist across sessions and are caller-managed.
 
-Audits process at most 500 components per request (200 by default). Pass the returned `nextCursor` back as MCP `cursor` or CLI `--cursor`, using the same root and folder. Source inventory changes expire the cursor rather than silently skipping components. Completed entries and a continuation are retained when an audit is cancelled. These remain isolated mount checks, not full application tests.
+Audits process at most 500 components per request (200 by default). Pass the returned `nextCursor` back as MCP `cursor` or CLI `--cursor`, using the same root and folder. Source inventory changes expire the cursor rather than silently skipping components. Completed entries and a continuation are retained when an audit is cancelled. These remain isolated mount checks, not full application tests. Audit `ok` means mounted without render errors, not verified fidelity. Each attempted render includes `complete` and unresolved inputs; totals separately count complete and incomplete evidence. Skipped targets have no completeness verdict. CLI exit codes continue to indicate execution errors/cancellation rather than treating every context warning as a failed mount.
 
 ## Optional accessibility and source evidence
 

@@ -65,14 +65,17 @@ it("cancels a render in flight, skips cancelled queued work and leaves the next 
   try {
     await renderer.render(target);
     const controller = new AbortController();
-    const pending = renderer.render({ ...target, actions: [{ wait: 5000 }] }, { signal: controller.signal });
+    const progress: string[] = [];
+    const pending = renderer.render({ ...target, actions: [{ wait: 5000 }] }, { signal: controller.signal, onProgress: (event) => { progress.push(event.phase); } });
     const checked = expect(pending).rejects.toThrow(/cancelled/i);
     setTimeout(() => controller.abort(), 100);
     await checked;
+    const progressAtCancellation = progress.length;
     const cancelled = new AbortController(); cancelled.abort();
     await expect(renderer.render(target, { signal: cancelled.signal })).rejects.toThrow(/cancelled/i);
     await expect(renderer.render({ ...target, actions: [{ wait: 5000 }] }, { timeoutMs: 100 })).rejects.toThrow(/timed out/i);
     expect((await renderer.render(target)).errors).toEqual([]);
+    expect(progress).toHaveLength(progressAtCancellation);
   } finally { await renderer.close(); }
 });
 

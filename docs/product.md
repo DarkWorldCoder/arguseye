@@ -4,6 +4,8 @@ Arguseye is eyes for coding agents and developers: see a component, change it, a
 
 Version scope: 0.0.18 skips inferred JSX wrappers with unresolved runtime inputs, preserves explicit incomplete-context evidence, and refreshes repaired layout chains. Version 0.0.16 adds native Node/Python/PHP/Ruby template previews, JSON context profiles, template right-click actions and explicit failed-font evidence. It retains 0.0.15’s plain-script widgets, project-owned Next.js browser polyfills, explicit reduced-motion evidence for static captures and bounded image decoding. It includes 0.0.14's project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.
 
+Unreleased source work: real render-phase progress for agents and VS Code, recovery diagnostics, audit completeness independent of mount status, opt-in bounded scroll traversal, and bounded DOM geometry/actual used-font inspection. These additions are not part of the published 0.0.18 package. See [the new rendering options](rendering.md#unreleased-render-evidence).
+
 ## What is implemented
 
 - Your actual React/Next.js browser component, Vue 3 SFC or Svelte component, using the project's packages and Chromium. React Router and Remix browser components use the project's memory data router.

@@ -1,10 +1,11 @@
 import { fileFromUrl } from "../server/fileUrl.js";
 import type { Page } from "playwright-core";
 import type { PreviewServer } from "../server/createPreviewServer.js";
+import { inspectElementStyles, type ElementStyleEvidence } from "./inspectElementStyles.js";
 
 export type SourcePoint = { file: string; line: number; column: number };
 export type ErrorLocation = { generated: SourcePoint; original: SourcePoint | null; reason?: string };
-export type ElementEvidence = { selector: string; tag: string; text: string; component?: string; source?: Partial<SourcePoint> & { file: string; kind: "mapped" | "component-file" }; reason?: string };
+export type ElementEvidence = ElementStyleEvidence & { component?: string; source?: Partial<SourcePoint> & { file: string; kind: "mapped" | "component-file" }; reason?: string };
 export type AccessibilityEvidence = { engine: string; scope: string; ms: number; violations: AccessibilityFinding[]; incomplete: AccessibilityFinding[]; passes: number; inapplicable: number; note: string };
 type AccessibilityFinding = { id: string; impact: string | null; description: string; help: string; helpUrl: string; nodes: Array<{ target: unknown; html: string; summary?: string }> };
 
@@ -25,7 +26,7 @@ export async function errorLocations(errors: string[], server: PreviewServer): P
 }
 
 /** Runs heavy inspection only when requested; automated findings never establish accessibility conformance. */
-export async function inspectRender(page: Page, server: PreviewServer, request: { accessibility?: boolean; sources?: boolean }, scope: string) {
+export async function inspectRender(page: Page, server: PreviewServer, request: { accessibility?: boolean; sources?: boolean; layout?: boolean; fonts?: boolean }, scope: string) {
   let accessibility: AccessibilityEvidence | undefined;
   let elements: ElementEvidence[] | undefined;
   if (request.sources) {
@@ -66,5 +67,12 @@ export async function inspectRender(page: Page, server: PreviewServer, request: 
     }, scope);
     accessibility = { ...findings, ms: Math.round(performance.now() - started), note: "Automated component-scope checks only. Incomplete checks need human review; absence of violations is not accessibility conformance." };
   }
-  return { ...(accessibility ? { accessibility } : {}), ...(elements ? { elements } : {}) };
+  let styleInspection: Awaited<ReturnType<typeof inspectElementStyles>>["styleInspection"] | undefined;
+  if (request.layout || request.fonts) {
+    const inspected = await inspectElementStyles(page, scope, request);
+    styleInspection = inspected.styleInspection;
+    const sources = new Map(elements?.map((element) => [element.selector, element]));
+    elements = inspected.elements.map((element) => ({ ...sources.get(element.selector), ...element }));
+  }
+  return { ...(accessibility ? { accessibility } : {}), ...(elements ? { elements } : {}), ...(styleInspection ? { styleInspection } : {}) };
 }

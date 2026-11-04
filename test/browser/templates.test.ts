@@ -222,8 +222,11 @@ it("loads real project fonts and keeps failed font faces visible in render evide
   const root = path.resolve("test/fixtures/template-app"), renderer = await createRenderer({ root });
   try {
     const file = path.join(root, "fonts.hbs"), target = { file, props: { name: "Ada" } };
-    const loaded = await renderer.render(target);
+    const loaded = await renderer.render({ ...target, inspection: { fonts: true, layout: true } });
     expect(loaded.errors).toEqual([]);
+    const heading = loaded.elements?.find((element) => element.tag === "h1");
+    expect(heading?.font?.used).toContainEqual(expect.objectContaining({ familyName: "DejaVu Sans Mono", isCustomFont: true, glyphCount: expect.any(Number) }));
+    expect(heading?.bounds?.height).toBeGreaterThan(0);
     expect(loaded.snapshot).toContain("Font loaded");
     expect(loaded.complete).toBe(true);
     const unchanged = await renderer.diff(loaded.captureId!);

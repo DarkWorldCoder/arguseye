@@ -5,11 +5,16 @@ import { sourceFiles } from "../project/sourceFiles.js";
 import { isTemplateFile } from "../project/templateEngines.js";
 import { pickExport } from "../project/pickExport.js";
 import type { Renderer } from "./createRenderer.js";
+import type { RenderDiagnostic } from "./renderDiagnostics.js";
 
 export type AuditEntry = {
   file: string;
   export?: string;
   status: "ok" | "error" | "empty" | "skipped";
+  /** Mount status alone does not establish that context and inputs were complete. */
+  complete?: boolean;
+  unresolved?: string[];
+  diagnostics?: RenderDiagnostic[];
   ms?: number;
   errors?: string[];
   warnings?: string[];
@@ -17,7 +22,7 @@ export type AuditEntry = {
   console?: string[];
 };
 
-export type AuditReport = { root: string; total: number; ok: number; error: number; empty: number; skipped: number; entries: AuditEntry[]; available: number; nextCursor: string | null; cancelled: boolean; topErrors: Array<{ message: string; count: number }> };
+export type AuditReport = { root: string; total: number; ok: number; error: number; empty: number; skipped: number; complete: number; incomplete: number; entries: AuditEntry[]; available: number; nextCursor: string | null; cancelled: boolean; topErrors: Array<{ message: string; count: number }> };
 
 /** Files that hold components: Vue and Svelte single-file components, and JSX/TSX modules outside test and config code. */
 export async function componentFiles(dir: string): Promise<string[]> {
@@ -61,13 +66,14 @@ export async function audit(renderer: Renderer, root: string, dir = root, { limi
       entry = {
         file: rel, export: exportName, ms: result.ms,
         status: notComponent ? "skipped" : result.errors.length ? "error" : empty ? "empty" : "ok",
+        ...(!notComponent ? { complete: result.complete, unresolved: result.unresolved, diagnostics: result.diagnostics } : {}),
         ...(result.errors.length ? { errors: result.errors.map(firstLine) } : {}),
         ...(result.warnings.length ? { warnings: result.warnings } : {}),
         ...(result.console?.length ? { console: result.console } : {}),
       };
     } catch (error) {
       if (signal?.aborted) { cancelled = true; break; }
-      entry = { file: rel, export: exportName, status: "error", errors: [firstLine(String((error as Error).message ?? error))] };
+      entry = { file: rel, export: exportName, status: "error", complete: false, errors: [firstLine(String((error as Error).message ?? error))] };
     }
     entries.push(entry);
     onEntry(entry);
@@ -77,6 +83,8 @@ export async function audit(renderer: Renderer, root: string, dir = root, { limi
   for (const e of entries) for (const m of e.errors ?? []) { const key = m.replace(/\/[^\s"')]+/g, "…").slice(0, 160); tally.set(key, (tally.get(key) ?? 0) + 1); }
   return {
     root, available: files.length, cancelled, nextCursor: offset + entries.length < files.length ? Buffer.from(JSON.stringify({ v: 1, root, dir, fingerprint, offset: offset + entries.length })).toString("base64url") : null, total: entries.length, ok: count("ok"), error: count("error"), empty: count("empty"), skipped: count("skipped"), entries,
+    complete: entries.filter((entry) => entry.complete === true).length,
+    incomplete: entries.filter((entry) => entry.complete === false).length,
     topErrors: [...tally].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([message, count]) => ({ message, count })),
   };
 }

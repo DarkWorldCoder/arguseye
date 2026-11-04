@@ -28,6 +28,8 @@ const HELP = `arguseye: inspect components and verify UI edits, no application s
   arguseye shot FILE [--engine ENGINE] [--profile NAME] [--build-mode native|vite] [--capture-dir DIR] [--json] [--output image|summary|both]
       Save an immutable baseline and optional PNG; JSON reports metadata without image bytes
       --fixtures FILE.json replays explicit browser inputs; --timeout-ms N bounds execution
+      --scroll [--scroll-container CSS] visits bounded scroll reveals before capture
+      --capture-policy FILE.json configures traversal limits; --layout --fonts inspects geometry and actual fonts
 
   arguseye diff --baseline DIR --out DIR [--json] [--root DIR]
       Compare current source against a saved baseline; writes before/after/diff PNGs and JSON
@@ -71,6 +73,11 @@ const { positionals, values } = parseArgs({
     fixtures: { type: "string" },
     accessibility: { type: "boolean" },
     sources: { type: "boolean" },
+    layout: { type: "boolean" },
+    fonts: { type: "boolean" },
+    scroll: { type: "boolean" },
+    "scroll-container": { type: "string" },
+    "capture-policy": { type: "string" },
     "timeout-ms": { type: "string" },
     help: { type: "boolean", short: "h" },
   },
@@ -132,12 +139,12 @@ if (values.help || !command) {
     process.on("SIGINT", cancel); process.on("SIGTERM", cancel);
     const report = await audit(renderer, root, file ? path.resolve(root, file) : root, {
       limit: values.limit ? Number(values.limit) : 200, cursor: values.cursor, signal: controller.signal,
-      onEntry: (e) => { if (!values.json) console.log(`${e.status.padEnd(7)} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}${e.errors ? "\n        " + e.errors[0] : ""}`); },
+      onEntry: (e) => { if (!values.json) console.log(`${e.status.padEnd(7)} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}${e.complete === false ? " · incomplete evidence" : ""}${e.errors ? "\n        " + e.errors[0] : ""}`); },
     });
     process.off("SIGINT", cancel); process.off("SIGTERM", cancel);
     if (values.out) await writeFile(values.out, JSON.stringify(report, null, 2));
     if (values.json) console.log(JSON.stringify(report));
-    else console.log(`\n${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped${report.topErrors.length ? "\nMost common errors:\n" + report.topErrors.map((t) => `  ${t.count}× ${t.message}`).join("\n") : ""}`);
+    else console.log(`\n${report.total} components: ${report.ok} mounted, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped; evidence: ${report.complete} complete, ${report.incomplete} incomplete${report.topErrors.length ? "\nMost common errors:\n" + report.topErrors.map((t) => `  ${t.count}× ${t.message}`).join("\n") : ""}`);
     process.exitCode = report.cancelled ? 130 : report.error ? 1 : 0;
   } finally {
     await renderer.close();
@@ -154,7 +161,8 @@ if (values.help || !command) {
       const result = await renderer.render({
         theme: values.theme as "light" | "dark" | undefined,
         ...target,
-        inspection: values.accessibility || values.sources ? { accessibility: values.accessibility, sources: values.sources } : undefined,
+        inspection: values.accessibility || values.sources || values.layout || values.fonts ? { accessibility: values.accessibility, sources: values.sources, layout: values.layout, fonts: values.fonts } : undefined,
+        capturePolicy: values["capture-policy"] ? JSON.parse(await readFile(values["capture-policy"], "utf8")) : values.scroll || values["scroll-container"] ? { scroll: { selector: values["scroll-container"] } } : undefined,
         fixtures: values.fixtures ? JSON.parse(await readFile(values.fixtures, "utf8")) : undefined,
         usage: values.usage,
         inContext: values["in-context"],

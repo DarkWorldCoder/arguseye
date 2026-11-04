@@ -24,6 +24,9 @@ export const renderOutputSchema = z.object({
   target: z.object({ file: z.string(), exportName: z.string(), props: record }).passthrough(),
   viewport, sourceRevision: z.string(), unresolved: z.array(z.string()), warnings: z.array(z.string()),
   complete: z.boolean(), snapshot: z.string(), ms: z.number(), reloaded: z.boolean(),
+  diagnostics: z.array(z.object({ code: z.string(), severity: z.enum(["error", "warning"]), phase: z.enum(["render", "inputs", "context", "assets"]), file: z.string(), message: z.string(), recovery: z.string() })).optional(),
+  scrollCapture: z.object({ selector: z.string().optional(), visited: z.array(z.object({ x: z.number(), y: z.number() })), complete: z.boolean(), restored: z.boolean(), ms: z.number(), reason: z.string().optional() }).optional(),
+  styleInspection: z.object({ scope: z.string(), total: z.number(), inspected: z.number(), limit: z.number(), complete: z.boolean(), ms: z.number(), note: z.string() }).optional(),
   template: z.object({ engine: z.string(), runtime: z.string(), engineVersion: z.string().optional(), runtimeVersion: z.string().optional(), profile: z.string().optional(), dependencies: z.array(z.string()), unresolved: z.array(z.string()), stateReset: z.literal(true) }).optional(),
   scheduledTimers: z.number().int().nonnegative().optional(),
   propsSource: z.enum(["given", "usage", "sample", "none"]),
@@ -52,6 +55,7 @@ export const usageRendersOutputSchema = z.object({ ...common, results: z.array(r
 /** Makes whole-project mount coverage distinct from visual fidelity. */
 export const auditOutputSchema = z.object({
   ...common, root: z.string(), available: z.number(), nextCursor: z.string().nullable(), cancelled: z.boolean(), total: z.number(), ok: z.number(), error: z.number(), empty: z.number(), skipped: z.number(),
-  entries: z.array(z.object({ file: z.string(), status: z.enum(["ok", "error", "empty", "skipped"]) }).passthrough()),
+  complete: z.number(), incomplete: z.number(),
+  entries: z.array(z.object({ file: z.string(), status: z.enum(["ok", "error", "empty", "skipped"]), complete: z.boolean().optional(), unresolved: z.array(z.string()).optional() }).passthrough()),
   topErrors: z.array(z.object({ message: z.string(), count: z.number() })),
 });

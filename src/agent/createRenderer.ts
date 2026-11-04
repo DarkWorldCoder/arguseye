@@ -19,12 +19,16 @@ import { readFileSync } from "node:fs";
 import { frameworkOf } from "../project/framework.js";
 import { classicKind } from "../project/classicKind.js";
 import { FileAccessError } from "../server/createFileAccess.js";
+import { renderDiagnostics, type RenderDiagnostic } from "./renderDiagnostics.js";
+import { scrollCapture, validateScrollPolicy, type ScrollPolicy, type ScrollEvidence } from "./scrollCapture.js";
 
 export type RenderRequest = PreviewTarget & {
   /** Explicit replay inputs; uses a fresh page so module-level reads are deterministic too. */
   fixtures?: RenderFixtures;
   /** Optional heavier accessibility and source inspection, outside the default render path. */
-  inspection?: { accessibility?: boolean; sources?: boolean };
+  inspection?: { accessibility?: boolean; sources?: boolean; layout?: boolean; fonts?: boolean };
+  /** Slower explicit traversal for below-fold reveals; ordinary captures never scroll automatically. */
+  capturePolicy?: { scroll?: ScrollPolicy };
   viewport?: { width: number; height: number };
   /** Render with the props of a real usage, by its id from `listUsages` (e.g. `app/page.tsx:9`). */
   usage?: string;
@@ -52,9 +56,11 @@ export type RenderResult = {
   /** Native template engine identity, actual dependencies and unresolved context. */
   template?: import("../server/createTemplateRenderer.js").TemplateEvidence;
   fixtureProvenance?: FixtureProvenance;
+  scrollCapture?: ScrollEvidence;
   build?: PreviewServer["build"];
   accessibility?: AccessibilityEvidence;
   elements?: ElementEvidence[];
+  styleInspection?: { scope: string; total: number; inspected: number; limit: number; complete: boolean; ms: number; note: string };
   errorLocations?: ErrorLocation[];
   environment?: { locale: string; timezoneId: string; reducedMotion: "reduce" | "no-preference"; clock: "system" | "fixed"; random: "runtime" | "seeded" };
   /** Scheduled application/dependency timers, distinct from observed instability or engine deadlines. */
@@ -62,12 +68,14 @@ export type RenderResult = {
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
-  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures" | "inspection" | "engine" | "profile" | "templateResolved">;
+  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures" | "inspection" | "capturePolicy" | "engine" | "profile" | "templateResolved">;
   viewport: { width: number; height: number };
   sourceRevision: string;
   unresolved: string[];
   warnings: string[];
   complete: boolean;
+  /** Evidence-backed next steps; absent on captures persisted by older versions. */
+  diagnostics?: RenderDiagnostic[];
   /** Accessibility tree of the component, compact enough to read as text. */
   snapshot: string;
   errors: string[];
@@ -117,8 +125,11 @@ export type Changes = {
 export type SessionResources = { pages: number; captures: number; history: number; pngBytes: number };
 export type SessionLimits = { pages: number; captures: number; history: number; pngBytes: number };
 
+/** Actual work phases shared by agent progress notifications and editor verification. */
+export type RenderProgress = { phase: "source" | "prepare" | "render" | "actions" | "settle" | "capture" | "inspect"; message: string; file: string };
+
 /** Cancels queued/in-flight work; the deadline starts when this request begins executing. */
-export type RenderControl = { signal?: AbortSignal; timeoutMs?: number };
+export type RenderControl = { signal?: AbortSignal; timeoutMs?: number; onProgress?: (progress: RenderProgress) => void };
 
 export type Renderer = {
   resources(): SessionResources;
@@ -147,16 +158,22 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   try { browser = await launchChrome(); } catch (error) { if (!options.server) await server.close(); throw error; }
   const captures = new Map<string, RenderResult>();
   let queue: Promise<unknown> = Promise.resolve();
-  type Job = { guard(): void; pages: Set<Promise<Page>>; openPages: Set<Page> };
+  type Job = { guard(): void; pages: Set<Promise<Page>>; openPages: Set<Page>; active: boolean; onProgress?: RenderControl["onProgress"] };
   const jobs = new AsyncLocalStorage<Job>();
   const guard = () => jobs.getStore()?.guard();
+  const progress = (file: string, phase: RenderProgress["phase"], message: string) => {
+    const job = jobs.getStore();
+    if (!job?.active || !job.onProgress) return;
+    job.guard();
+    try { job.onProgress({ file, phase, message }); } catch { /* A disconnected observer must not break the render. */ }
+  };
   let closing = false;
   const serial = <T>(work: () => Promise<T>, control: RenderControl = {}): Promise<T> => {
     const timeout = control.timeoutMs ?? 30000;
     if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120000) return Promise.reject(new Error("Render deadline must be between 1 and 120000 ms"));
     const result = queue.then(async () => {
       let stopped: Error | undefined;
-      const job: Job = { pages: new Set(), openPages: new Set(), guard() { if (stopped) throw stopped; if (closing) throw new Error("Arguseye session is closed"); } };
+      const job: Job = { pages: new Set(), openPages: new Set(), active: true, onProgress: control.onProgress, guard() { if (stopped) throw stopped; if (closing) throw new Error("Arguseye session is closed"); } };
       let rejectStop: (e: Error) => void;
       const stop = (message: string) => {
         stopped = new Error(message);
@@ -174,7 +191,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       try {
         if (control.signal?.aborted) abort();
         return await Promise.race([interrupted, jobs.run(job, async () => { guard(); return work(); })]);
-      } finally { clearTimeout(timer); control.signal?.removeEventListener("abort", abort); }
+      } finally { job.active = false; clearTimeout(timer); control.signal?.removeEventListener("abort", abort); }
     });
     queue = result.catch(() => {}); return result;
   };
@@ -363,6 +380,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const inputWarnings = before.warnings.filter((w) => w.startsWith("Runtime usage inputs were not evaluated:") || w.startsWith("Sample props were generated from types;"));
       after.warnings = unique([...after.warnings, ...inputWarnings]);
       after.complete &&= !after.unresolved.length && !inputWarnings.length;
+      after.diagnostics = renderDiagnostics(after);
       if (after.changes && !after.complete) after.changes.status = "incomplete";
       if (after.captureId && captures.has(after.captureId)) { captures.set(after.captureId, { ...structuredClone(after), png: Buffer.from(after.png) }); trim(); }
       const page = await pages.get(pageKey(before.target.file, before.viewport, await classicOf(before.target.file)))!;
@@ -397,15 +415,18 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     return second;
   }
 
-  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, fixtures, inspection, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
+  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, fixtures, inspection, capturePolicy, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
       guard();
       validateFixtures(fixtures);
+      if (capturePolicy !== undefined && (!capturePolicy || typeof capturePolicy !== "object" || Array.isArray(capturePolicy))) throw new Error("Capture policy must be a JSON object.");
+      if (capturePolicy?.scroll !== undefined) validateScrollPolicy(capturePolicy.scroll);
       const started = performance.now();
       if (![viewport.width, viewport.height].every((v) => Number.isInteger(v) && v > 0 && v <= 8192)) throw new Error(`Invalid viewport "${viewport.width}x${viewport.height}"`);
       // Disk edits are registered before anything (usage index, route lookup) reads the files and refreshes their mtimes.
       server.syncDisk();
       rest.file = path.resolve(options.root, rest.file);
       server.assertAccess(rest.file);
+      progress(rest.file, "source", "Reading component");
       rest.exportName ??= await exportOf(rest.file);
       const classic = await classicOf(rest.file);
       if (classic === "script" && server.build?.mode === "vite") throw new Error("Classic-script widgets currently use native mode; retry with --build-mode native.");
@@ -437,6 +458,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target.props = { children: typeof props.children === "string" ? props.children : "Page content" };
       }
       const contextApplied = target.context?.flatMap((w) => w.kind === "prelude" ? [] : (w.kind === "host" ? w.tag : w.member ? `${w.importName}.${w.member}` : w.importName === "default" ? path.basename(w.source) : w.importName));
+      progress(rest.file, "prepare", "Preparing dependencies and styles");
       if (server.build?.mode === "vite") await server.prepare(target.file, prepareContext(target), target.route, target.engine);
       const key = target.engine ? `html:${viewport.width}x${viewport.height}` : pageKey(rest.file, viewport, classic);
       // Classic scripts leave globals and "already loaded" guards behind: never run one on a page used before.
@@ -445,6 +467,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       // Explicit browser inputs cannot leak into the next ordinary render through its warm page.
       if (warm && (replacedRoots.has(await warm) || isolatedPages.has(await warm))) { pages.delete(key); await (await warm).close(); warm = undefined; }
       const isNew = !warm;
+      progress(rest.file, "render", "Rendering preview");
       warm ??= warmPage(viewport, target, fixtures, storage);
       jobs.getStore()?.pages.add(warm);
       const page = await retainPage(key, warm);
@@ -501,6 +524,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
 
       guard();
       marks.push(performance.now());
+      if (actions.length) progress(rest.file, "actions", "Applying preview actions");
       const actionsApplied = await runActions(page, actions, errors);
       if (actions.length) pointerDirty.add(page);
 
@@ -509,6 +533,13 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (propsSource === "sample" && !layout) warnings.push("Sample props were generated from types; these are not real application data.");
       if (layout) warnings.push(`Rendered as the app uses it: the layout chain down to ${path.relative(options.root, rest.file)} (providers, elements, <html>/<body> classes) around ${JSON.stringify(target.props!.children)}.`);
 
+      let traversal: ScrollEvidence | undefined;
+      if (capturePolicy?.scroll) {
+        progress(rest.file, "actions", "Visiting scroll-revealed content");
+        traversal = await scrollCapture(page, capturePolicy.scroll, guard);
+        if (!traversal.complete) warnings.push("Scroll traversal incomplete: " + traversal.reason);
+      }
+      progress(rest.file, "settle", "Checking fonts and images");
       const settled = await page.evaluate(async () => {
         // JavaScript animations (charts drawing in, springs) move the DOM every frame and CSS freezing cannot stop
         // them: they are fast-forwarded, and anything still moving is waited out (at most 2.5 s).
@@ -583,6 +614,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");
       if (settled.infiniteWebAnimation) warnings.push("Infinite web animation paused at its first frame for verification; its running state was not captured.");
       marks.push(performance.now());
+      progress(rest.file, "capture", "Capturing preview");
       const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, rootIntact, scheduledTimers } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
@@ -652,6 +684,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const locations = allErrors.length ? await errorLocations(allErrors, server) : [];
       let inspectionResult = {};
       if (inspection) {
+        progress(rest.file, "inspect", "Inspecting preview evidence");
         try { inspectionResult = await inspectRender(page, server, inspection, portals || !rootIntact ? "body" : "#root"); }
         catch (error) { warnings.push("Requested inspection did not complete: " + String((error as Error).message ?? error)); }
       }
@@ -664,7 +697,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const template = target.engine ? await page.evaluate(() => (window as any).__CP__?.template) : undefined;
       if (template?.unresolved?.length) unresolved.push(...template.unresolved);
       const result: RenderResult = {
-        ...(template ? { template } : {}),
+        ...(template ? { template } : {}), ...(traversal ? { scrollCapture: traversal } : {}),
         png, snapshot, scheduledTimers, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
@@ -677,14 +710,16 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target: structuredClone({
           file: rest.file, exportName: rest.exportName ?? "default", props,
           ...(target.engine ? { engine: target.engine, profile: target.profile, templateResolved: true } : {}),
-          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}), ...(inspection ? { inspection } : {}),
+          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}), ...(inspection ? { inspection } : {}), ...(capturePolicy ? { capturePolicy } : {}),
         }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings: unique(warnings), complete: !allErrors.length && !warnings.length,
       };
       if (png.byteLength > limits.pngBytes) {
         result.warnings.push("PNG retention budget exceeded; save this response to an explicit capture directory or increase the session pngBytes limit before capturing a baseline."); result.complete = false;
-      } else if (!allErrors.length) result.captureId = remember(result);
-      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme, fixtures, inspection]);
+      }
+      result.diagnostics = renderDiagnostics(result);
+      if (png.byteLength <= limits.pngBytes && !allErrors.length) result.captureId = remember(result);
+      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme, fixtures, inspection, capturePolicy]);
       const previous = lastResults.get(signature);
       if (previous) {
         const diff = await compareCaptures(page, { ...structuredClone(previous), png: Buffer.from(previous.png) }, result);

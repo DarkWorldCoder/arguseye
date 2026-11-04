@@ -2,6 +2,21 @@ import { expect, it } from "vitest";
 import path from "node:path";
 import { createRenderer } from "../../src/agent/createRenderer.js";
 
+it("reports geometry and intentional clipping as observations rather than correctness failures", async () => {
+  const root = path.resolve("test/fixtures/react-app"), file = path.join(root, "components/Inspection.tsx");
+  const renderer = await createRenderer({ root });
+  try {
+    renderer.server.updateBuffer(file, 'export function Inspection(){return <section><div style={{width:80,overflow:"hidden"}}><span style={{display:"block",width:160}}>Wide child</span></div><p style={{display:"none"}}>Hidden</p></section>}');
+    const result = await renderer.render({ file, exportName: "Inspection", inspection: { layout: true } });
+    expect(result.errors).toEqual([]);
+    expect(result.elements?.find((element) => element.tag === "div" && element.text === "Wide child")).toMatchObject({ bounds: { width: 80 }, observations: expect.arrayContaining(["horizontal-overflow"]) });
+    expect(result.elements?.find((element) => element.tag === "span")?.observations).toContain("clipped-by-ancestor");
+    expect(result.elements?.find((element) => element.tag === "p")?.observations).toEqual(expect.arrayContaining(["hidden", "zero-size"]));
+    expect(result.styleInspection).toMatchObject({ scope: "#root", limit: 100, complete: true });
+    expect(result.complete).toBe(true);
+  } finally { await renderer.close(); }
+});
+
 it("returns opt-in accessibility findings with review-needed checks and element source references", async () => {
   const root = path.resolve("test/fixtures/react-app"), file = path.join(root, "components/Inspection.tsx");
   const renderer = await createRenderer({ root });

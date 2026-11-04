@@ -2,6 +2,8 @@ import path from "node:path";
 import { VIEWPORTS, parseViewport } from "./viewports.js";
 import { renderEvidence, diffEvidence } from "./renderEvidence.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import type { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { createRenderer, type Renderer, type RenderRequest, type RenderResult } from "./createRenderer.js";
 import { inspectProject } from "../project/inspectProject.js";
@@ -46,6 +48,7 @@ const look = {
   output,
   viewport: z.string().optional().describe('"mobile", "tablet", "desktop" (default) or "WIDTHxHEIGHT"'),
   theme: z.enum(["light", "dark"]).optional().describe('Force a colour scheme: "dark" adds the dark class to <html>, sets color-scheme and emulates prefers-color-scheme; "light" removes the class. Default: the app as written'),
+  capturePolicy: z.object({ scroll: z.object({ selector: z.string().min(1).max(1024).optional(), maxSteps: z.number().int().min(1).max(64).optional(), timeoutMs: z.number().int().min(1).max(10000).optional(), maxDistance: z.number().int().min(1).max(100000).optional() }).optional() }).optional().describe("Opt-in bounded vertical traversal for real lazy/reveal observers, then restores the original scroll position. Slower than an ordinary render; reports traversal coverage, not proof every section revealed."),
 };
 
 /** Exposes the headless renderer as MCP tools so a coding agent can see what it built in one call. */
@@ -69,6 +72,14 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
 
   const viewport = (value: string | undefined) => parseViewport(value);
 
+  const control = (extra: RequestHandlerExtra<ServerRequest, ServerNotification>, timeoutMs?: number): import("./createRenderer.js").RenderControl => {
+    const progressToken = extra._meta?.progressToken;
+    let count = 0;
+    return { signal: extra.signal, timeoutMs, ...(progressToken !== undefined ? { onProgress: ({ message }: import("./createRenderer.js").RenderProgress) => {
+      if (!extra.signal.aborted) void extra.sendNotification({ method: "notifications/progress", params: { progressToken, progress: ++count, message } }).catch(() => {});
+    } } : {}) };
+  };
+
   /** One line of context, the errors, then the accessibility snapshot. */
   function describe(request: RenderRequest, result: RenderResult): string {
     const size = request.viewport ?? VIEWPORTS.desktop;
@@ -90,7 +101,8 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
       ...(result.errorLocations ?? []).filter((r) => r.original).slice(0, 5).map((r) => `original source: ${rel(r.original!.file)}:${r.original!.line}:${r.original!.column}`),
       ...(result.accessibility ? [`${result.accessibility.engine}: ${result.accessibility.violations.length} violations; ${result.accessibility.incomplete.length} checks need review (${result.accessibility.ms} ms)`, ...result.accessibility.violations.slice(0, 10).map((r) => `${r.id}: ${r.help} ${JSON.stringify(r.nodes[0]?.target ?? [])}`)] : []),
     ].join("\n");
-    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${inspection ? inspection + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}${result.unresolved.length ? "\nunresolved: " + result.unresolved.join("; ") : ""}\n${result.snapshot}`;
+    const recovery = [...new Set((result.diagnostics ?? []).map((d) => d.recovery))].slice(0, 3).map((step) => "next: " + step).join("\n");
+    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${inspection ? inspection + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}${result.unresolved.length ? "\nunresolved: " + result.unresolved.join("; ") : ""}${recovery ? "\n" + recovery : ""}\n${result.snapshot}`;
   }
 
   /** Short stacks with project-relative paths instead of preview-server URLs. */
@@ -146,7 +158,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
         frame: z.object({ width: z.number(), height: z.number(), background: z.string().optional(), padding: z.number().optional() }).optional().describe("Render inside a stand-in parent box of this size and background"),
         actions: z.array(z.record(z.string(), z.unknown())).optional().describe('Steps before capture, e.g. [{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"},{"hover":{"text":"Save"}},{"press":"Enter"},{"wait":300}]. Targets: role+name, text, label, placeholder, testId, selector.'),
         storage: z.object({ local: z.record(z.string(), z.string()).optional(), session: z.record(z.string(), z.string()).optional() }).optional().describe("localStorage/sessionStorage seeded before mount (auth tokens, flags); cleared after"),
-        inspection: z.object({ accessibility: z.boolean().optional(), sources: z.boolean().optional() }).optional().describe("Optional axe checks and element source references; adds separate analysis cost and does not prove correctness/accessibility conformance"),
+        inspection: z.object({ accessibility: z.boolean().optional(), sources: z.boolean().optional(), layout: z.boolean().optional(), fonts: z.boolean().optional() }).optional().describe("Optional axe/source inspection and bounded DOM layout/actual used-font evidence. Adds separately reported analysis cost; observations do not establish correctness or accessibility conformance."),
         fixtures: fixtureSchema, timeoutMs: deadline,
         props: z.record(z.string(), z.unknown()).optional().describe("Props to render with (merged over the usage's props). For a classic-script widget: its config, exposed as window.__ARGUSEYE_WIDGET_CONFIG__; data-* keys become attributes of its <script> tag"),
         ...look,
@@ -154,8 +166,8 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
     },
     async (args, extra) => {
       try {
-        const request = { engine: args.engine, profile: args.profile, file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, inspection: args.inspection, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
-        const { result, content } = await renderContent(request, args.output, { signal: extra.signal, timeoutMs: args.timeoutMs });
+        const request = { engine: args.engine, profile: args.profile, file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, inspection: args.inspection, capturePolicy: args.capturePolicy, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
+        const { result, content } = await renderContent(request, args.output, control(extra, args.timeoutMs));
         return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
       } catch (error) {
         return failure(error);
@@ -170,7 +182,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
     inputSchema: { baselineId: z.string(), output, timeoutMs: deadline },
   }, async (args, extra) => {
     try {
-      const result = await (await getRenderer()).diff(args.baselineId, { signal: extra.signal, timeoutMs: args.timeoutMs });
+      const result = await (await getRenderer()).diff(args.baselineId, control(extra, args.timeoutMs));
       const content = [
         ...(args.output === "summary" ? [] : [result.before.png, result.after.png, result.diffPng].map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }))),
         ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\ncontext: before ${result.before.complete ? "complete" : "incomplete"}, after ${result.after.complete ? "complete" : "incomplete"}\n${[...new Set([...result.after.warnings, ...result.newWarnings])].join("\n")}\n${result.resolvedWarnings.map((w) => "resolved warning: " + w).join("\n")}\n${result.newErrors.join("\n")}` }]),
@@ -228,7 +240,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
       try {
         const file = abs(args.file);
         if (args.cursor && !/^\d+$/.test(args.cursor)) throw new Error(`Invalid usage cursor "${args.cursor}"`);
-        const page = await (await getRenderer()).renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), theme: args.theme, offset: Number(args.cursor ?? 0), limit: args.limit }, { signal: extra.signal, timeoutMs: args.timeoutMs });
+        const page = await (await getRenderer()).renderUsages({ file, exportName: args.export, viewport: viewport(args.viewport), theme: args.theme, capturePolicy: args.capturePolicy, offset: Number(args.cursor ?? 0), limit: args.limit }, control(extra, args.timeoutMs));
         const content = page.results.flatMap((result) => [
           ...(args.output === "summary" ? [] : [{ type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" }]),
           ...(args.output === "image" ? [] : [{ type: "text" as const, text: describe({ ...result.target, usage: result.usage, viewport: result.viewport }, result) }]),
@@ -254,7 +266,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
       try {
         const report = await audit(await getRenderer(), root, args.dir ? abs(args.dir) : root, { limit: args.limit ?? 200, cursor: args.cursor, signal: extra.signal });
         const lines = report.entries.filter((e) => e.status !== "ok").map((e) => `${e.status} ${e.file}${e.export && e.export !== "default" ? "#" + e.export : ""}${e.errors ? ": " + tidy(e.errors[0]) : ""}`);
-        const text = `${report.nextCursor ? `Continue with cursor ${report.nextCursor}\n` : ""}${report.cancelled ? "Audit cancelled; completed entries preserved.\n" : ""}${report.total} components: ${report.ok} ok, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped\n${lines.join("\n")}`;
+        const text = `${report.nextCursor ? `Continue with cursor ${report.nextCursor}\n` : ""}${report.cancelled ? "Audit cancelled; completed entries preserved.\n" : ""}${report.total} components: ${report.ok} mounted, ${report.error} with errors, ${report.empty} empty, ${report.skipped} skipped; evidence: ${report.complete} complete, ${report.incomplete} incomplete\n${lines.join("\n")}`;
         return { isError: report.error > 0, content: [{ type: "text" as const, text }], structuredContent: { schemaVersion: 1 as const, errors: report.topErrors.map((e) => e.message), ...report } };
       } catch (error) {
         return failure(error);

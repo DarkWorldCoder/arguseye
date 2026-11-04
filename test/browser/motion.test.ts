@@ -8,6 +8,27 @@ let renderer: Renderer;
 beforeAll(async () => { renderer = await createRenderer({ root }); });
 afterAll(async () => renderer?.close());
 
+it("visits real viewport and nested scroll reveals, replays the policy and reports bounded traversal", async () => {
+  const target = { file: path.join(root, "Observed.tsx"), viewport: { width: 400, height: 600 } };
+  const ordinary = await renderer.render(target);
+  const revealed = await renderer.render({ ...target, capturePolicy: { scroll: {} } });
+  expect(revealed.errors).toEqual([]);
+  expect(revealed.scrollCapture).toMatchObject({ complete: true, restored: true });
+  expect(revealed.scrollCapture!.visited.length).toBeGreaterThan(1);
+  expect(revealed.png.equals(ordinary.png)).toBe(false);
+  const replay = await renderer.diff(revealed.captureId!);
+  expect(replay.changedPixels).toBe(0);
+  expect(replay.after.target.capturePolicy).toEqual({ scroll: {} });
+  const limited = await renderer.render({ ...target, capturePolicy: { scroll: { maxSteps: 1 } } });
+  expect(limited.scrollCapture?.complete).toBe(false);
+  expect(limited.complete).toBe(false);
+  expect(limited.warnings.join()).toContain("Scroll traversal incomplete");
+  const nested = await renderer.render({ ...target, props: { nested: true }, capturePolicy: { scroll: { selector: "[data-scroll-area]" } } });
+  expect(nested.scrollCapture).toMatchObject({ complete: true, restored: true, selector: "[data-scroll-area]" });
+  expect(nested.scrollCapture!.visited.at(-1)!.y).toBeGreaterThan(600);
+  await expect(renderer.render({ ...target, capturePolicy: { scroll: { maxSteps: 1000 } } })).rejects.toThrow(/maxSteps/);
+});
+
 it("captures scroll-revealed content through reduced motion, with an explicit replayable opt-out", async () => {
   const still = await renderer.render({ file, props: { animated: false }, viewport: { width: 400, height: 600 } });
   const revealed = await renderer.render({ file, props: { animated: true }, viewport: { width: 400, height: 600 } });

@@ -11,6 +11,15 @@ beforeAll(async () => { renderer = await createRenderer({ root }); });
 afterAll(async () => renderer?.close());
 
 describe("render evidence and edit verification", () => {
+  it("gives evidence-backed recovery steps without replacing render errors", async () => {
+    const sampled = await renderer.render({ file: path.join(root, "components/Alert.tsx"), exportName: "Alert" });
+    expect(sampled.diagnostics).toContainEqual(expect.objectContaining({ code: "SAMPLED_PROPS", phase: "inputs", recovery: expect.stringContaining("list_usages") }));
+    const failed = await renderer.render({ file: path.join(root, "components/Broken.tsx") });
+    expect(failed.errors.length).toBeGreaterThan(0);
+    expect(failed.diagnostics).toContainEqual(expect.objectContaining({ code: "RENDER_ERROR", severity: "error", file: path.join(root, "components/Broken.tsx") }));
+    expect((await renderer.render(target)).diagnostics).toEqual([]);
+  });
+
   it("returns reproducible, structured evidence and a capture id", async () => {
     const result = await renderer.render(target);
     expect(result.target).toEqual({ file, exportName: "ProductCard", props: target.props });
@@ -81,10 +90,12 @@ describe("render evidence and edit verification", () => {
   });
 
   it("serializes simultaneous renders so their props and images cannot cross", async () => {
-    const results = await Promise.all(["One", "Two", "Three"].map((title) => renderer.render({ ...target, props: { title, price: 1 } })));
+    const progress: string[][] = [[], [], []];
+    const results = await Promise.all(["One", "Two", "Three"].map((title, index) => renderer.render({ ...target, props: { title, price: 1 } }, { onProgress: (event) => { progress[index].push(event.phase); } })));
     for (const [i, result] of results.entries()) {
       expect(result.snapshot).toContain(["One", "Two", "Three"][i]);
       expect(result.errors).toEqual([]);
+      expect(progress[i]).toEqual(["source", "prepare", "render", "settle", "capture"]);
     }
   });
 
