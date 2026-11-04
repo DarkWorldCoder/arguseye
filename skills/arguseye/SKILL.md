@@ -29,9 +29,9 @@ Function props are passed as `{ "$fn": "(x) => ..." }`, dates as `{ "$date": "20
 
 For render tools, `output` is `"image"`, `"summary"` or `"both"` (default). Use summary for a compact text response, image for visual inspection, or both when needed. Structured evidence remains available separately from image bytes.
 
-## Feature-branch evidence options (unreleased)
+## Render evidence options (0.0.19+)
 
-These additions are absent from published 0.0.18. Inspect the connected tool's advertised schema before using them. Read `diagnostics[].recovery` as advice while retaining the original errors and warnings; do not execute suggested source changes automatically. An audit's `ok` mount count is separate from its complete/incomplete evidence counts.
+These additions require 0.0.19 or later. Inspect the connected tool's advertised schema before using them. Read `diagnostics[].recovery` as advice while retaining the original errors and warnings; do not execute suggested source changes automatically. An audit's `ok` mount count is separate from its complete/incomplete evidence counts.
 
 For real below-fold observers, use `capturePolicy: {scroll: {}}` on rendering tools. An optional `selector` names one nested scroll container; `maxSteps`, `timeoutMs` and `maxDistance` bound traversal. Read `scrollCapture` and preserve incomplete coverage. Traversal restores the original view and does not force hidden content to become visible; visited range is not proof every animation completed. Baseline comparisons replay the policy.
 

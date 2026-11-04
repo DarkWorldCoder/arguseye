@@ -2,7 +2,7 @@
 
 Research date: November 4, 2026. Source baseline: local package version 0.0.18. Method: source inspection, Agent Reach's Exa web search, and its GitHub CLI backend for repository metadata, licenses and selected issue reports. No external code was installed or executed. This is a proposal, not an implementation or a new conformance result.
 
-Implementation follow-up: `feat/render-verification-evidence` adds the first render-report milestone: audit completeness, recovery diagnostics, real progress, bounded scroll traversal and optional DOM layout/used-font inspection. These are unreleased source additions; affected-component matrices, richer interaction/network recipes and further adapters below remain proposals. See [the implemented contracts](../rendering.md#unreleased-render-evidence).
+Implementation follow-up: `feat/render-verification-evidence` adds the first render-report milestone: audit completeness, recovery diagnostics, real progress, bounded scroll traversal and optional DOM layout/used-font inspection. These additions are included in the 0.0.19 release candidate; affected-component matrices, richer interaction/network recipes and further adapters below remain proposals. See [the implemented contracts](../rendering.md#render-evidence).
 
 ## Decision
 

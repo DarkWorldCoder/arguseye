@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.19 — 2026-11-04
+
+- Return evidence-backed recovery diagnostics while preserving original errors, warnings and unresolved inputs. Audits count complete and incomplete evidence separately from successful mounts.
+- Show real reading, preparation and render phases in VS Code. MCP clients requesting progress receive notifications from actual work; cancellation stops the request’s notifications. No simulated thinking or estimated percentages.
+- Add opt-in bounded vertical scroll traversal for document or nested scroll containers. Restore the original position, retain coverage and limit warnings, and replay the capture policy in baseline comparisons. Traversal does not guarantee that every animation or lazy asset is visible.
+- Add opt-in layout observations and Chromium’s actually used font families, alongside requested CSS fonts. Inspection covers at most 100 DOM descendants and excludes shadow trees and iframe documents; missing inspection data stays explicit. Ordinary warm renders do not enable these extra checks.
+- Expose the same evidence through CLI JSON, MCP, saved captures and the bundled agent skill. Existing installation, file-boundary, application-context and platform limits remain; this release does not claim to fix them.
+
 ## 0.0.18 — 2026-11-03
 
 The 0.0.17 candidate was withheld after its new Windows VS Code test compared an unnormalized drive-letter path with VS Code’s normalized URI path. The component mounted successfully; this release corrects the assertion without changing time limits. Version 0.0.17 was not published to npm or the extension registries.

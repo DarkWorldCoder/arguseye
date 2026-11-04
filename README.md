@@ -42,7 +42,7 @@ If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorl
 
 ## In development
 
-Source-branch preview: the next release adds real progress messages, recovery diagnostics, audit completeness, opt-in scroll captures and actual-font/layout inspection. These options are **not in published 0.0.18**. See the [unreleased rendering contracts](docs/rendering.md#unreleased-render-evidence).
+Version **0.0.19** adds real progress messages, recovery diagnostics, audit completeness, opt-in scroll captures and actual-font/layout inspection. See the [rendering contracts and limits](docs/rendering.md#render-evidence).
 
 ## Native template previews
 

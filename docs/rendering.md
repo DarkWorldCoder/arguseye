@@ -1,8 +1,11 @@
-# Reproducible and bounded verification (0.0.14)
+# Reproducible and bounded verification
 
-## Unreleased render evidence
+<a id="unreleased-render-evidence"></a>
+<a id="render-evidence"></a>
 
-The following options are implemented on the feature branch and are not included in published 0.0.18 packages.
+## Render evidence (0.0.19)
+
+The following options require version 0.0.19 or later. Check the installed version and advertised tool schema before using them.
 
 Render results add `diagnostics` with an observed message, target file, phase, severity, code and recovery advice. Original errors, unresolved inputs and warnings remain authoritative. A recovery suggestion does not change source, synthesize authentication or establish correctness. MCP summary output includes bounded next steps. Audits retain `ok` as a mount status and separately count complete/incomplete evidence; skipped targets have no completeness verdict.
 
