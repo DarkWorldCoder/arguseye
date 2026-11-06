@@ -41,6 +41,21 @@ describe("render evidence and edit verification", () => {
     expect(result.newErrors).toEqual([]);
   });
 
+  it("reuses identical PNGs while still reporting accessibility-only edits", async () => {
+    try {
+      renderer.server.updateBuffer(file, 'export function ProductCard(){return <button aria-label="Before">Same pixels</button>}');
+      const baseline = await renderer.render(target);
+      renderer.server.updateBuffer(file, 'export function ProductCard(){return <button aria-label="After">Same pixels</button>}');
+      const result = await renderer.diff(baseline.captureId!);
+      expect(result.before.png.equals(result.after.png)).toBe(true);
+      expect(result.diffPng.equals(result.after.png)).toBe(true);
+      expect(result.changedPixels).toBe(0);
+      expect(result.dimensions.before).toEqual(result.dimensions.after);
+      expect(result.snapshotChanged).toBe(true);
+      expect(result.status).toBe("changed");
+    } finally { renderer.server.updateBuffer(file, undefined); }
+  });
+
   it("preserves sampled-input provenance through comparisons and their returned capture handles", async () => {
     const baseline = await renderer.render({ file: path.join(root, "components/Alert.tsx"), exportName: "Alert" });
     expect(baseline.propsSource).toBe("sample");

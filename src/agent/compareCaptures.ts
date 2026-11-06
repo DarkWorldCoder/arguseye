@@ -17,11 +17,18 @@ export type DiffResult = {
   resolvedErrors: string[];
   newWarnings: string[];
   resolvedWarnings: string[];
+  environmentChanges: string[];
 };
 
 /** Compares decoded pixels in Chromium, avoiding a second image codec and work on ordinary renders. */
 export async function compareCaptures(page: Page, before: RenderResult, after: RenderResult): Promise<DiffResult> {
-  const pixels = await page.evaluate(async ([a, b]) => {
+  // Exact PNG equality proves equal pixels; semantic and completeness checks still run below.
+  const identical = before.png.equals(after.png);
+  const dimensions = (png: Buffer) => ({ width: png.readUInt32BE(16), height: png.readUInt32BE(20) });
+  const pixels = identical ? {
+    changedPixels: 0, changedPercent: 0, changedRegion: null, png: "",
+    dimensions: { before: dimensions(before.png), after: dimensions(after.png) },
+  } : await page.evaluate(async ([a, b]) => {
     const decode = (data: string) => new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image(); img.onload = () => resolve(img); img.onerror = reject;
       img.src = "data:image/png;base64," + data;
@@ -66,12 +73,25 @@ export async function compareCaptures(page: Page, before: RenderResult, after: R
   const incompatibleRuntime = identity(before) !== identity(after);
   const runtimeWarnings = incompatibleRuntime ? ["Template engine or runtime identity changed since the baseline; capture a new baseline before treating this comparison as complete."] : [];
   const stabilityWarnings = timerVariance ? ["Pixels or accessibility text changed with unchanged source and inputs while application timers remain scheduled; capture stability is not established."] : [];
+  const environmentChanges: string[] = [];
+  if (!before.environment?.capture || !after.environment?.capture) environmentChanges.push("Capture identity metadata is unavailable");
+  else {
+    for (const key of ["browserName", "browserVersion", "platform", "arch", "osRelease", "deviceScaleFactor", "toolVersion"] as const) {
+      const a = before.environment.capture[key], b = after.environment.capture[key];
+      if (a === undefined || b === undefined || a !== b) environmentChanges.push(`${key}: ${JSON.stringify(a)} → ${JSON.stringify(b)}`);
+    }
+    for (const key of ["locale", "timezoneId", "reducedMotion", "clock", "random"] as const) {
+      const a = before.environment[key], b = after.environment[key];
+      if (a === undefined || b === undefined || a !== b) environmentChanges.push(`${key}: ${JSON.stringify(a)} → ${JSON.stringify(b)}`);
+    }
+  }
+  const environmentWarnings = environmentChanges.length ? [`Capture environment changed or is unavailable (${environmentChanges.join("; ")}); capture a new baseline before treating this comparison as complete.`] : [];
   return {
-    ...metrics, diffPng: Buffer.from(png, "base64"), before, after, snapshotChanged,
-    status: !before.complete || !after.complete || timerVariance || incompatibleRuntime ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
+    ...metrics, diffPng: identical ? Buffer.from(after.png) : Buffer.from(png, "base64"), before, after, snapshotChanged, environmentChanges,
+    status: !before.complete || !after.complete || timerVariance || incompatibleRuntime || environmentChanges.length ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
     newErrors: after.errors.filter((e) => !before.errors.includes(e)),
     resolvedErrors: before.errors.filter((e) => !after.errors.includes(e)),
-    newWarnings: [...after.warnings.filter((w) => !before.warnings.includes(w)), ...stabilityWarnings, ...runtimeWarnings],
+    newWarnings: [...after.warnings.filter((w) => !before.warnings.includes(w)), ...stabilityWarnings, ...runtimeWarnings, ...environmentWarnings],
     resolvedWarnings: before.warnings.filter((w) => !after.warnings.includes(w)),
   };
 }

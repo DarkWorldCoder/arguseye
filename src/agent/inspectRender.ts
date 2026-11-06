@@ -9,6 +9,9 @@ export type ElementEvidence = ElementStyleEvidence & { component?: string; sourc
 export type AccessibilityEvidence = { engine: string; scope: string; ms: number; violations: AccessibilityFinding[]; incomplete: AccessibilityFinding[]; passes: number; inapplicable: number; note: string };
 type AccessibilityFinding = { id: string; impact: string | null; description: string; help: string; helpUrl: string; nodes: Array<{ target: unknown; html: string; summary?: string }> };
 
+/** Selector-focused DOM evidence stays inside the captured scope; axe retains its full component scope. */
+export type InspectionRequest = { accessibility?: boolean; sources?: boolean; layout?: boolean; fonts?: boolean; selector?: string };
+
 /** Parses actual preview-module stack positions; package/chunk frames without maps remain generated evidence. */
 export async function errorLocations(errors: string[], server: PreviewServer): Promise<ErrorLocation[]> {
   const points: SourcePoint[] = [], seen = new Set<string>();
@@ -26,11 +29,15 @@ export async function errorLocations(errors: string[], server: PreviewServer): P
 }
 
 /** Runs heavy inspection only when requested; automated findings never establish accessibility conformance. */
-export async function inspectRender(page: Page, server: PreviewServer, request: { accessibility?: boolean; sources?: boolean; layout?: boolean; fonts?: boolean }, scope: string) {
+export async function inspectRender(page: Page, server: PreviewServer, request: InspectionRequest, scope: string) {
+  if (request.selector !== undefined) {
+    if (typeof request.selector !== "string" || !request.selector.trim() || request.selector.length > 2000) throw new Error("Inspection selector must contain 1–2000 characters.");
+    request = { ...request, layout: true };
+  }
   let accessibility: AccessibilityEvidence | undefined;
   let elements: ElementEvidence[] | undefined;
   if (request.sources) {
-    const raw = await page.evaluate((scope) => [...document.querySelectorAll(scope + " *")].slice(0, 100).map((element) => {
+    const raw = await page.evaluate(({ scope, selector }) => [...document.querySelectorAll(selector ?? scope + " *")].filter((element) => document.querySelector(scope)?.contains(element)).slice(0, 100).map((element) => {
       const el = element as any, cp = (window as any).__CP__;
       let fiber = el[Object.keys(el).find((key) => key.startsWith("__reactFiber$")) ?? ""];
       let component: string | undefined, componentFile: string | undefined, stack = "";
@@ -46,8 +53,8 @@ export async function inspectRender(page: Page, server: PreviewServer, request: 
         const index = node.parentElement ? [...node.parentElement.children].indexOf(node) + 1 : 1;
         chain.unshift(`${node.tagName.toLowerCase()}:nth-child(${index})`); node = node.parentElement;
       }
-      return { selector: (node?.id === "root" ? "#root > " : "body > ") + chain.join(" > "), tag: element.tagName.toLowerCase(), text: (element.textContent ?? "").trim().slice(0, 160), component, componentFile, stack };
-    }), scope);
+      return { selector: node?.id === "root" ? "#root" + (chain.length ? " > " + chain.join(" > ") : "") : "body" + (chain.length ? " > " + chain.join(" > ") : ""), tag: element.tagName.toLowerCase(), text: (element.textContent ?? "").trim().slice(0, 160), component, componentFile, stack };
+    }), { scope, selector: request.selector });
     elements = await Promise.all(raw.map(async ({ componentFile, stack, ...element }): Promise<ElementEvidence> => {
       const mapped = (await errorLocations([stack], server)).find((ref) => ref.original)?.original;
       if (mapped) return { ...element, source: { ...mapped, kind: "mapped" } };

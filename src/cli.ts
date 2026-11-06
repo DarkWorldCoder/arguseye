@@ -30,6 +30,7 @@ const HELP = `arguseye: inspect components and verify UI edits, no application s
       --fixtures FILE.json replays explicit browser inputs; --timeout-ms N bounds execution
       --scroll [--scroll-container CSS] visits bounded scroll reveals before capture
       --capture-policy FILE.json configures traversal limits; --layout --fonts inspects geometry and actual fonts
+      --inspect-selector CSS focuses DOM/source/font inspection within the captured scope and enables layout
 
   arguseye diff --baseline DIR --out DIR [--json] [--root DIR]
       Compare current source against a saved baseline; writes before/after/diff PNGs and JSON
@@ -75,6 +76,7 @@ const { positionals, values } = parseArgs({
     sources: { type: "boolean" },
     layout: { type: "boolean" },
     fonts: { type: "boolean" },
+    "inspect-selector": { type: "string" },
     scroll: { type: "boolean" },
     "scroll-container": { type: "string" },
     "capture-policy": { type: "string" },
@@ -161,7 +163,7 @@ if (values.help || !command) {
       const result = await renderer.render({
         theme: values.theme as "light" | "dark" | undefined,
         ...target,
-        inspection: values.accessibility || values.sources || values.layout || values.fonts ? { accessibility: values.accessibility, sources: values.sources, layout: values.layout, fonts: values.fonts } : undefined,
+        inspection: values.accessibility || values.sources || values.layout || values.fonts || values["inspect-selector"] !== undefined ? { accessibility: values.accessibility, sources: values.sources, layout: values.layout, fonts: values.fonts, selector: values["inspect-selector"] } : undefined,
         capturePolicy: values["capture-policy"] ? JSON.parse(await readFile(values["capture-policy"], "utf8")) : values.scroll || values["scroll-container"] ? { scroll: { selector: values["scroll-container"] } } : undefined,
         fixtures: values.fixtures ? JSON.parse(await readFile(values.fixtures, "utf8")) : undefined,
         usage: values.usage,

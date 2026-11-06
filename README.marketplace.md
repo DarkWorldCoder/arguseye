@@ -15,6 +15,13 @@ Your project's dependencies must be installed. Headless CLI and MCP use also req
 
 Release builds target **Windows x64, macOS Apple Silicon, and Linux x64**. Screenshots below were captured in a real VS Code extension host on Linux; Windows and macOS builds are packaged separately. Images use public HTTPS URLs and load independently of your operating system.
 
+
+## Focused inspection and baseline compatibility (0.0.20+)
+
+Inspect a specific heading or button with `inspection: {selector: "h2", fonts: true, sources: true}` in MCP, or `shot app/page.tsx --inspect-selector 'h2' --fonts --sources --json` in the CLI. Results cover up to 100 matching nodes inside the captured component, including targets after the first 100 page nodes. Missing targets keep the PNG and report incomplete inspection. Shadow trees and iframe documents remain excluded; accessibility checks retain the full captured scope.
+
+Saved captures record the browser version, platform/architecture, OS release, pixel ratio and Arguseye version. Comparisons expose `environmentChanges` and stay incomplete across changed identities or legacy baselines without this metadata. Capture a fresh baseline in the current environment. Font, GPU and external-resource differences are not fully fingerprinted.
+
 ## Native template previews
 
 Preview Django, Jinja2, Handlebars, Mustache, EJS, Pug, Nunjucks, LiquidJS and other native Node/Python/PHP/Ruby templates with explicit JSON context and your own installed engines. Right-click a template in VS Code, select **Preview Component**, choose its engine/data profile and compare unsaved edits against a baseline. No app server or stories are needed.

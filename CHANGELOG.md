@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.20 — 2026-11-06
+
+- Focus optional DOM/source/font evidence with `inspection.selector` or CLI `--inspect-selector`. Inspect up to 100 matching nodes inside the captured scope, including late page targets. A missing or invalid selector keeps the image and reports incomplete requested inspection. Axe keeps its full captured scope; shadow trees and iframe documents remain excluded.
+- Repair root/body selectors when portals expand the captured scope, so Chromium can report actual fonts for those elements. Font-inspection transport failures preserve layout evidence with explicit unavailable reasons.
+- Record capture identity (Chromium version, platform/architecture, OS release, pixel ratio and tool version) using existing measurement work. Return `environmentChanges`; changed identities/browser policies or legacy baselines without metadata make comparisons incomplete and request recapturing. This does not fingerprint all fonts, GPU settings or external resources.
+- Skip browser pixel decoding for byte-identical PNGs while still comparing accessibility text, errors, warnings and environment compatibility. Their unhighlighted diff image is an independent copy of the after frame.
+- Document the new agent workflow and source-backed priorities. Existing installation, file-boundary, runtime/context and platform limits are unchanged; this release does not claim to fix them.
+
 ## 0.0.19 — 2026-11-04
 
 - Return evidence-backed recovery diagnostics while preserving original errors, warnings and unresolved inputs. Audits count complete and incomplete evidence separately from successful mounts.

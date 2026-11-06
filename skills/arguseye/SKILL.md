@@ -37,6 +37,12 @@ For real below-fold observers, use `capturePolicy: {scroll: {}}` on rendering to
 
 Use `inspection: {layout: true, fonts: true}` on `render_component` for bounded geometry, clipping/overflow observations and actual used-font families/glyph counts. Requested CSS families alone do not establish font fidelity. Inspect `styleInspection` coverage and cost: only the first 100 DOM descendants are covered, excluding shadow and iframe documents. Treat clipping/ellipsis as observations requiring review. CLI source builds expose `--scroll`, `--scroll-container`, `--capture-policy`, `--layout` and `--fonts`.
 
+## Focused evidence (0.0.20+)
+
+Check the connected schema before using `inspection.selector`. Use `{selector:"h2",fonts:true,sources:true}` to inspect at most 100 matching nodes within the capture, including late page targets. Selector-only requests enable layout evidence. Missing/invalid targets make requested inspection incomplete while preserving the image. Shadow/iframe documents remain excluded and axe keeps its full captured scope. CLI: `shot app/page.tsx --inspect-selector 'h2' --fonts --sources --json`.
+
+Read `environment.capture` and diff `environmentChanges`. Browser/tool version, platform/architecture, OS release, pixel ratio or browser-policy differences make comparisons incomplete; legacy baselines without capture identity need recapturing. This is not a complete font/GPU/external-state fingerprint. Byte-identical PNGs skip pixel decoding but still compare semantic/context evidence; their diff image is an unhighlighted copy of the after frame.
+
 ## Native templates (0.0.16+)
 
 Template adapters require Arguseye 0.0.16 or later and native compilation mode. Supply `engine` when needed and JSON `props` as context; an optional `profile` selects project-owned preview data. A Python/PHP/Ruby project does not need React or `package.json`. Install its real engine/runtime dependencies; do not substitute another engine with similar delimiters. `inspect_project` reports declared template configuration before runtime execution.

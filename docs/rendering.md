@@ -39,11 +39,24 @@ node dist/cli.mjs shot app/page.tsx --capture-policy capture-policy.json --json
 
 The policy file contains the `capturePolicy` object itself, for example `{"scroll":{"maxSteps":8}}`. These examples run a built source checkout; do not assume an older registry version supports these flags.
 
+
+### Focused inspection and compatible baselines (0.0.20+)
+
+Use `inspection: {selector: "h2", fonts: true, sources: true}` to inspect headings beyond the first 100 page nodes. A selector enables layout evidence and limits DOM/source/font results to the first 100 matches inside the captured root (or body when portals expand it). `styleInspection` records the selector, total matches and coverage. Missing or invalid selectors preserve the PNG while reporting incomplete requested inspection. Axe remains scoped to the whole captured component; this selector does not narrow accessibility checks. Shadow trees and iframe documents remain excluded.
+
+```bash
+npx @ayushniroula/arguseye shot app/page.tsx --inspect-selector 'h2' --fonts --sources --json
+```
+
+`environment.capture` records Chromium version, platform, architecture, OS release, device pixel ratio and Arguseye version. Comparisons return `environmentChanges`, and report `incomplete` when capture identities or locale/timezone/motion/clock/random policies differ. Old saved baselines without capture metadata still load, but need recapturing for a complete comparison. This metadata does not fingerprint every font, GPU, hardware setting or external resource, and is not a guarantee of deterministic pixels.
+
+When PNG bytes are identical, comparison skips redundant browser pixel decoding and uses a copy of the after image as the unhighlighted diff. Accessibility text, errors, context warnings and capture-environment checks still run. An unchanged image can therefore produce a changed or incomplete comparison.
+
 ### Layout and actual fonts
 
 `inspection.layout` adds element bounds, selected computed styles and observations for overflow, clipping, ellipsis, hidden ancestry and zero size. Those observations can describe intentional design and do not become correctness failures. `inspection.fonts` adds the CSS family/weight/size and Chromium's actually used font families, custom-font flags and glyph counts. This distinguishes requested fonts from fallback glyphs; a difference is not automatically a font defect.
 
-This selector-based inspection is limited to the first 100 descendants of the captured scope and excludes shadow trees and iframe documents. `styleInspection` records total/inspected counts, coverage completeness and elapsed time. Unsupported font inspection or a changing node remains explicitly unavailable with a reason. `timings.inspection` reports the extra analysis cost; scroll cost is recorded separately in `scrollCapture.ms` and included in the overall settle stage. Neither option is enabled on the ordinary warm-render path.
+By default this inspection covers the first 100 descendants of the captured scope and excludes shadow trees and iframe documents. `styleInspection` records total/inspected counts, coverage completeness and elapsed time. Unsupported font inspection or a changing node remains explicitly unavailable with a reason. `timings.inspection` reports the extra analysis cost; scroll cost is recorded separately in `scrollCapture.ms` and included in the overall settle stage. Neither option is enabled on the ordinary warm-render path.
 
 ## Project build plugins
 

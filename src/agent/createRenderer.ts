@@ -1,6 +1,8 @@
 import { fileFromUrl } from "../server/fileUrl.js";
-import { inspectRender, errorLocations, type AccessibilityEvidence, type ElementEvidence, type ErrorLocation } from "./inspectRender.js";
+import { inspectRender, errorLocations, type AccessibilityEvidence, type ElementEvidence, type ErrorLocation, type InspectionRequest } from "./inspectRender.js";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { release as osRelease } from "node:os";
+import { packageVersion } from "../packageVersion.js";
 import { installFixtures, validateFixtures, type RenderFixtures, type FixtureProvenance } from "./renderFixtures.js";
 import { randomUUID } from "node:crypto";
 import { routeFor, routePath } from "../project/routeFor.js";
@@ -26,7 +28,7 @@ export type RenderRequest = PreviewTarget & {
   /** Explicit replay inputs; uses a fresh page so module-level reads are deterministic too. */
   fixtures?: RenderFixtures;
   /** Optional heavier accessibility and source inspection, outside the default render path. */
-  inspection?: { accessibility?: boolean; sources?: boolean; layout?: boolean; fonts?: boolean };
+  inspection?: InspectionRequest;
   /** Slower explicit traversal for below-fold reveals; ordinary captures never scroll automatically. */
   capturePolicy?: { scroll?: ScrollPolicy };
   viewport?: { width: number; height: number };
@@ -50,6 +52,9 @@ export type Action = {
 };
 export type Target = { role?: string; name?: string; text?: string; label?: string; placeholder?: string; testId?: string; selector?: string; exact?: boolean };
 
+/** Observed capture identity detects known cross-machine differences, not every rendering variable. */
+export type CaptureEnvironment = { browserName: "chromium"; browserVersion: string; platform: string; arch: string; osRelease: string; deviceScaleFactor: number; toolVersion: string };
+
 export type RenderResult = {
   /** PNG cropped to the rendered component. */
   png: Buffer;
@@ -60,9 +65,9 @@ export type RenderResult = {
   build?: PreviewServer["build"];
   accessibility?: AccessibilityEvidence;
   elements?: ElementEvidence[];
-  styleInspection?: { scope: string; total: number; inspected: number; limit: number; complete: boolean; ms: number; note: string };
+  styleInspection?: { scope: string; selector?: string; total: number; inspected: number; limit: number; complete: boolean; ms: number; reason?: string; note: string };
   errorLocations?: ErrorLocation[];
-  environment?: { locale: string; timezoneId: string; reducedMotion: "reduce" | "no-preference"; clock: "system" | "fixed"; random: "runtime" | "seeded" };
+  environment?: { locale: string; timezoneId: string; reducedMotion: "reduce" | "no-preference"; clock: "system" | "fixed"; random: "runtime" | "seeded"; capture?: CaptureEnvironment };
   /** Scheduled application/dependency timers, distinct from observed instability or engine deadlines. */
   scheduledTimers?: number;
   /** Immutable baseline id, absent when rendering failed. */
@@ -119,6 +124,7 @@ export type Changes = {
   resolvedErrors: string[];
   newWarnings: string[];
   resolvedWarnings: string[];
+  environmentChanges: string[];
 };
 
 /** Retained browser pages and PNG buffers; excludes transient response buffers and Chromium heap. */
@@ -156,6 +162,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
   const usages = createUsageIndex(options.root, { readSource: server.readSource, version: server.version });
   let browser: Browser;
   try { browser = await launchChrome(); } catch (error) { if (!options.server) await server.close(); throw error; }
+  const captureRuntime = { browserName: "chromium" as const, browserVersion: browser.version(), platform: process.platform, arch: process.arch, osRelease: osRelease(), toolVersion: packageVersion };
   const captures = new Map<string, RenderResult>();
   let queue: Promise<unknown> = Promise.resolve();
   type Job = { guard(): void; pages: Set<Promise<Page>>; openPages: Set<Page>; active: boolean; onProgress?: RenderControl["onProgress"] };
@@ -615,7 +622,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (settled.infiniteWebAnimation) warnings.push("Infinite web animation paused at its first frame for verification; its running state was not captured.");
       marks.push(performance.now());
       progress(rest.file, "capture", "Capturing preview");
-      const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, rootIntact, scheduledTimers } = await page.evaluate(() => {
+      const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, deviceScaleFactor, rootIntact, scheduledTimers } = await page.evaluate(() => {
         // The box the component sits in (a frame or the call site's innermost ancestor), else the root's height and
         // the horizontal extent of what it rendered, so a 340 px card is not captured as wide as the viewport.
         const framed = document.querySelector("[data-cp-box]");
@@ -656,7 +663,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
           right = Math.min(innerWidth, Math.max(right, b.right)); bottom = Math.min(innerHeight, Math.max(bottom, b.bottom));
         }
         return {
-          environment: (window as any).__CP__.environment,
+          environment: { ...(window as any).__CP__.environment }, deviceScaleFactor: window.devicePixelRatio,
           rootIntact: !!document.getElementById("root"),
           box: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) },
           portals: portaled.length,
@@ -685,7 +692,11 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       let inspectionResult = {};
       if (inspection) {
         progress(rest.file, "inspect", "Inspecting preview evidence");
-        try { inspectionResult = await inspectRender(page, server, inspection, portals || !rootIntact ? "body" : "#root"); }
+        try {
+          const inspected = await inspectRender(page, server, inspection, portals || !rootIntact ? "body" : "#root");
+          inspectionResult = inspected;
+          if (inspected.styleInspection?.reason) warnings.push("Requested inspection incomplete: " + inspected.styleInspection.reason);
+        }
         catch (error) { warnings.push("Requested inspection did not complete: " + String((error as Error).message ?? error)); }
       }
       if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
@@ -698,7 +709,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (template?.unresolved?.length) unresolved.push(...template.unresolved);
       const result: RenderResult = {
         ...(template ? { template } : {}), ...(traversal ? { scrollCapture: traversal } : {}),
-        png, snapshot, scheduledTimers, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        png, snapshot, scheduledTimers, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, capture: { ...captureRuntime, deviceScaleFactor }, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
         ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),
@@ -726,7 +737,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         result.changes = {
           status: diff.status, changedPercent: diff.changedPercent, changedPixels: diff.changedPixels, changedRegion: diff.changedRegion, snapshotChanged: diff.snapshotChanged,
           snapshotDiff: lineDiff(previous.snapshot, result.snapshot), newErrors: diff.newErrors, resolvedErrors: diff.resolvedErrors,
-          newWarnings: diff.newWarnings, resolvedWarnings: diff.resolvedWarnings,
+          newWarnings: diff.newWarnings, resolvedWarnings: diff.resolvedWarnings, environmentChanges: diff.environmentChanges,
         };
       }
       guard();

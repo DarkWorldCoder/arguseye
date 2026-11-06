@@ -2,6 +2,46 @@ import { expect, it } from "vitest";
 import path from "node:path";
 import { createRenderer } from "../../src/agent/createRenderer.js";
 
+it("focuses inspection beyond the first 100 nodes and reports missing targets without losing the render", async () => {
+  const root = path.resolve("test/fixtures/react-app"), file = path.join(root, "components/Inspection.tsx");
+  const renderer = await createRenderer({ root });
+  try {
+    renderer.server.updateBuffer(file, 'export function Inspection(){return <section>{Array.from({length:110},(_,i)=><div key={i}>Item {i}</div>)}<button id="inspect-me" style={{width:137}}>Inspect this</button></section>}');
+    const inspection = { selector: "#inspect-me", fonts: true, sources: true };
+    const result = await renderer.render({ file, exportName: "Inspection", inspection });
+    expect(result.errors).toEqual([]);
+    expect(result.elements).toHaveLength(1);
+    expect(result.elements![0]).toMatchObject({ text: "Inspect this", bounds: { width: 137 }, font: { status: "available" }, source: { file } });
+    expect(result.styleInspection).toMatchObject({ selector: "#inspect-me", total: 1, inspected: 1, complete: true });
+    const replay = await renderer.diff(result.captureId!);
+    expect(replay.after.target.inspection).toEqual(inspection);
+    expect(replay.after.elements).toHaveLength(1);
+    const missing = await renderer.render({ file, exportName: "Inspection", inspection: { selector: "head, #missing" } });
+    expect(missing.errors).toEqual([]);
+    expect(missing.snapshot).toContain("Inspect this");
+    expect(missing.elements).toEqual([]);
+    expect(missing.complete).toBe(false);
+    expect(missing.warnings.join()).toContain("No elements matched");
+    const invalid = await renderer.render({ file, exportName: "Inspection", inspection: { selector: "[" } });
+    expect(invalid.errors).toEqual([]);
+    expect(invalid.complete).toBe(false);
+    expect(invalid.warnings.join()).toContain("Requested inspection did not complete");
+  } finally { await renderer.close(); }
+});
+
+it("keeps font selectors addressable when portal inspection includes the preview root", async () => {
+  const root = path.resolve("test/fixtures/react-app"), file = path.join(root, "components/Inspection.tsx");
+  const renderer = await createRenderer({ root });
+  try {
+    renderer.server.updateBuffer(file, 'import {createPortal} from "react-dom"; export function Inspection(){return <><p>Inside root</p>{createPortal(<aside>Portal text</aside>,document.body)}</>}');
+    const result = await renderer.render({ file, exportName: "Inspection", inspection: { fonts: true } });
+    expect(result.errors).toEqual([]);
+    expect(result.styleInspection?.scope).toBe("body");
+    expect(result.elements?.find((element) => element.selector === "#root")?.font?.status).toBe("available");
+    expect(result.elements?.find((element) => element.text === "Portal text" && element.tag === "aside")?.font?.status).toBe("available");
+  } finally { await renderer.close(); }
+});
+
 it("reports geometry and intentional clipping as observations rather than correctness failures", async () => {
   const root = path.resolve("test/fixtures/react-app"), file = path.join(root, "components/Inspection.tsx");
   const renderer = await createRenderer({ root });

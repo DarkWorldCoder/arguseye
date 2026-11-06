@@ -6,6 +6,8 @@ Version scope: 0.0.18 skips inferred JSX wrappers with unresolved runtime inputs
 
 Version 0.0.19 adds real render-phase progress for agents and VS Code, recovery diagnostics, audit completeness independent of mount status, opt-in bounded scroll traversal, and bounded DOM geometry/actual used-font inspection. Earlier packages do not contain these additions. See [the rendering options and limits](rendering.md#render-evidence).
 
+Version 0.0.20 adds selector-focused DOM/source/font evidence, addressable root/portal font inspection, and capture-environment identity checks. Legacy or incompatible baselines remain incomplete even when the pixels match. Exact PNG equality skips redundant decoding while retaining semantic and context checks.
+
 ## What is implemented
 
 - Your actual React/Next.js browser component, Vue 3 SFC or Svelte component, using the project's packages and Chromium. React Router and Remix browser components use the project's memory data router.
@@ -47,7 +49,7 @@ References checked on 2026-10-27:
 
 `npm test` covers server HTTP, updates/timing, headless rendering, MCP contracts and installed fixtures. `npm run test:vscode` checks the panel workflow in the real extension host. `npm run benchmark` records the same fixture-edit task through our MCP and Playwright MCP plus Vite. Raw results and limitations live in `benchmarks/latest.json`; no fixed speedup or token saving is promised.
 
-The MVP is local. Next.js server execution, Nuxt application context, arbitrary provider reconstruction, backend/auth-dependent states, agent interaction scripting, cloud review and team dashboards remain outside this release. See README.md for the exact compatibility limits and setup commands.
+The MVP is local. Bounded caller-authored actions and explicit storage/network fixtures are supported. Next.js server execution, Nuxt application context, arbitrary provider reconstruction, backend/auth-dependent state reconstruction, unbounded interaction scripting, cloud review and team dashboards remain outside this release. See README.md for the exact compatibility limits and setup commands.
 
 ## State (2026-10-29)
 Added: render inside the call site's parent box (`list_usages` context, `render_component in_context`, `frame`), states before capture (`actions`, `storage`), function props (`$fn`), `NEXT_PUBLIC_*` env, Next app-router previews on Next's vendored React canary, settled-frame capture (fonts, images). Verified on WiseAdmit: Footer, Navbar and the 641-line AIEcosystem section render with no errors. Cold starts on a large provider chain are 7–32 s per new package set: next is a one-time project-wide package warm-up at server start, then automatic `changes` on re-render, layout facts with refs, element→source. See docs/agent-wishlist.md.

@@ -42,7 +42,14 @@ If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorl
 
 ## In development
 
-Version **0.0.19** adds real progress messages, recovery diagnostics, audit completeness, opt-in scroll captures and actual-font/layout inspection. See the [rendering contracts and limits](docs/rendering.md#render-evidence).
+Version **0.0.20** adds focused DOM/source/font inspection, portal-root font fixes, capture-environment compatibility checks and faster byte-identical image comparisons. It retains 0.0.19’s real progress, recovery diagnostics, audit completeness and opt-in scroll capture. See the [rendering contracts and limits](docs/rendering.md#render-evidence).
+
+
+## Focused inspection and baseline compatibility (0.0.20+)
+
+Inspect a specific heading or button with `inspection: {selector: "h2", fonts: true, sources: true}` in MCP, or `shot app/page.tsx --inspect-selector 'h2' --fonts --sources --json` in the CLI. Results cover up to 100 matching nodes inside the captured component, including targets after the first 100 page nodes. Missing targets keep the PNG and report incomplete inspection. Shadow trees and iframe documents remain excluded; accessibility checks retain the full captured scope.
+
+Saved captures record the browser version, platform/architecture, OS release, pixel ratio and Arguseye version. Comparisons expose `environmentChanges` and stay incomplete across changed identities or legacy baselines without this metadata. Capture a fresh baseline in the current environment. Font, GPU and external-resource differences are not fully fingerprinted.
 
 ## Native template previews
 
