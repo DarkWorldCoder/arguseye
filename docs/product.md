@@ -8,6 +8,8 @@ Version 0.0.19 adds real render-phase progress for agents and VS Code, recovery 
 
 Version 0.0.20 adds selector-focused DOM/source/font evidence, addressable root/portal font inspection, and capture-environment identity checks. Legacy or incompatible baselines remain incomplete even when the pixels match. Exact PNG equality skips redundant decoding while retaining semantic and context checks.
 
+Version 0.0.21 fixes native Smarty compilation across clock boundaries and exposes explicit project-owned Smarty configuration. Its deterministic regression uses a slow native compiler filter and verifies unsaved partial updates. The original React live-update timing spike remains unexplained; delivery/import/refresh diagnostics and strict platform gates are retained.
+
 ## What is implemented
 
 - Your actual React/Next.js browser component, Vue 3 SFC or Svelte component, using the project's packages and Chromium. React Router and Remix browser components use the project's memory data router.

@@ -376,6 +376,8 @@ cp.ready = cp.show(cp.target).then(cp.report);
 cp.updates = 0;
 if (cp.live) new EventSource("/@events").onmessage = async (event) => {
   const update = JSON.parse(event.data);
+  cp.lastUpdateReceived = performance.now();
+  cp.lastUpdateImported = cp.lastUpdateApplied = undefined;
   if (update.full) return location.reload();
   cp.epoch = update.epoch;
   cp.versions = update.versions;
@@ -384,8 +386,10 @@ if (cp.live) new EventSource("/@events").onmessage = async (event) => {
       await cp.show({ ...cp.target, fresh: false });
     } else {
       await import(moduleUrl(update.file));
+      cp.lastUpdateImported = performance.now();
       if (update.kind === "refresh") cp.refresh.performReactRefresh();
     }
+    cp.lastUpdateApplied = performance.now();
   } catch (error) {
     fail(error);
     cp.status = "error";

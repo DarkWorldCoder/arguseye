@@ -40,7 +40,7 @@ describe("live updates from unsaved edits", () => {
     let notify!: (time: number) => void;
     const applied = new Promise<number>((resolve) => { notify = resolve; });
     await page.exposeFunction("recordVisibleEdit", () => notify(performance.now()));
-    await page.evaluate(() => {
+    const browserPrepared = await page.evaluate(() => {
       const observer = new MutationObserver(() => {
         const button = document.querySelector("button");
         if (button?.textContent === "Buy now (3)" && button.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
@@ -48,6 +48,7 @@ describe("live updates from unsaved edits", () => {
         }
       });
       observer.observe(document.getElementById("root")!, { subtree: true, childList: true, characterData: true });
+      return performance.now();
     });
     const edited = onDisk(card).replace("Add to cart", "Buy now");
     const cpuBefore = process.cpuUsage();
@@ -63,7 +64,13 @@ describe("live updates from unsaved edits", () => {
     const frameMs = performance.now() - started;
     const ms = (await applied) - started;
     console.log("React edit-to-visible-DOM", Math.round(ms), "ms; frame observation", Math.round(frameMs), "ms; target 50 ms, enforced DOM limit 100 ms");
-    console.log("React update phases", JSON.stringify({ buffer: updated - started, bufferCpuMs: (cpu.user + cpu.system) / 1000 }));
+    const browserPhases = await page.evaluate(() => ({
+      received: (window as any).__CP__.lastUpdateReceived,
+      imported: (window as any).__CP__.lastUpdateImported,
+      applied: (window as any).__CP__.lastUpdateApplied,
+      resources: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("ProductCard.tsx")).map((entry) => ({ start: entry.startTime, end: (entry as PerformanceResourceTiming).responseEnd, duration: entry.duration })),
+    }));
+    console.log("React update phases", JSON.stringify({ buffer: updated - started, bufferCpuMs: (cpu.user + cpu.system) / 1000, browserPrepared, ...browserPhases }));
 
     expect(ms).toBeGreaterThanOrEqual(0);
     expect(ms).toBeLessThan(100);
