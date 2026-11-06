@@ -30,7 +30,7 @@ export const renderOutputSchema = z.object({
   template: z.object({ engine: z.string(), runtime: z.string(), engineVersion: z.string().optional(), runtimeVersion: z.string().optional(), profile: z.string().optional(), dependencies: z.array(z.string()), unresolved: z.array(z.string()), stateReset: z.literal(true) }).optional(),
   scheduledTimers: z.number().int().nonnegative().optional(),
   propsSource: z.enum(["given", "usage", "sample", "none"]),
-  environment: z.object({ locale: z.string(), timezoneId: z.string(), reducedMotion: z.enum(["reduce", "no-preference"]).optional(), clock: z.enum(["system", "fixed"]), random: z.enum(["runtime", "seeded"]) }).optional(),
+  environment: z.object({ locale: z.string(), timezoneId: z.string(), reducedMotion: z.enum(["reduce", "no-preference"]).optional(), clock: z.enum(["system", "fixed"]), random: z.enum(["runtime", "seeded"]), capture: z.object({ browserName: z.literal("chromium"), browserVersion: z.string(), platform: z.string(), arch: z.string(), osRelease: z.string(), deviceScaleFactor: z.number(), toolVersion: z.string() }).optional() }).optional(),
   accessibility: z.object({ engine: z.string(), scope: z.string(), ms: z.number(), violations: z.array(record), incomplete: z.array(record), passes: z.number(), inapplicable: z.number(), note: z.string() }).optional(),
   elements: z.array(z.object({ selector: z.string(), tag: z.string(), text: z.string(), source: z.object({ file: z.string(), kind: z.enum(["mapped", "component-file"]), line: z.number().optional(), column: z.number().optional() }).optional() }).passthrough()).optional(),
   errorLocations: z.array(z.object({ generated: z.object({ file: z.string(), line: z.number(), column: z.number() }), original: z.object({ file: z.string(), line: z.number(), column: z.number() }).nullable(), reason: z.string().optional() })).optional(),
@@ -40,7 +40,7 @@ export const renderOutputSchema = z.object({
 export const diffOutputSchema = z.object({
   ...common, status: z.enum(["unchanged", "changed", "incomplete"]), before: renderOutputSchema, after: renderOutputSchema,
   changedPixels: z.number(), changedPercent: z.number(), changedRegion: region.nullable(), snapshotChanged: z.boolean(),
-  dimensions: z.object({ before: viewport, after: viewport }), newErrors: z.array(z.string()), resolvedErrors: z.array(z.string()), newWarnings: z.array(z.string()), resolvedWarnings: z.array(z.string()),
+  dimensions: z.object({ before: viewport, after: viewport }), newErrors: z.array(z.string()), resolvedErrors: z.array(z.string()), newWarnings: z.array(z.string()), resolvedWarnings: z.array(z.string()), environmentChanges: z.array(z.string()),
 }).passthrough();
 
 /** Gives static prop inspection a machine-readable counterpart to its existing text. */
