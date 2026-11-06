@@ -26,7 +26,7 @@ export const renderOutputSchema = z.object({
   complete: z.boolean(), snapshot: z.string(), ms: z.number(), reloaded: z.boolean(),
   diagnostics: z.array(z.object({ code: z.string(), severity: z.enum(["error", "warning"]), phase: z.enum(["render", "inputs", "context", "assets"]), file: z.string(), message: z.string(), recovery: z.string() })).optional(),
   scrollCapture: z.object({ selector: z.string().optional(), visited: z.array(z.object({ x: z.number(), y: z.number() })), complete: z.boolean(), restored: z.boolean(), ms: z.number(), reason: z.string().optional() }).optional(),
-  styleInspection: z.object({ scope: z.string(), total: z.number(), inspected: z.number(), limit: z.number(), complete: z.boolean(), ms: z.number(), note: z.string() }).optional(),
+  styleInspection: z.object({ scope: z.string(), selector: z.string().optional(), total: z.number(), inspected: z.number(), limit: z.number(), complete: z.boolean(), ms: z.number(), reason: z.string().optional(), note: z.string() }).optional(),
   template: z.object({ engine: z.string(), runtime: z.string(), engineVersion: z.string().optional(), runtimeVersion: z.string().optional(), profile: z.string().optional(), dependencies: z.array(z.string()), unresolved: z.array(z.string()), stateReset: z.literal(true) }).optional(),
   scheduledTimers: z.number().int().nonnegative().optional(),
   propsSource: z.enum(["given", "usage", "sample", "none"]),

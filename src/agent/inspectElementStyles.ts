@@ -1,4 +1,4 @@
-import type { Page } from "playwright-core";
+import type { CDPSession, Page } from "playwright-core";
 
 /** Observed font glyph usage comes from Chromium, not the requested CSS family alone. */
 export type FontEvidence = { requested: string; weight: string; size: string; status: "available" | "unavailable"; used: Array<{ familyName: string; isCustomFont: boolean; glyphCount: number }>; reason?: string };
@@ -6,17 +6,18 @@ export type FontEvidence = { requested: string; weight: string; size: string; st
 export type ElementStyleEvidence = { selector: string; tag: string; text: string; bounds?: { x: number; y: number; width: number; height: number }; observations?: string[]; styles?: Record<string, string>; font?: FontEvidence };
 
 /** Bounded opt-in geometry and glyph-font inspection; ordinary renders do not enable DOM/CSS agents. */
-export async function inspectElementStyles(page: Page, scope: string, request: { layout?: boolean; fonts?: boolean }) {
+export async function inspectElementStyles(page: Page, scope: string, request: { layout?: boolean; fonts?: boolean; selector?: string }) {
   const started = performance.now();
-  const raw = await page.evaluate(({ scope, layout, fonts }) => {
-    const nodes = [...document.querySelectorAll(scope + " *")];
+  const raw = await page.evaluate(({ scope, layout, fonts, selector }) => {
+    const container = document.querySelector(scope);
+    const nodes = [...document.querySelectorAll(selector ?? scope + " *")].filter((element) => container?.contains(element));
     const elements = nodes.slice(0, 100).map((element) => {
       const chain: string[] = []; let node: Element | null = element;
       while (node && node.id !== "root" && node !== document.body) {
         const index = node.parentElement ? [...node.parentElement.children].indexOf(node) + 1 : 1;
         chain.unshift(`${node.tagName.toLowerCase()}:nth-child(${index})`); node = node.parentElement;
       }
-      const selector = (node?.id === "root" ? "#root > " : "body > ") + chain.join(" > ");
+      const selector = node?.id === "root" ? "#root" + (chain.length ? " > " + chain.join(" > ") : "") : "body" + (chain.length ? " > " + chain.join(" > ") : "");
       const rect = element.getBoundingClientRect(), css = getComputedStyle(element);
       const observations: string[] = [];
       if (layout) {
@@ -38,11 +39,13 @@ export async function inspectElementStyles(page: Page, scope: string, request: {
       };
     });
     return { elements, total: nodes.length };
-  }, { scope, layout: !!request.layout, fonts: !!request.fonts });
+  }, { scope, layout: !!request.layout, fonts: !!request.fonts, selector: request.selector });
   const elements: ElementStyleEvidence[] = raw.elements;
-  if (request.fonts) {
-    const session = await page.context().newCDPSession(page);
+  let reason = request.selector && !raw.total ? `No elements matched "${request.selector}" within ${scope}.` : undefined;
+  if (request.fonts && elements.length) {
+    let session: CDPSession | undefined;
     try {
+      session = await page.context().newCDPSession(page);
       await session.send("DOM.enable"); await session.send("CSS.enable");
       const { root } = await session.send("DOM.getDocument", { depth: 0 });
       for (const element of elements) {
@@ -55,7 +58,11 @@ export async function inspectElementStyles(page: Page, scope: string, request: {
           element.font.status = "available";
         } catch (error) { element.font.reason = String((error as Error).message ?? error); }
       }
-    } finally { await session.detach().catch(() => {}); }
+    } catch (error) {
+      reason = "Font inspection unavailable: " + String((error as Error).message ?? error);
+      for (const element of elements) if (element.font?.status === "unavailable") element.font.reason ??= reason;
+    } finally { await session?.detach().catch(() => {}); }
+    if (elements.some((element) => element.font?.status === "unavailable")) reason ??= "Font inspection unavailable for some elements; inspect their font.reason fields.";
   }
-  return { elements, styleInspection: { scope, total: raw.total, inspected: elements.length, limit: 100, complete: raw.total <= 100 && elements.every((element) => element.font?.status !== "unavailable"), ms: Math.round(performance.now() - started), note: "Observed DOM geometry and used fonts only; observations are not correctness verdicts. Closed/open shadow trees and iframe documents are outside this selector-based inspection. A used font can differ legitimately from the first CSS family." } };
+  return { elements, styleInspection: { scope, ...(request.selector ? { selector: request.selector } : {}), total: raw.total, inspected: elements.length, limit: 100, complete: !reason && raw.total <= 100 && elements.every((element) => element.font?.status !== "unavailable"), ...(reason ? { reason } : {}), ms: Math.round(performance.now() - started), note: "Observed DOM geometry and used fonts only; observations are not correctness verdicts. Closed/open shadow trees and iframe documents are outside this selector-based inspection. A used font can differ legitimately from the first CSS family." } };
 }

@@ -1,5 +1,5 @@
 import { fileFromUrl } from "../server/fileUrl.js";
-import { inspectRender, errorLocations, type AccessibilityEvidence, type ElementEvidence, type ErrorLocation } from "./inspectRender.js";
+import { inspectRender, errorLocations, type AccessibilityEvidence, type ElementEvidence, type ErrorLocation, type InspectionRequest } from "./inspectRender.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { installFixtures, validateFixtures, type RenderFixtures, type FixtureProvenance } from "./renderFixtures.js";
 import { randomUUID } from "node:crypto";
@@ -26,7 +26,7 @@ export type RenderRequest = PreviewTarget & {
   /** Explicit replay inputs; uses a fresh page so module-level reads are deterministic too. */
   fixtures?: RenderFixtures;
   /** Optional heavier accessibility and source inspection, outside the default render path. */
-  inspection?: { accessibility?: boolean; sources?: boolean; layout?: boolean; fonts?: boolean };
+  inspection?: InspectionRequest;
   /** Slower explicit traversal for below-fold reveals; ordinary captures never scroll automatically. */
   capturePolicy?: { scroll?: ScrollPolicy };
   viewport?: { width: number; height: number };
@@ -60,7 +60,7 @@ export type RenderResult = {
   build?: PreviewServer["build"];
   accessibility?: AccessibilityEvidence;
   elements?: ElementEvidence[];
-  styleInspection?: { scope: string; total: number; inspected: number; limit: number; complete: boolean; ms: number; note: string };
+  styleInspection?: { scope: string; selector?: string; total: number; inspected: number; limit: number; complete: boolean; ms: number; reason?: string; note: string };
   errorLocations?: ErrorLocation[];
   environment?: { locale: string; timezoneId: string; reducedMotion: "reduce" | "no-preference"; clock: "system" | "fixed"; random: "runtime" | "seeded" };
   /** Scheduled application/dependency timers, distinct from observed instability or engine deadlines. */
@@ -685,7 +685,11 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       let inspectionResult = {};
       if (inspection) {
         progress(rest.file, "inspect", "Inspecting preview evidence");
-        try { inspectionResult = await inspectRender(page, server, inspection, portals || !rootIntact ? "body" : "#root"); }
+        try {
+          const inspected = await inspectRender(page, server, inspection, portals || !rootIntact ? "body" : "#root");
+          inspectionResult = inspected;
+          if (inspected.styleInspection?.reason) warnings.push("Requested inspection incomplete: " + inspected.styleInspection.reason);
+        }
         catch (error) { warnings.push("Requested inspection did not complete: " + String((error as Error).message ?? error)); }
       }
       if (empty && !allErrors.length) warnings.push("The component rendered nothing visible with these props (it returned null or elements with no size). Pass props that make it render: see describe_props, list_usages or `usage`.");
