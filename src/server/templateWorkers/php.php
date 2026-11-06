@@ -54,6 +54,8 @@ while (($line = fgets(STDIN)) !== false) {
         // PHP loaders use forward slashes; Node supplies native Windows separators in buffer keys.
         $req['overlays'] = array_combine(array_map('cp_key', array_keys($req['overlays'])), array_values($req['overlays']));
         $state = $req + ['dependencies' => []]; $state['dependencies'] = []; $state['sources'] = [];
+        // Reading again during compilation must not make unchanged source appear newer than its compiled output.
+        $state['sourceTimestamp'] = time();
         ob_start();
         $autoload = $req['root'] . '/vendor/autoload.php';
         if (is_file($autoload)) require_once $autoload;
@@ -89,7 +91,7 @@ while (($line = fgets(STDIN)) !== false) {
             $native = new \Smarty\Smarty;
             $native->setCompileDir($cache); $native->setTemplateDir($req['dirs']);
             $native->registerResource('arguseye', new class extends \Smarty\Resource\CustomPlugin {
-                protected function fetch($name, &$source, &$mtime) { $source = cp_read(cp_locate($name)); $mtime = time(); }
+                protected function fetch($name, &$source, &$mtime) { global $state; $source = cp_read(cp_locate($name)); $mtime = $state['sourceTimestamp']; }
                 public function populate(\Smarty\Template\Source $source, ?\Smarty\Template $_template = null) { parent::populate($source, $_template); $source->uid = hash('sha256', $source->name . cp_read(cp_locate($source->name))); }
             });
             $native->default_resource_type = 'arguseye';
