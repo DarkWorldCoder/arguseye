@@ -43,6 +43,10 @@ Check the connected schema before using `inspection.selector`. Use `{selector:"h
 
 Read `environment.capture` and diff `environmentChanges`. Browser/tool version, platform/architecture, OS release, pixel ratio or browser-policy differences make comparisons incomplete; legacy baselines without capture identity need recapturing. This is not a complete font/GPU/external-state fingerprint. Byte-identical PNGs skip pixel decoding but still compare semantic/context evidence; their diff image is an unhighlighted copy of the after frame.
 
+## Smarty setup (0.0.21+)
+
+Explicit PHP setup may return `configure(smarty)` to register native modifiers or compiler filters on the project’s real Smarty instance. Compilation uses a stable source timestamp within each render, including slow filters; unsaved helper/partial edits still need verification. Preserve lookup-tracing and other context warnings. Earlier packages do not provide this hook or clock-boundary fix.
+
 ## Native templates (0.0.16+)
 
 Template adapters require Arguseye 0.0.16 or later and native compilation mode. Supply `engine` when needed and JSON `props` as context; an optional `profile` selects project-owned preview data. A Python/PHP/Ruby project does not need React or `package.json`. Install its real engine/runtime dependencies; do not substitute another engine with similar delimiters. `inspect_project` reports declared template configuration before runtime execution.

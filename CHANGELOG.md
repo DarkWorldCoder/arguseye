@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.21 — 2026-11-06
+
+- Fix Smarty rejecting freshly compiled templates when compilation crosses a clock second. Keep the adapter’s source timestamp stable for each request while retaining content identities and unsaved include updates. A real project compiler prefilter reproduces the failure deterministically.
+- Support explicit PHP setup `configure(smarty)` using the project’s native Smarty instance, including unsaved helper changes. No setup is inferred and lookup-tracing warnings remain.
+- Record React live-update receipt, module-import and refresh phases in timing diagnostics. The strict 100 ms live-edit gate is unchanged; the earlier isolated 419 ms macOS delay is not claimed resolved by this instrumentation.
+- Supersede the 0.0.20 Marketplace candidate, which was withheld by its failed macOS gate. npm 0.0.20 was already published; registry and platform availability are verified independently. Existing installation, file-boundary and application-context limits remain.
+
 ## 0.0.20 — 2026-11-06
 
 - Focus optional DOM/source/font evidence with `inspection.selector` or CLI `--inspect-selector`. Inspect up to 100 matching nodes inside the captured scope, including late page targets. A missing or invalid selector keeps the image and reports incomplete requested inspection. Axe keeps its full captured scope; shadow trees and iframe documents remain excluded.

@@ -33,6 +33,7 @@ Native template previews require 0.0.16 or later. See the [engine matrix, config
 - **Your source and packages.** Render with your project's React, Vue, or Svelte runtime, global styles, CSS modules, Tailwind, Sass, and assets.
 - **Real progress.** Reading, preparation and render phases show actual work during startup, baseline capture and comparison.
 - **Actionable evidence.** Version 0.0.19 adds recovery diagnostics and separate audit completeness counts. Optional CLI/MCP scroll traversal and layout/used-font inspection report their coverage and limits; [read the contracts](https://github.com/DarkWorldCoder/arguseye/blob/main/docs/rendering.md#render-evidence).
+- **Smarty configuration (0.0.21+).** Register native modifiers and compiler filters through explicit project setup. Slow compilation keeps a stable source timestamp; unsaved helper and partial changes still update the preview.
 - **Real usage inputs.** Select discovered call sites or adjust props in the panel. Runtime expressions and incomplete context stay visible.
 - **Unsaved edits.** Preview the buffer as you work. Ordinary React refreshes and Vue template/style changes preserve component state; Vue script changes and Svelte edits remount and report the reset.
 - **Responsive checks.** Switch mobile, tablet, and desktop presets; fit the preview or inspect it at 1:1.

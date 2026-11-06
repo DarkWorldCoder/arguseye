@@ -36,3 +36,9 @@ Research and source review: 2026-11-06. This is a delivery decision, not a claim
 ## Validation boundaries
 
 Regression tests use the public headless-render seam: late DOM targeting, missing/invalid selectors, portal root fonts, identical-image semantic edits, compatible baselines, mismatched identities and legacy captures. Existing warm-render and live-update limits remain unchanged. Release results, native-platform checks and public registry availability must be recorded separately after verification. Installation, canonical file boundaries, unsupported application-server behavior, and incomplete provider/runtime context are not claimed fixed by these changes.
+
+## Release-found edge case
+
+The 0.0.20 macOS release run exposed a Smarty adapter clock-boundary bug after its candidate gates passed. A native project prefilter delaying compilation by 1.1 seconds reproduces the exact invalid-compiled-template error. The 0.0.21 candidate holds one source timestamp per render and verifies changed unsaved includes afterward. Explicit Smarty `configure(smarty)` setup supplies the real compiler filter; no native engine is mocked.
+
+The same release run recorded a 419 ms React live edit, while the independent main run recorded 38 ms and failed a different warm-render gate at 121 ms. The original live-update delay is not yet explained. React update receipt/import/refresh timing is now recorded, and all 100 ms gates remain required. A successful later run alone does not establish a root cause or universal performance guarantee.
