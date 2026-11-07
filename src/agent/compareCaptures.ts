@@ -13,6 +13,7 @@ export type DiffResult = {
   changedRegion: { x: number; y: number; width: number; height: number } | null;
   dimensions: { before: { width: number; height: number }; after: { width: number; height: number } };
   snapshotChanged: boolean;
+  expectationsChanged: boolean;
   newErrors: string[];
   resolvedErrors: string[];
   newWarnings: string[];
@@ -68,6 +69,8 @@ export async function compareCaptures(page: Page, before: RenderResult, after: R
   }, [before.png.toString("base64"), after.png.toString("base64")]);
   const { png, ...metrics } = pixels;
   const snapshotChanged = before.snapshot !== after.snapshot;
+  const outcomes = (result: RenderResult) => result.expectations?.map(({ condition, status, observed }) => ({ condition, status, observed }));
+  const expectationsChanged = !!(before.expectations || after.expectations) && JSON.stringify(outcomes(before)) !== JSON.stringify(outcomes(after));
   const timerVariance = (pixels.changedPixels > 0 || snapshotChanged) && (before.scheduledTimers || after.scheduledTimers) && before.sourceRevision === after.sourceRevision && JSON.stringify(before.target) === JSON.stringify(after.target) && JSON.stringify(before.viewport) === JSON.stringify(after.viewport);
   const identity = (result: RenderResult) => result.template ? JSON.stringify([result.template.engine, result.template.runtime, result.template.engineVersion, result.template.runtimeVersion]) : undefined;
   const incompatibleRuntime = identity(before) !== identity(after);
@@ -87,8 +90,8 @@ export async function compareCaptures(page: Page, before: RenderResult, after: R
   }
   const environmentWarnings = environmentChanges.length ? [`Capture environment changed or is unavailable (${environmentChanges.join("; ")}); capture a new baseline before treating this comparison as complete.`] : [];
   return {
-    ...metrics, diffPng: identical ? Buffer.from(after.png) : Buffer.from(png, "base64"), before, after, snapshotChanged, environmentChanges,
-    status: !before.complete || !after.complete || timerVariance || incompatibleRuntime || environmentChanges.length ? "incomplete" : pixels.changedPixels || snapshotChanged ? "changed" : "unchanged",
+    ...metrics, diffPng: identical ? Buffer.from(after.png) : Buffer.from(png, "base64"), before, after, snapshotChanged, expectationsChanged, environmentChanges,
+    status: !before.complete || !after.complete || timerVariance || incompatibleRuntime || environmentChanges.length ? "incomplete" : pixels.changedPixels || snapshotChanged || expectationsChanged ? "changed" : "unchanged",
     newErrors: after.errors.filter((e) => !before.errors.includes(e)),
     resolvedErrors: before.errors.filter((e) => !after.errors.includes(e)),
     newWarnings: [...after.warnings.filter((w) => !before.warnings.includes(w)), ...stabilityWarnings, ...runtimeWarnings, ...environmentWarnings],
