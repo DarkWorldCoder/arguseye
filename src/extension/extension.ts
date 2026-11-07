@@ -14,6 +14,10 @@ import type { DiffResult } from "../agent/compareCaptures.js";
 import { diffEvidence } from "../agent/renderEvidence.js";
 import { VIEWPORTS } from "../agent/viewports.js";
 import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
+import { verificationInputsSchema } from "../agent/renderChecks.js";
+import type { RenderRequest } from "../agent/createRenderer.js";
+
+type VerificationInputs = Pick<RenderRequest, "actions" | "ready" | "expectations">;
 
 /** What the preview page last reported, mirrored for the status bar and for tests. */
 export type PreviewStatus = {
@@ -45,6 +49,7 @@ export type PanelState = {
   viewport: keyof typeof VIEWPORTS;
   /** `auto` shows the app as written; `light`/`dark` force the colour scheme (dark class + color-scheme). */
   theme: "auto" | "light" | "dark";
+  checks?: VerificationInputs;
 };
 
 export type PreviewApi = {
@@ -60,6 +65,10 @@ export type PreviewApi = {
   setTheme(theme: PanelState["theme"]): Promise<void>;
   captureBaseline(): Promise<RenderResult>;
   compareChanges(): Promise<DiffResult>;
+  setChecks(inputs: unknown): Promise<void>;
+  runChecks(): Promise<RenderResult>;
+  saveRegressionCheck(uri?: vscode.Uri): Promise<void>;
+  runRegressionCheck(uri?: vscode.Uri): Promise<RenderResult | undefined>;
 };
 
 /** Typing pause before the preview re-renders; short enough to feel live, long enough to batch keystrokes. */
@@ -111,6 +120,10 @@ class PreviewPanel implements vscode.Disposable {
     setTheme: (theme) => this.setTheme(theme),
     captureBaseline: () => this.captureBaseline(),
     compareChanges: () => this.compareChanges(),
+    setChecks: (inputs) => this.setChecks(inputs),
+    runChecks: () => this.runChecks(),
+    saveRegressionCheck: (uri) => this.saveRegressionCheck(uri),
+    runRegressionCheck: (uri) => this.runRegressionCheck(uri),
     waitForStatus: (matches, timeoutMs) =>
       new Promise((resolve, reject) => {
         if (this.current && matches(this.current)) return resolve(this.current);
@@ -311,6 +324,7 @@ class PreviewPanel implements vscode.Disposable {
   }
 
   private async verificationRenderer(): Promise<Renderer> {
+    if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before executing verification checks.");
     if (!this.shownRoot) throw new Error("Open a preview first.");
     const root = this.shownRoot;
     const server = await this.server(root);
@@ -333,7 +347,7 @@ class PreviewPanel implements vscode.Disposable {
   private async captureBaseline(): Promise<RenderResult> {
     if (!this.state) throw new Error("Open a preview first.");
     const renderer = await this.verificationRenderer();
-    const result = await renderer.render({ file: this.state.file, engine: this.state.engine, profile: this.state.profile, templateResolved: true, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport], theme: this.forcedTheme() }, { onProgress: this.verificationProgress() });
+    const result = await renderer.render({ ...this.state.checks, file: this.state.file, engine: this.state.engine, profile: this.state.profile, templateResolved: true, exportName: this.state.exportName, props: this.state.props, usage: this.state.usage, viewport: VIEWPORTS[this.state.viewport], theme: this.forcedTheme() }, { onProgress: this.verificationProgress() });
     this.baseline = result.captureId;
     await this.panel?.webview.postMessage({ type: "verification", message: result.captureId ? "Baseline captured" + (result.warnings.length ? ": " + result.warnings.join("; ") : ".") : result.errors.join("\n"), baseline: !!this.baseline });
     return result;
@@ -344,6 +358,52 @@ class PreviewPanel implements vscode.Disposable {
     const renderer = await this.verificationRenderer();
     const result = await renderer.diff(this.baseline, { onProgress: this.verificationProgress() });
     await this.panel?.webview.postMessage({ type: "verification", evidence: diffEvidence(result), images: [result.before.png, result.after.png, result.diffPng].map((png) => "data:image/png;base64," + png.toString("base64")), baseline: true });
+    return result;
+  }
+
+  private async setChecks(value: unknown): Promise<void> {
+    if (!this.state) throw new Error("Open a preview first.");
+    this.state.checks = verificationInputsSchema.parse(value);
+    await this.panel?.webview.postMessage({ type: "checks", file: this.state.file, checks: this.state.checks });
+  }
+
+  private async runChecks(): Promise<RenderResult> {
+    if (!this.state) throw new Error("Open a preview first.");
+    const state = this.state;
+    if (!state.checks || !Object.values(state.checks).some((items) => items?.length)) throw new Error("Add readiness, actions or expectations in Checks, then run again.");
+    const renderer = await this.verificationRenderer();
+    const result = await renderer.render({ ...state.checks, file: state.file, engine: state.engine, profile: state.profile, templateResolved: true, exportName: state.exportName, props: state.props, usage: state.usage, viewport: VIEWPORTS[state.viewport], theme: state.theme === "auto" ? undefined : state.theme }, { onProgress: this.verificationProgress() });
+    if (this.state?.file === state.file) await this.showCheckResult(result);
+    return result;
+  }
+
+  private async showCheckResult(result: RenderResult): Promise<void> {
+    const checks = [...(result.readiness ?? []), ...(result.expectations ?? [])];
+    const message = `${path.basename(result.target.file)}: ${checks.filter((c) => c.status === "passed").length}/${checks.length} checks passed; ${result.complete ? "complete" : "incomplete"} evidence. ` + [...result.errors, ...result.warnings, ...checks.filter((c) => c.status !== "passed").map((c) => c.message ?? c.status)].join("; ");
+    await this.panel?.webview.postMessage({ type: "verification", message, checkResults: checks, image: "data:image/png;base64," + result.png.toString("base64"), baseline: !!this.baseline });
+  }
+
+  private async saveRegressionCheck(uri?: vscode.Uri): Promise<void> {
+    const result = await this.runChecks();
+    if (!result.captureId) throw new Error("Fix render errors before saving a regression check.");
+    const renderer = await this.verificationRenderer();
+    const recipe = renderer.recipe(result.captureId);
+    uri ??= await vscode.window.showSaveDialog({ title: "Save regression check", defaultUri: vscode.Uri.file(path.join(this.shownRoot!, path.parse(result.target.file).name + ".arguseye.json")), filters: { JSON: ["json"] } });
+    if (!uri) return;
+    if (uri.scheme !== "file") throw new Error("Choose a local JSON file for the regression check.");
+    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(JSON.stringify(recipe, null, 2) + "\n"));
+    await this.panel?.webview.postMessage({ type: "verification", message: `Regression inputs saved to ${uri.fsPath}. Review their contents before sharing; no baseline was approved.`, baseline: !!this.baseline });
+  }
+
+  private async runRegressionCheck(uri?: vscode.Uri): Promise<RenderResult | undefined> {
+    uri ??= (await vscode.window.showOpenDialog({ title: "Run saved regression check", canSelectMany: false, filters: { JSON: ["json"] } }))?.[0];
+    if (!uri) return;
+    if (uri.scheme !== "file") throw new Error("Choose a local JSON regression check.");
+    if ((await vscode.workspace.fs.stat(uri)).size > 1_048_576) throw new Error("Recipe exceeds 1 MiB");
+    const value = JSON.parse(new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)));
+    const renderer = await this.verificationRenderer();
+    const result = await renderer.renderRecipe(value, { onProgress: this.verificationProgress() });
+    await this.showCheckResult(result);
     return result;
   }
 
@@ -369,8 +429,11 @@ class PreviewPanel implements vscode.Disposable {
       if (message.type === "usage") return act(this.setUsage(message.id));
       if (message.type === "viewport") return act(this.setViewport(message.preset));
       if (message.type === "theme") return act(this.setTheme(message.theme));
-      if (message.type === "capture") return act(this.captureBaseline());
+      if (message.type === "capture") return act(Promise.resolve().then(() => message.checks === undefined ? undefined : this.setChecks(JSON.parse(message.checks))).then(() => this.captureBaseline()));
       if (message.type === "compare") return act(this.compareChanges());
+      if (message.type === "run-checks") return act(Promise.resolve().then(() => this.setChecks(JSON.parse(message.value))).then(() => this.runChecks()));
+      if (message.type === "save-check") return act(Promise.resolve().then(() => this.setChecks(JSON.parse(message.value))).then(() => this.saveRegressionCheck()));
+      if (message.type === "open-check") return act(this.runRegressionCheck());
       if (message.type === "props") return void this.setProps(message.props);
       if (message.type === "export") return void this.setExport(message.exportName);
       if (message.source !== "arguseye") return;
@@ -459,7 +522,10 @@ function webviewHtml(origin: string, pageUrl: string): string {
   #verification:empty { display: none; }
   #verification .images { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   #verification figure { margin: 0; } #verification img { width: 100%; height: auto; } #verification figcaption { padding: 4px 0; }
-  button:focus-visible, select:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+  button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+  #checks { padding: 6px 8px; border-bottom: 1px solid var(--vscode-panel-border); }
+  #checks textarea { display: block; box-sizing: border-box; width: 100%; height: 112px; margin: 6px 0; font-family: var(--vscode-editor-font-family); color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); }
+  #checks p { margin: 6px 0; } #checks button { font: inherit; padding: 4px 8px; }
   #props { width: 240px; overflow: auto; border-left: 1px solid var(--vscode-panel-border); padding: 8px; display: none; }
   #props.open { display: block; }
   #props label { display: block; margin: 6px 0 2px; opacity: .85; }
@@ -486,6 +552,12 @@ function webviewHtml(origin: string, pageUrl: string): string {
   <button id="toggle" title="Edit props">Props</button>
 </div>
 <details id="contextWarnings" hidden><summary>Incomplete preview context</summary><pre></pre></details>
+<details id="checks"><summary>Regression checks</summary>
+  <p>Add a readiness condition or expectation, then run it in fresh state. The interactive preview keeps its state.</p>
+  <label for="checkInput">Checks JSON (ready, expectations, actions)</label>
+  <textarea id="checkInput" spellcheck="false">{"expectations": []}</textarea>
+  <button id="runChecks">Run checks</button> <button id="saveCheck">Save regression check</button> <button id="openCheck">Run saved check</button>
+</details>
 <div id="main">
   <div id="stage"><div id="frameBox"><iframe id="preview" title="Component preview" src="${pageUrl}" allow="clipboard-read; clipboard-write"></iframe></div></div>
   <div id="props"></div>
@@ -512,6 +584,7 @@ document.getElementById("full").onclick = () => { fitMode = false; document.getE
 const form = document.getElementById("props");
 const exportSelect = document.getElementById("export");
 let state;
+let checkFile;
 vscode.postMessage({ type: "ready" });
 
 addEventListener("message", (event) => {
@@ -532,20 +605,23 @@ addEventListener("message", (event) => {
     statusChip.className = data.status === "error" ? "error" : "";
   }
   else if (data?.type === "show") { statusChip.textContent = "Rendering preview"; frame.contentWindow.postMessage({ type: "cp:show", target: data.target }, "*"); }
+  else if (data?.type === "checks") { document.getElementById("checkInput").value = JSON.stringify(data.checks, null, 2); checkFile = data.file; }
   else if (data?.type === "verification") {
     statusChip.textContent = renderedStatus;
     const host = document.getElementById("verification"); host.replaceChildren();
     document.getElementById("compare").disabled = !data.baseline;
     const summary = document.createElement("p");
-    summary.textContent = data.message ?? (data.evidence.status + ": " + data.evidence.changedPercent.toFixed(2) + "% changed pixels. " + (data.evidence.snapshotChanged ? "Accessibility tree changed. " : "") + data.evidence.after.warnings.join("; ") + data.evidence.newErrors.join("; "));
+    summary.textContent = data.message ?? (data.evidence.status + ": " + data.evidence.changedPercent.toFixed(2) + "% changed pixels. " + (data.evidence.snapshotChanged ? "Accessibility tree changed. " : "") + (data.evidence.expectationsChanged ? "Expectations changed. " : "") + data.evidence.after.warnings.join("; ") + data.evidence.newErrors.join("; "));
     host.append(summary);
+    if (data.checkResults) { const details = document.createElement("details"), title = document.createElement("summary"), evidence = document.createElement("pre"); title.textContent = "Check outcomes"; evidence.style.whiteSpace = "pre-wrap"; evidence.textContent = JSON.stringify(data.checkResults, null, 2); details.append(title, evidence); host.append(details); }
+    if (data.image) { const img = document.createElement("img"); img.alt = "Component rendered in fresh state for regression checks"; img.style.maxWidth = "100%"; img.src = data.image; host.append(img); }
     if (data.images) {
       const grid = document.createElement("div"); grid.className = "images";
       data.images.forEach((src, i) => { const figure = document.createElement("figure"), caption = document.createElement("figcaption"), img = document.createElement("img"); caption.textContent = ["Before", "After", "Changed pixels"][i]; img.alt = caption.textContent; img.src = src; figure.append(caption, img); grid.append(figure); });
       host.append(grid);
     }
   }
-  else if (data?.type === "state") { state = data.state; renderBar(); renderForm(); }
+  else if (data?.type === "state") { state = data.state; if (checkFile !== state.file) { checkFile = state.file; document.getElementById("checkInput").value = JSON.stringify(state.checks ?? { expectations: [] }, null, 2); } renderBar(); renderForm(); }
 });
 document.getElementById("toggle").onclick = () => form.classList.toggle("open");
 document.getElementById("engine").onchange = (event) => vscode.postMessage({ type: "template", engine: event.target.value });
@@ -553,8 +629,11 @@ document.getElementById("profile").onchange = (event) => vscode.postMessage({ ty
 document.getElementById("usage").onchange = (event) => { if (event.target.value) vscode.postMessage({ type: "usage", id: event.target.value }); };
 document.getElementById("viewport").onchange = (event) => vscode.postMessage({ type: "viewport", preset: event.target.value });
 document.getElementById("theme").onchange = (event) => vscode.postMessage({ type: "theme", theme: event.target.value });
-document.getElementById("capture").onclick = () => vscode.postMessage({ type: "capture" });
+document.getElementById("capture").onclick = () => vscode.postMessage({ type: "capture", checks: document.getElementById("checkInput").value });
 document.getElementById("compare").onclick = () => vscode.postMessage({ type: "compare" });
+document.getElementById("runChecks").onclick = () => vscode.postMessage({ type: "run-checks", value: document.getElementById("checkInput").value });
+document.getElementById("saveCheck").onclick = () => vscode.postMessage({ type: "save-check", value: document.getElementById("checkInput").value });
+document.getElementById("openCheck").onclick = () => vscode.postMessage({ type: "open-check" });
 exportSelect.onchange = () => vscode.postMessage({ type: "export", exportName: exportSelect.value });
 
 function renderBar() {

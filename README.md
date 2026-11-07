@@ -42,6 +42,8 @@ If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorl
 
 ## In development
 
+**Unreleased state verification:** explicit readiness conditions, strict actions (including explicit portal scope), behavioral expectations and portable regression recipes now share the MCP, CLI and VS Code engine. Failed checks remain visible even when pixels match. See [the development contract and examples](docs/rendering.md#readiness-expectations-and-saved-checks-unreleased); these APIs are not in npm 0.0.21.
+
 Version **0.0.21** fixes Smarty compilation across clock boundaries and supports project-owned Smarty configuration, including unsaved helper and partial edits. See the [native template setup contract](docs/templates.md).
 
 Version **0.0.20** adds focused DOM/source/font inspection, portal-root font fixes, capture-environment compatibility checks and faster byte-identical image comparisons. It retains 0.0.19’s real progress, recovery diagnostics, audit completeness and opt-in scroll capture. See the [rendering contracts and limits](docs/rendering.md#render-evidence).

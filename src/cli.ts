@@ -12,6 +12,9 @@ import { findUsages } from "./usages/findUsages.js";
 import { routeFor } from "./project/routeFor.js";
 import { audit } from "./agent/audit.js";
 import { inspectProject } from "./project/inspectProject.js";
+import { verificationInputsSchema } from "./agent/renderChecks.js";
+import { readRenderRecipe } from "./agent/renderRecipe.js";
+import { stat } from "node:fs/promises";
 
 const HELP = `arguseye: inspect components and verify UI edits, no application server
 
@@ -34,6 +37,11 @@ const HELP = `arguseye: inspect components and verify UI edits, no application s
 
   arguseye diff --baseline DIR --out DIR [--json] [--root DIR]
       Compare current source against a saved baseline; writes before/after/diff PNGs and JSON
+
+  arguseye check RECIPE.json [--out PNG] [--json] [--root DIR]
+      Replay saved readiness/actions/expectations against current source; nonzero exit on failed or incomplete checks
+      shot --checks FILE.json accepts {ready,expectations,actions}; --save-recipe FILE.json saves resolved inputs
+      --include-browser-inputs explicitly includes storage and network bodies when exporting a recipe
 
   arguseye usages FILE [--export NAME] [--root DIR]
       Print every usage of a component with its real props (JSON)
@@ -72,6 +80,9 @@ const { positionals, values } = parseArgs({
     limit: { type: "string" },
     cursor: { type: "string" },
     fixtures: { type: "string" },
+    checks: { type: "string" },
+    "save-recipe": { type: "string" },
+    "include-browser-inputs": { type: "boolean" },
     accessibility: { type: "boolean" },
     sources: { type: "boolean" },
     layout: { type: "boolean" },
@@ -131,8 +142,27 @@ if (values.help || !command) {
     const result = await renderer.diff(renderer.restoreCapture(baseline));
     await saveDiff(values.out, result);
     console.log(values.json ? JSON.stringify(diffEvidence(result)) : `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels; evidence in ${values.out}`);
-    process.exitCode = result.status === "incomplete" ? 1 : 0;
+    process.exitCode = result.status === "incomplete" || result.after.expectations?.some((c) => c.status !== "passed") ? 1 : 0;
   } finally { await renderer.close(); }
+} else if (command === "check" && file) {
+  let renderer: Awaited<ReturnType<typeof createRenderer>> | undefined;
+  try {
+    if ((await stat(file)).size > 1_048_576) throw new Error("Recipe exceeds 1 MiB");
+    const value = JSON.parse(await readFile(file, "utf8"));
+    readRenderRecipe(root, value);
+    renderer = await createRenderer({ root, buildMode });
+    const result = await renderer.renderRecipe(value, { timeoutMs: values["timeout-ms"] ? Number(values["timeout-ms"]) : undefined });
+    if (values.out) await writeFile(values.out, result.png);
+    if (values["capture-dir"]) await saveCapture(values["capture-dir"], result);
+    const checks = [...(result.readiness ?? []), ...(result.expectations ?? [])];
+    console.log(values.json ? JSON.stringify({ ...renderEvidence(result), ...(values.out ? { image: path.resolve(values.out) } : {}) }) : `${checks.filter((c) => c.status === "passed").length}/${checks.length} checks passed · ${result.complete ? "complete" : "incomplete"} evidence\n${checks.filter((c) => c.status !== "passed").map((c) => c.message).join("\n")}\n${result.errors.join("\n")}`);
+    process.exitCode = result.errors.length || !result.complete || checks.some((c) => c.status !== "passed") ? 1 : 0;
+  } catch (error) {
+    const message = `Regression check "${file}": ${(error as Error).message}`;
+    if (values.json) console.log(JSON.stringify({ schemaVersion: 1, errors: [message] }));
+    else console.error(message);
+    process.exitCode = 1;
+  } finally { await renderer?.close(); }
 } else if (command === "audit") {
   const renderer = await createRenderer({ root, buildMode });
   try {
@@ -160,7 +190,10 @@ if (values.help || !command) {
     } else {
       const { width, height } = parseViewport(values.viewport);
       if (values.theme !== undefined && values.theme !== "light" && values.theme !== "dark") throw new Error(`Unknown theme "${values.theme}"; use light or dark`);
+      if (values.checks && (await stat(values.checks)).size > 1_048_576) throw new Error("Checks file exceeds 1 MiB");
+      const checks = verificationInputsSchema.parse(values.checks ? JSON.parse(await readFile(values.checks, "utf8")) : {});
       const result = await renderer.render({
+        ...checks,
         theme: values.theme as "light" | "dark" | undefined,
         ...target,
         inspection: values.accessibility || values.sources || values.layout || values.fonts || values["inspect-selector"] !== undefined ? { accessibility: values.accessibility, sources: values.sources, layout: values.layout, fonts: values.fonts, selector: values["inspect-selector"] } : undefined,
@@ -174,11 +207,15 @@ if (values.help || !command) {
       }, { timeoutMs: values["timeout-ms"] ? Number(values["timeout-ms"]) : undefined });
       if (!["image", "summary", "both"].includes(values.output!)) throw new Error(`Unknown output "${values.output}"`);
       if (values["capture-dir"]) await saveCapture(values["capture-dir"], result);
+      if (values["save-recipe"]) {
+        if (!result.captureId) throw new Error("Cannot save a regression check from a failed render; fix the reported errors first.");
+        await writeFile(values["save-recipe"], JSON.stringify(renderer.recipe(result.captureId, { includeBrowserInputs: values["include-browser-inputs"] }), null, 2) + "\n", { flag: "wx" });
+      }
       const out = values.out ?? `${path.parse(file).name}.png`;
       if (values.output !== "summary") await writeFile(out, result.png);
       if (values.json) console.log(JSON.stringify({ ...renderEvidence(result), ...(values.output !== "summary" ? { image: path.resolve(out) } : {}) }));
       else console.log(`${out} · ${result.ms} ms\nerrors: ${result.errors.length ? "\n- " + result.errors.join("\n- ") : "none"}\n${result.snapshot}`);
-      process.exitCode = result.errors.length ? 1 : 0;
+      process.exitCode = result.errors.length || [...(result.readiness ?? []), ...(result.expectations ?? [])].some((c) => c.status !== "passed") ? 1 : 0;
     }
   } catch (error) {
     // A clean one-line error (no Node stack) that names what to pass instead, for people and agents alike.

@@ -52,7 +52,7 @@ jobs:
         run: node scripts/prepareNativeBenchmark.mjs
       - name: Native framework and MCP contracts
         if: runner.os != 'Linux'
-        run: npx vitest run test/browser/render.test.ts test/browser/vue.test.ts test/browser/svelte.test.ts test/browser/preact.test.ts test/browser/solid.test.ts test/browser/html.test.ts test/browser/mcp.test.ts test/browser/theme.test.ts test/browser/live.test.ts test/browser/usageContext.test.ts test/browser/motion.test.ts test/browser/templates.test.ts test/browser/inspection.test.ts test/browser/captureEnvironment.test.ts test/browser/evidence.test.ts test/browser/smartySetup.test.ts --maxWorkers 1
+        run: npx vitest run test/browser/render.test.ts test/browser/renderChecks.test.ts test/browser/actions.test.ts test/browser/vue.test.ts test/browser/svelte.test.ts test/browser/preact.test.ts test/browser/solid.test.ts test/browser/html.test.ts test/browser/mcp.test.ts test/browser/theme.test.ts test/browser/live.test.ts test/browser/usageContext.test.ts test/browser/motion.test.ts test/browser/templates.test.ts test/browser/inspection.test.ts test/browser/captureEnvironment.test.ts test/browser/evidence.test.ts test/browser/smartySetup.test.ts --maxWorkers 1
       - name: Full test suite on Linux
         if: runner.os == 'Linux'
         run: npm test
