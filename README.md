@@ -42,7 +42,7 @@ If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorl
 
 ## In development
 
-**Unreleased state verification:** explicit readiness conditions, strict actions (including explicit portal scope), behavioral expectations and portable regression recipes now share the MCP, CLI and VS Code engine. Failed checks remain visible even when pixels match. See [the development contract and examples](docs/rendering.md#readiness-expectations-and-saved-checks-unreleased); these APIs are not in npm 0.0.21.
+**Unreleased state verification:** explicit readiness conditions, strict actions (including explicit portal scope), behavioral expectations and portable regression recipes now share the MCP, CLI and VS Code engine. Enabled/disabled control checks include fieldset and ARIA state; conflicting locator strategies are rejected before rendering. Failed checks remain visible even when pixels match. See [the development contract and examples](docs/rendering.md#readiness-expectations-and-saved-checks-unreleased); these APIs are not in npm 0.0.21.
 
 Version **0.0.21** fixes Smarty compilation across clock boundaries and supports project-owned Smarty configuration, including unsaved helper and partial edits. See the [native template setup contract](docs/templates.md).
 

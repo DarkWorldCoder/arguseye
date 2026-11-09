@@ -64,9 +64,11 @@ export async function run(): Promise<void> {
   const edited = await api.waitForStatus((s) => /Desk Lamp/.test(s.text) && /\$12\.50/.test(s.text), 5000);
   assert.deepEqual(edited.errors, []);
 
-  await api.setChecks({ expectations: [{ target: { role: "button", name: "Add to cart (0)", exact: true }, state: "visible", timeoutMs: 500 }] });
+  await api.setChecks({ expectations: [{ target: { role: "button", name: "Add to cart (0)", exact: true }, state: "visible", timeoutMs: 500 },
+    { target: { role: "button", name: "Add to cart (0)", exact: true }, state: "enabled", value: true, timeoutMs: 500 }] });
   const checked = await api.runChecks();
   assert.equal(checked.expectations![0].status, "passed", "panel checks run through fresh shared-engine verification");
+  assert.equal(checked.expectations![1].status, "passed", "panel observes enabled controls through the shared renderer");
   const checkDirectory = mkdtempSync(path.join(tmpdir(), "arguseye-panel-check-"));
   const checkFile = vscode.Uri.file(path.join(checkDirectory, "card.json"));
   try {

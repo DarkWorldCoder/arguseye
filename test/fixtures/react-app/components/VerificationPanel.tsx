@@ -18,3 +18,18 @@ export function VerificationPanel({ delay = 0, fail = false }: { delay?: number;
     {open && createPortal(<div role="dialog" aria-label="Review"><label><input type="checkbox" />Accept</label><button onClick={() => { setSaved("confirmed"); setOpen(false); }}>Confirm</button></div>, document.body)}
   </section>;
 }
+
+/** Checks native and inherited ARIA-disabled controls without simulating an application backend. */
+export function VerificationForm({ delay = 0 }: { delay?: number }) {
+  const [blocked, setBlocked] = useState(true);
+  useEffect(() => {
+    if (!delay) return;
+    const timer = setTimeout(() => setBlocked(false), delay);
+    return () => clearTimeout(timer);
+  }, [delay]);
+  return <section>
+    <fieldset disabled={blocked}><button>Submit</button></fieldset>
+    <div aria-disabled={blocked}><button>Archive</button></div>
+    <button disabled={blocked}>Publish</button>
+  </section>;
+}

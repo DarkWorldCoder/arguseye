@@ -121,3 +121,52 @@ it("replays a portable saved check in a fresh renderer and requires explicit bro
     await expect(fresh.renderRecipe({ ...explicit, target: { ...explicit.target, file: "../outside.tsx" } })).rejects.toThrow(/outside.*project/i);
   } finally { await fresh.close(); }
 });
+
+it("observes disabled native, fieldset and ARIA controls and waits for them to become enabled", async () => {
+  const result = await renderer.render({ file, exportName: "VerificationForm", props: {}, expectations: [
+    { target: { role: "button", name: "Submit", exact: true }, state: "enabled", value: false },
+    { target: { role: "button", name: "Archive", exact: true }, state: "enabled", value: false },
+    { target: { role: "button", name: "Publish", exact: true }, state: "enabled", value: false },
+    { target: { role: "button", name: "Missing", exact: true }, state: "enabled", value: false, timeoutMs: 20 },
+  ] });
+  expect(result.errors).toEqual([]);
+  expect(result.expectations!.map((c) => c.status)).toEqual(["passed", "passed", "passed", "failed"]);
+  expect(result.expectations!.slice(0, 3).map((c) => c.observed)).toMatchObject([
+    { count: 1, enabled: false }, { count: 1, enabled: false }, { count: 1, enabled: false },
+  ]);
+  const ready = await renderer.render({ file, exportName: "VerificationForm", props: { delay: 100 },
+    ready: [{ target: { role: "button", name: "Submit", exact: true }, state: "enabled", value: true, timeoutMs: 1000 }],
+    expectations: [{ target: { role: "button", name: "Archive", exact: true }, state: "enabled", value: true }],
+  });
+  expect(ready.readiness![0].status).toBe("passed");
+  expect(ready.readiness![0].ms).toBeLessThan(1000);
+  expect(ready.expectations![0].status).toBe("passed");
+  const recipe = renderer.recipe(ready.captureId!);
+  expect((await renderer.renderRecipe(recipe)).expectations![0].status).toBe("passed");
+});
+
+it("rejects conflicting locator fields rather than silently dropping part of an agent's target", async () => {
+  for (const target of [{ selector: "button", text: "Save" }, { role: "button", testId: "load-state" }, { role: "button", label: "Accept" }]) {
+    await expect(renderer.render({ file, expectations: [{ target, state: "visible" }] })).rejects.toThrow(/exactly one locator/i);
+    await expect(renderer.render({ file, actions: [{ click: target }] })).rejects.toThrow(/exactly one locator/i);
+  }
+  await expect(renderer.render({ file, ready: [{ target: { role: "button" }, state: "enabled" }] as any })).rejects.toThrow(/requires a boolean/);
+});
+
+it("keeps enabled checks within the warm-render p95 budget over 20 renders", async () => {
+  const request = { file, exportName: "VerificationForm", props: {}, expectations: [
+    { target: { role: "button", name: "Submit", exact: true }, state: "enabled" as const, value: false },
+  ] };
+  await renderer.render(request);
+  const times: number[] = [];
+  for (let i = 0; i < 20; i++) {
+    const result = await renderer.render(request);
+    expect(result.errors).toEqual([]);
+    expect(result.expectations![0].status).toBe("passed");
+    times.push(result.ms);
+  }
+  times.sort((a, b) => a - b);
+  const p95 = times[Math.ceil(times.length * 0.95) - 1];
+  console.log("Enabled-check warm render p95", p95, "ms; samples", times);
+  expect(p95).toBeLessThanOrEqual(100);
+});

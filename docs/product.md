@@ -1,6 +1,6 @@
 # Product: why Arguseye exists
 
-Unreleased state-verification work adds strict action targets, explicit readiness/expectations, saved regression recipes, MCP replay tools, CLI checks and VS Code check controls. See [the development contract](rendering.md#readiness-expectations-and-saved-checks-unreleased). Published 0.0.21 does not contain these APIs; matrix, impact analysis and later roadmap features remain proposals.
+Unreleased state-verification work adds strict action targets, explicit readiness/expectations (including enabled/disabled controls), saved regression recipes, MCP replay tools, CLI checks and VS Code check controls. See [the development contract](rendering.md#readiness-expectations-and-saved-checks-unreleased). Published 0.0.21 does not contain these APIs; matrix, impact analysis and later roadmap features remain proposals.
 
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 

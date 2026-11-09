@@ -6,7 +6,7 @@ These additions are in the state-verification development branch, not the publis
 
 `ready` conditions run after actions and before asset settling. `expectations` run after settling, immediately before capture. A condition has a strict `target`, a `state`, an optional expected `value` and `timeoutMs` (default 2000, maximum 5000). Each list allows 20 conditions; the whole render retains its execution deadline. Actions allow at most 50 single-verb steps. Plain renders do not poll conditions.
 
-States are `visible`, `hidden`, `attached`, `detached`, `text`, `count`, `checked`, `expanded` and `focused`. Text uses normalized whitespace and exact equality, with a maximum expected length of 2000 characters. Count needs a nonnegative integer; checked/expanded need a boolean. Other states do not take a value. Single-element conditions reject ambiguous matches; count intentionally observes multiple matches. Hidden succeeds for an absent or non-visible element. These visibility checks observe layout bounds and CSS visibility; they do not prove contrast, lack of occlusion or product correctness.
+States are `visible`, `hidden`, `attached`, `detached`, `text`, `count`, `checked`, `expanded`, `focused` and `enabled`. Text uses normalized whitespace and exact equality, with a maximum expected length of 2000 characters. Count needs a nonnegative integer; checked/expanded/enabled need a boolean. Other states do not take a value. `enabled: false` verifies a disabled control; an absent control does not pass. Enabled checks use [Playwright’s enabled-state semantics](https://playwright.dev/docs/actionability#enabled), including native disabled fields, disabled fieldsets and ARIA-disabled ancestors. They do not prove that a control is visible, unobstructed or will complete an action. Single-element conditions reject ambiguous matches; count intentionally observes multiple matches. Hidden succeeds for an absent or non-visible element. These visibility checks observe layout bounds and CSS visibility; they do not prove contrast, lack of occlusion or product correctness.
 
 ```json
 {
@@ -40,7 +40,7 @@ VS Code's **Regression checks** section accepts the same JSON. **Run checks** sh
 
 ## Interaction targets
 
-Actions require an unambiguous target. Multiple matching buttons or labels return a strict-target error instead of silently choosing the first. Refine the selector, accessible name or test ID before retrying.
+Actions and checks require exactly one locator strategy: role (with optional name), text, label, placeholder, testId, selector or name alone. Combining strategies is rejected before rendering rather than silently ignoring fields. Actions require an unambiguous target. Multiple matching buttons or labels return a strict-target error instead of silently choosing the first. Refine the selector, accessible name or test ID before retrying.
 
 Targets default to the component root. Set `scope: "capture"` explicitly to search the isolated preview document, including body-level dialogs and menus rendered through portals. This does not reach the surrounding VS Code UI or another browser page.
 

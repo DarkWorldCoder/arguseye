@@ -26,7 +26,8 @@ type Content = Array<{ type: string; text?: string; data?: string; mimeType?: st
 it("exports and replays regression checks with explicit failed outcomes in text and structured evidence", async () => {
   const rendered = await client.callTool({ name: "render_component", arguments: {
     file: "components/VerificationPanel.tsx", export: "VerificationPanel", props: {}, output: "summary",
-    expectations: [{ target: { role: "button", name: "Save", exact: true }, state: "count", value: 3, timeoutMs: 20 }],
+    expectations: [{ target: { role: "button", name: "Save", exact: true }, state: "count", value: 3, timeoutMs: 20 },
+      { target: { role: "button", name: "Open dialog", exact: true }, state: "enabled", value: true }],
   } });
   expect(rendered.isError).toBe(true);
   expect((rendered.structuredContent as any).errors).toEqual([]);
@@ -36,6 +37,7 @@ it("exports and replays regression checks with explicit failed outcomes in text 
   const replay = await client.callTool({ name: "render_recipe", arguments: { recipe: (saved.structuredContent as any).recipe, output: "summary" } });
   expect(replay.isError).toBe(true);
   expect((replay.structuredContent as any).expectations[0].status).toBe("failed");
+  expect((replay.structuredContent as any).expectations[1]).toMatchObject({ status: "passed", observed: { enabled: true } });
   expect((replay.content as Content)[0].text).toContain("1 failed");
 });
 

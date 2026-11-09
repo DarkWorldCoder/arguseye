@@ -4,15 +4,15 @@ import type { Target } from "./createRenderer.js";
 
 const text = z.string().min(1).max(2000);
 /** The same strict locator vocabulary is used for actions, readiness and expectations. */
-export const targetSchema = z.object({ role: text.optional(), name: text.optional(), text: text.optional(), label: text.optional(), placeholder: text.optional(), testId: text.optional(), selector: text.optional(), exact: z.boolean().optional(), scope: z.enum(["root", "capture"]).optional() }).strict().refine((t) => !!(t.role || t.name || t.text || t.label || t.placeholder || t.testId || t.selector), "A target needs a role, text, label, placeholder, testId or selector");
+export const targetSchema = z.object({ role: text.optional(), name: text.optional(), text: text.optional(), label: text.optional(), placeholder: text.optional(), testId: text.optional(), selector: text.optional(), exact: z.boolean().optional(), scope: z.enum(["root", "capture"]).optional() }).strict().refine((t) => [t.role, t.text, t.label, t.placeholder, t.testId, t.selector, !t.role && t.name].filter(Boolean).length === 1, "A target needs exactly one locator: role (with optional name), text, label, placeholder, testId, selector or name");
 /** Explicit conditions contain data only; they never evaluate caller-supplied JavaScript. */
 export const conditionSchema = z.object({
   target: targetSchema,
-  state: z.enum(["visible", "hidden", "attached", "detached", "text", "count", "checked", "expanded", "focused"]),
+  state: z.enum(["visible", "hidden", "attached", "detached", "text", "count", "checked", "expanded", "focused", "enabled"]),
   value: z.union([z.string().max(2000), z.number().int().nonnegative(), z.boolean()]).optional(),
   timeoutMs: z.number().int().min(1).max(5000).optional(),
 }).strict().superRefine((c, ctx) => {
-  const kind = c.state === "text" ? "string" : c.state === "count" ? "number" : ["checked", "expanded"].includes(c.state) ? "boolean" : undefined;
+  const kind = c.state === "text" ? "string" : c.state === "count" ? "number" : ["checked", "expanded", "enabled"].includes(c.state) ? "boolean" : undefined;
   if (kind && typeof c.value !== kind || !kind && c.value !== undefined) ctx.addIssue({ code: "custom", path: ["value"], message: `${c.state} ${kind ? "requires a " + kind + " value" : "does not accept value"}` });
 });
 /** Bounds requested checks independently of the whole render deadline. */
@@ -28,7 +28,7 @@ export const verificationInputsSchema = z.object({ ready: conditionsSchema.optio
 /** A caller-authored condition, replayed verbatim with a baseline. */
 export type RenderCondition = z.infer<typeof conditionSchema>;
 /** Expectations are distinct from render errors and evidence completeness. */
-export type CheckEvidence = { condition: RenderCondition; status: "passed" | "failed" | "not-run"; ms: number; observed?: { count: number; text?: string; visible?: boolean; checked?: boolean | "mixed"; expanded?: boolean; focused?: boolean }; message?: string };
+export type CheckEvidence = { condition: RenderCondition; status: "passed" | "failed" | "not-run"; ms: number; observed?: { count: number; text?: string; visible?: boolean; checked?: boolean | "mixed"; expanded?: boolean; focused?: boolean; enabled?: boolean }; message?: string };
 
 /** Resolves without first-match shortcuts; body scope is explicit for captured portals. */
 export function locateTarget(page: Page, t: Target): Locator {
@@ -69,6 +69,11 @@ export async function runChecks(page: Page, conditions: RenderCondition[], guard
           return { count: nodes.length, text: (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 2001), visible: box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.visibility !== "collapse", checked: (el as HTMLInputElement).indeterminate === true || checked === "mixed" ? "mixed" as const : typeof (el as HTMLInputElement).checked === "boolean" ? (el as HTMLInputElement).checked : checked === "true" ? true : checked === "false" ? false : undefined, expanded: expanded === "true" ? true : expanded === "false" ? false : undefined, focused: (el.getRootNode() as Document | ShadowRoot).activeElement === el };
         });
         if (condition.state !== "count" && observed.count > 1) { message = `Ambiguous target matched ${observed.count} elements; refine its name, selector or testId.`; break; }
+        // Delegate disabled semantics (including fieldsets and ARIA ancestors) to the browser engine.
+        if (condition.state === "enabled" && observed.count === 1) {
+          const left = Math.max(1, timeout - (performance.now() - start));
+          observed.enabled = await locator.isEnabled({ timeout: left });
+        }
         const passed = condition.state === "count" ? observed.count === condition.value
           : condition.state === "attached" ? observed.count === 1
           : condition.state === "detached" ? observed.count === 0
