@@ -7,6 +7,16 @@ description: Preview React (incl. React Router and Remix), browser-renderable Ne
 
 Render component source in Chromium with the project's packages, styles, assets and statically reconstructable layouts. Inspect a cropped PNG, accessibility snapshot, resolved inputs, warnings and errors. The application server and authored stories are unnecessary; project dependencies and a compatible Chromium browser are still required. Startup and warm render times vary with the project; read the returned timings.
 
+## State verification in development builds
+
+Check the advertised tool schema first: published 0.0.21 does not include these APIs. If available, use `ready` for caller-authored pre-capture conditions and `expectations` for explicit behavior checks. Targets must be unambiguous; `scope: "capture"` explicitly searches the isolated document including body-level portals. Never retry an ambiguous action by guessing the first result.
+
+Use `{ "target": { "role": "button", "name": "Submit" }, "state": "enabled", "value": true }` to check whether a control is enabled, or `false` to check disabled state. This does not establish clickability or action success. Use exactly one locator strategy; only role may be combined with name.
+
+Read `readiness` and `expectations` outcomes (`passed`, `failed`, `not-run`) even when `errors` is empty. Readiness failure preserves an image with incomplete evidence; render/action failures prevent dependent checks from claiming a pass. A failed expectation is distinct from a runtime error or a visual-review decision. `render_diff` replays checks and exposes `expectationsChanged`, including identical-image changes.
+
+`capture_recipe {captureId}` exports version-1 JSON inputs; `render_recipe {recipe}` replays them against current source. Browser storage and network bodies are omitted by default. An omission list blocks replay: review and explicitly restore inputs rather than silently clearing it. Props and other content may still be private. Saving a recipe does not approve a baseline or make sampled/runtime inputs complete. The CLI equivalents are `shot --checks checks.json --save-recipe card.arguseye.json` and `check card.arguseye.json --json`.
+
 ## When to use it
 - After editing a component: render it again; the result says what changed (`changes`) since the last render of the same target.
 - For a shared component: inspect relevant call-site variants with `render_usages`, following pagination when broader coverage is needed. Use `usage` plus `in_context: true` to reconstruct its parent elements.

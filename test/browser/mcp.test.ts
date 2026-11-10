@@ -23,6 +23,24 @@ afterAll(async () => close?.());
 
 type Content = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 
+it("exports and replays regression checks with explicit failed outcomes in text and structured evidence", async () => {
+  const rendered = await client.callTool({ name: "render_component", arguments: {
+    file: "components/VerificationPanel.tsx", export: "VerificationPanel", props: {}, output: "summary",
+    expectations: [{ target: { role: "button", name: "Save", exact: true }, state: "count", value: 3, timeoutMs: 20 },
+      { target: { role: "button", name: "Open dialog", exact: true }, state: "enabled", value: true }],
+  } });
+  expect(rendered.isError).toBe(true);
+  expect((rendered.structuredContent as any).errors).toEqual([]);
+  expect((rendered.content as Content)[0].text).toContain("1 failed");
+  const saved = await client.callTool({ name: "capture_recipe", arguments: { captureId: (rendered.structuredContent as any).captureId } });
+  expect(saved.isError).toBeFalsy();
+  const replay = await client.callTool({ name: "render_recipe", arguments: { recipe: (saved.structuredContent as any).recipe, output: "summary" } });
+  expect(replay.isError).toBe(true);
+  expect((replay.structuredContent as any).expectations[0].status).toBe("failed");
+  expect((replay.structuredContent as any).expectations[1]).toMatchObject({ status: "passed", observed: { enabled: true } });
+  expect((replay.content as Content)[0].text).toContain("1 failed");
+});
+
 it("reports real render phases when the client requests progress", async () => {
   const progress: Array<{ progress: number; message?: string }> = [];
   const result = await client.callTool({ name: "render_component", arguments: { file: "components/ProductCard.tsx", export: "ProductCard", props: { title: "Progress", price: 3 }, output: "summary", capturePolicy: { scroll: {} }, inspection: { layout: true, fonts: true } } }, undefined, { onprogress: (event) => { progress.push(event); } });
@@ -63,13 +81,13 @@ it("continues a bounded audit without repeating components and rejects malformed
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "describe_props", "inspect_project", "list_usages", "render_component", "render_diff", "render_usages"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "capture_recipe", "describe_props", "inspect_project", "list_usages", "render_component", "render_diff", "render_recipe", "render_usages"]);
   });
 
   it("distinguishes static inspection from rendering project code with possible external effects", async () => {
     const { tools } = await client.listTools();
     for (const tool of tools) {
-      const staticTool = ["describe_props", "list_usages", "inspect_project"].includes(tool.name);
+      const staticTool = ["capture_recipe", "describe_props", "list_usages", "inspect_project"].includes(tool.name);
       expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: staticTool, idempotentHint: staticTool, destructiveHint: !staticTool, openWorldHint: !staticTool });
     }
   });

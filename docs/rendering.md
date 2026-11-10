@@ -1,5 +1,53 @@
 # Reproducible and bounded verification
 
+## Readiness, expectations and saved checks (unreleased)
+
+These additions are in the state-verification development branch, not the published 0.0.21 package. They use the same engine from MCP, CLI and VS Code.
+
+`ready` conditions run after actions and before asset settling. `expectations` run after settling, immediately before capture. A condition has a strict `target`, a `state`, an optional expected `value` and `timeoutMs` (default 2000, maximum 5000). Each list allows 20 conditions; the whole render retains its execution deadline. Actions allow at most 50 single-verb steps. Plain renders do not poll conditions.
+
+States are `visible`, `hidden`, `attached`, `detached`, `text`, `count`, `checked`, `expanded`, `focused` and `enabled`. Text uses normalized whitespace and exact equality, with a maximum expected length of 2000 characters. Count needs a nonnegative integer; checked/expanded/enabled need a boolean. Other states do not take a value. `enabled: false` verifies a disabled control; an absent control does not pass. Enabled checks use [Playwright’s enabled-state semantics](https://playwright.dev/docs/actionability#enabled), including native disabled fields, disabled fieldsets and ARIA-disabled ancestors. They do not prove that a control is visible, unobstructed or will complete an action. Single-element conditions reject ambiguous matches; count intentionally observes multiple matches. Hidden succeeds for an absent or non-visible element. These visibility checks observe layout bounds and CSS visibility; they do not prove contrast, lack of occlusion or product correctness.
+
+```json
+{
+  "ready": [{"target":{"testId":"load-state"},"state":"text","value":"Ready to review","timeoutMs":1000}],
+  "expectations": [{"target":{"role":"button","name":"Save","exact":true},"state":"count","value":2}]
+}
+```
+
+Results carry separate `readiness` and `expectations` arrays with `passed`, `failed` or `not-run`, observed values, elapsed milliseconds and a failure reason. Readiness timeout preserves the available PNG and makes evidence incomplete. Render/action failures or failed readiness prevent dependent expectations from claiming a pass. A failed expectation is a measured result, so it can coexist with `complete: true` and `errors: []`; it is not a runtime exception. MCP marks that result as an error and CLI exits nonzero. Check outcomes describe the observation time, not a guarantee the UI can never change afterward.
+
+Baselines replay their readiness, actions and expectations. Comparisons expose `expectationsChanged`; a changed expectation outcome is not reported as unchanged merely because the PNG and accessibility snapshot match. Existing environment/context completeness checks still apply.
+
+### Save and replay regression inputs
+
+After `render_component`, call `capture_recipe` with its `captureId`. Save the returned version-1 JSON locally, then pass it to `render_recipe` to check current source in a fresh verification render. Exporting a recipe does not approve a baseline, certify a passing result or include comparison images.
+
+CLI example, using a project's existing ProductCard and an explicitly authored checks document:
+
+```sh
+arguseye shot components/ProductCard.tsx --export ProductCard --props '{"title":"Desk","price":3}' --checks checks.json --save-recipe card.arguseye.json --output summary --json
+arguseye check card.arguseye.json --json --capture-dir ./baseline
+# Edit source, then compare against the same saved inputs and checks:
+arguseye diff --baseline ./baseline --out ./comparison --json
+```
+
+`checks.json` accepts only `ready`, `expectations` and `actions`. `--save-recipe` refuses to overwrite an existing file. Recipes use project-relative targets, retain sampled/unresolved input provenance and replay current source. Their recorded source revision describes the original capture; it does not make future source equivalent. Unknown versions, outside-project paths and JSON over 1 MiB fail before replay.
+
+Browser storage and network fixture bodies are omitted by default, and nonempty `omittedInputs` blocks replay. Review contents before selecting `includeBrowserInputs: true` (MCP) or `--include-browser-inputs` (CLI), or explicitly repair the inputs before clearing the omission list. Props, selectors, URLs, diagnostics and screenshots can still contain private data; this is not automatic anonymization. Existing realpath/file-access rules also apply to loaded source.
+
+VS Code's **Regression checks** section accepts the same JSON. **Run checks** shows a fresh captured image and outcomes while preserving interactive preview state. **Save regression check** uses a file dialog, and **Run saved check** replays a selected JSON file. Baseline capture uses configured checks; comparison replays the baseline's inputs. This milestone does not include matrix runs, source picking, a backend reconstruction system or arbitrary JavaScript readiness callbacks.
+
+## Interaction targets
+
+Actions and checks require exactly one locator strategy: role (with optional name), text, label, placeholder, testId, selector or name alone. Combining strategies is rejected before rendering rather than silently ignoring fields. Actions require an unambiguous target. Multiple matching buttons or labels return a strict-target error instead of silently choosing the first. Refine the selector, accessible name or test ID before retrying.
+
+Targets default to the component root. Set `scope: "capture"` explicitly to search the isolated preview document, including body-level dialogs and menus rendered through portals. This does not reach the surrounding VS Code UI or another browser page.
+
+```json
+{"actions":[{"click":{"role":"button","name":"Open dialog","exact":true}},{"click":{"role":"button","name":"Confirm","scope":"capture"}}]}
+```
+
 <a id="unreleased-render-evidence"></a>
 <a id="render-evidence"></a>
 

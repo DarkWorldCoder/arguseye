@@ -1,6 +1,8 @@
 import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import type { PreviewApi } from "../../src/extension/extension.js";
 
 const root = process.env.CP_FIXTURE_ROOT!;
@@ -62,6 +64,19 @@ export async function run(): Promise<void> {
   const edited = await api.waitForStatus((s) => /Desk Lamp/.test(s.text) && /\$12\.50/.test(s.text), 5000);
   assert.deepEqual(edited.errors, []);
 
+  await api.setChecks({ expectations: [{ target: { role: "button", name: "Add to cart (0)", exact: true }, state: "visible", timeoutMs: 500 },
+    { target: { role: "button", name: "Add to cart (0)", exact: true }, state: "enabled", value: true, timeoutMs: 500 }] });
+  const checked = await api.runChecks();
+  assert.equal(checked.expectations![0].status, "passed", "panel checks run through fresh shared-engine verification");
+  assert.equal(checked.expectations![1].status, "passed", "panel observes enabled controls through the shared renderer");
+  const checkDirectory = mkdtempSync(path.join(tmpdir(), "arguseye-panel-check-"));
+  const checkFile = vscode.Uri.file(path.join(checkDirectory, "card.json"));
+  try {
+    await api.saveRegressionCheck(checkFile);
+    assert.equal(JSON.parse(readFileSync(checkFile.fsPath, "utf8")).version, 1);
+    assert.equal((await api.runRegressionCheck(checkFile))!.expectations![0].status, "passed");
+  } finally { rmSync(checkDirectory, { recursive: true, force: true }); }
+
   const baseline = await api.captureBaseline();
   assert.ok(baseline.captureId);
 
@@ -75,6 +90,7 @@ export async function run(): Promise<void> {
   assert.equal(diff.status, "changed");
   assert.ok(diff.after.snapshot.includes("Buy now"));
   assert.ok(diff.changedPixels > 0);
+  assert.equal(diff.after.expectations![0].status, "failed", "comparison replays expectations against the unsaved edit");
 
   // Switching to another component file follows along.
   const page = vscode.Uri.file(path.join(root, "app/page.tsx")).fsPath;

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Check enabled/disabled controls through the shared readiness/expectation and saved-replay contracts, including native disabled fields, fieldsets and inherited ARIA-disabled state. Reject conflicting locator strategies before rendering instead of silently ignoring fields.
+
+- Reject ambiguous action targets instead of clicking the first match; explicit `scope: "capture"` includes body-level portals in the isolated preview.
+- Add bounded readiness and behavioral expectations with passed/failed/not-run evidence, preserved failure screenshots, cancellation and baseline replay. Comparisons report changed expectation outcomes even for identical pixels and accessibility text.
+- Save versioned project-relative regression recipes and replay them through MCP, CLI and VS Code. Browser storage and network bodies require explicit export; omissions prevent silent incomplete replay. Recipes retain sampled/unresolved input provenance and never approve baselines automatically.
+- Add VS Code regression-check controls and CLI `check`, `shot --checks` and `--save-recipe`. These features are not published under 0.0.21; matrix/impact workflows remain planned.
+
 ## 0.0.21 — 2026-11-06
 
 - Fix Smarty rejecting freshly compiled templates when compilation crosses a clock second. Keep the adapter’s source timestamp stable for each request while retaining content identities and unsaved include updates. A real project compiler prefilter reproduces the failure deterministically.
