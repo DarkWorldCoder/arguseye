@@ -2,9 +2,18 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Backfill the existing native-tested release to Open VSX
+        required: true
+        type: choice
+        default: v0.0.21
+        options: [v0.0.21]
 
 jobs:
   vsix:
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +111,101 @@ jobs:
         with:
           path: artifacts
       - run: for f in artifacts/*/*.vsix; do npx @vscode/vsce publish --oidc --packagePath "$f"; done
+
+  openvsx:
+    # Tag releases require all native checks; manual backfills use only hash-pinned tested archives.
+    if: ${{ !cancelled() && (needs.vsix.result == 'success' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag == 'v0.0.21')) }}
+    needs: vsix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: vsix-*
+          path: artifacts
+          merge-multiple: true
+        if: github.event_name == 'push'
+      - name: Download and verify the existing tested 0.0.21 archives
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh release download v0.0.21 --repo DarkWorldCoder/arguseye --pattern '*.vsix' --dir artifacts
+          sha256sum --check <<'CHECKSUMS'
+          3552cb9214b99d722fa7e8b3c77f2cbd350324187a92181c3fc12743df4d3d1b  artifacts/arguseye-linux-x64.vsix
+          bf9d3b19083b192e9128f242dbf0fe504a6032a9c1c1607043323313d7835e95  artifacts/arguseye-win32-x64.vsix
+          0db456ac076abedd3d31efbf5b9f3dab715105a8e32879edfb3301529e279bb7  artifacts/arguseye-darwin-arm64.vsix
+          CHECKSUMS
+      - name: Publish validated packages to Open VSX
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(artifacts/*.vsix)
+          if (( ${#packages[@]} != 3 )); then
+            echo "Expected three validated native VSIX packages" >&2
+            exit 1
+          fi
+          for package in "${packages[@]}"; do
+            npx --yes ovsx publish --trusted-publishing "$package"
+          done
+      - name: Verify public native downloads and latest versions
+        shell: python
+        run: |
+          import hashlib, json, pathlib, time, urllib.parse, urllib.request, zipfile
+          import xml.etree.ElementTree as ET
+          seen = set()
+          versions = set()
+          for package in sorted(pathlib.Path("artifacts").glob("*.vsix")):
+              with zipfile.ZipFile(package) as archive:
+                  manifest = json.loads(archive.read("extension/package.json"))
+                  xml = ET.fromstring(archive.read("extension.vsixmanifest"))
+              target = next(node for node in xml.iter() if node.tag.rsplit("}", 1)[-1] == "Identity").attrib.get("TargetPlatform")
+              publisher, name, version = manifest["publisher"], manifest["name"], manifest["version"]
+              assert (publisher, name) == ("ayushniroula", "arguseye"), "Unexpected extension identity"
+              assert target in {"linux-x64", "win32-x64", "darwin-arm64"} and target not in seen, "Unexpected or duplicate native target"
+              seen.add(target)
+              versions.add(version)
+              expected = hashlib.sha256(package.read_bytes()).hexdigest()
+              base = "https://open-vsx.org/api/" + "/".join(urllib.parse.quote(value, safe="") for value in (publisher, name, target))
+              failure = None
+              for attempt in range(6):
+                  try:
+                      with urllib.request.urlopen(base + "/" + version, timeout=10) as response:
+                          metadata = json.load(response)
+                      assert metadata.get("version") == version and metadata.get("targetPlatform") == target, "Published native version is unavailable"
+                      download = metadata["files"]["download"]
+                      assert urllib.parse.urlparse(download).scheme == "https", "Expected an HTTPS registry download"
+                      digest = hashlib.sha256()
+                      size = 0
+                      with urllib.request.urlopen(download, timeout=20) as response:
+                          while chunk := response.read(1024 * 1024):
+                              size += len(chunk)
+                              assert size <= package.stat().st_size, "Registry download is larger than the validated archive"
+                              digest.update(chunk)
+                      assert size == package.stat().st_size and digest.hexdigest() == expected, "Public VSIX does not match the validated archive"
+                      with urllib.request.urlopen(base + "/latest", timeout=10) as response:
+                          latest = json.load(response)
+                      assert latest.get("version") == version, "Open VSX latest still serves another version"
+                      failure = None
+                      print(f"Verified {publisher}.{name} {version} {target}: SHA-256 {expected}")
+                      break
+                  except Exception as error:
+                      failure = error
+                      if attempt < 5:
+                          time.sleep(3)
+              if failure is not None:
+                  raise RuntimeError(f"Open VSX public verification failed for {target}: {failure}")
+          assert seen == {"linux-x64", "win32-x64", "darwin-arm64"} and len(versions) == 1, "Expected one release on all three native platforms"
 
   npm:
     # Skipped until the NPM_TOKEN secret exists (or npm trusted publishing is configured).
