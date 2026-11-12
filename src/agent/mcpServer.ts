@@ -1,6 +1,7 @@
+import { matrixRequestSchema, matrixBaselinesSchema, type MatrixReport } from "./renderMatrix.js";
 import path from "node:path";
 import { VIEWPORTS, parseViewport } from "./viewports.js";
-import { renderEvidence, diffEvidence } from "./renderEvidence.js";
+import { renderEvidence, diffEvidence, matrixEvidence } from "./renderEvidence.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
@@ -12,7 +13,7 @@ import { packageVersion } from "../packageVersion.js";
 import { FileAccessError } from "../server/createFileAccess.js";
 import { conditionsSchema, actionsSchema } from "./renderChecks.js";
 import { recipeSchema } from "./renderRecipe.js";
-import { toolOutputSchema, projectOutputSchema, renderOutputSchema, diffOutputSchema, propsOutputSchema, usagesOutputSchema, usageRendersOutputSchema, auditOutputSchema } from "./evidenceSchemas.js";
+import { toolOutputSchema, matrixOutputSchema, projectOutputSchema, renderOutputSchema, diffOutputSchema, propsOutputSchema, usagesOutputSchema, usageRendersOutputSchema, auditOutputSchema } from "./evidenceSchemas.js";
 
 /** Sent to the agent when it connects: when to reach for these tools, so it uses them without being asked. */
 const INSTRUCTIONS = `Arguseye shows you UI you cannot otherwise see: it renders React (incl. browser-compatible Next.js, React Router, Remix), Vue, Svelte, Preact and Solid components from source with project packages and supported layout, provider, style and font context. Missing inputs and runtime approximations remain explicit. No application server or authored stories are required.
@@ -21,6 +22,7 @@ Use it whenever you create or change a UI component, its styles or its props:
 - Call inspect_project if setup or rendering fails: it checks the selected project and installed framework packages without starting a browser or executing project config.
 - After the edit, call render_component on the file (pass usage from list_usages for real props). Read errors first, then the accessibility snapshot, then the image.
 - Before saying a UI change is done, render it again and read \`changes\`; for a shared component, render_usages checks every call site.
+- For responsive or theme-sensitive edits, use render_matrix with 1–12 named explicit contexts, then render_matrix_diff with matching case/capture IDs. Default summary is compact. Read coverage and unresolved inputs: not-run or not-compared is never unchanged.
 - Use theme "dark" when the app has a dark mode, viewport "mobile" for responsive work, actions to open menus, dialogs or tabs.
 - Use ready for explicit pre-capture state and expectations for caller-defined checks. Read passed/failed/not-run outcomes even when errors is empty. capture_recipe exports resolved regression inputs; render_recipe replays them against current source. Browser input omissions require explicit repair before replay.
 - After a refactor or dependency upgrade, audit_components renders everything once and lists what broke.
@@ -136,6 +138,38 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
     isError: true,
     content: [{ type: "text" as const, text: `error: ${(error as Error).message}` }],
     structuredContent: { schemaVersion: 1, errors: [(error as Error).message], diagnostics: [{ code: error instanceof FileAccessError ? "ACCESS_DENIED" : "TOOL_FAILED", severity: "error", phase: "request", message: (error as Error).message }] },
+  });
+
+  function matrixResponse(report: MatrixReport, format = "summary") {
+    const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
+    for (const cell of report.cells) {
+      if (format !== "image") content.push({ type: "text", text: `${cell.id}: ${cell.status}${cell.render?.captureId ? `; captureId: ${cell.render.captureId}` : ""}${cell.errors.length ? "\n" + cell.errors.join("\n") : ""}` });
+      if (format !== "summary") {
+        content.push({ type: "text", text: cell.id });
+        for (const [label, png] of cell.diff ? [["Before", cell.diff.before.png], ["After", cell.diff.after.png], ["Changed pixels", cell.diff.diffPng]] as const : cell.render ? [["Render", cell.render.png]] as const : []) {
+          content.push({ type: "text", text: label }, { type: "image", data: png.toString("base64"), mimeType: "image/png" });
+        }
+      }
+    }
+    if (format !== "image") content.unshift({ type: "text", text: `${report.status}: ${report.coverage.executed}/${report.coverage.requested} executed; ${report.coverage.compared} compared; ${report.coverage.notRun} not run. ${report.warnings.join(" ")} Visual changes require review; these are isolated renders, not application integration tests.` });
+    return { isError: !report.complete || report.coverage.failed > 0, content, structuredContent: matrixEvidence(report) };
+  }
+
+  server.registerTool("render_matrix", {
+    annotations: EXECUTES_CODE, outputSchema: toolOutputSchema(matrixOutputSchema),
+    description: "Check up to 12 explicitly named viewport/theme/prop/state cases for one component as a single bounded job (30 seconds maximum). Default output is token-cheap summary; each case returns captureId, checks, context and coverage. props and check/action arrays replace target defaults. No unselected combinations are tested.",
+    inputSchema: { ...matrixRequestSchema.shape, output, timeoutMs: z.number().int().min(1).max(30000).optional() },
+  }, async ({ target, cases, output, timeoutMs }, extra) => {
+    try { return matrixResponse(await (await getRenderer()).renderMatrix({ target, cases } as import("./renderMatrix.js").MatrixRequest, control(extra, timeoutMs)), output); }
+    catch (error) { return failure(error); }
+  });
+  server.registerTool("render_matrix_diff", {
+    annotations: EXECUTES_CODE, outputSchema: toolOutputSchema(matrixOutputSchema),
+    description: "Compare current source using each named baseline's immutable resolved inputs. Missing/evicted baselines are not-compared, never unchanged. Capture IDs belong to this session and remain subject to its existing retention limits. A changed result is review evidence, not a correctness verdict.",
+    inputSchema: { baselines: matrixBaselinesSchema, output, timeoutMs: z.number().int().min(1).max(30000).optional() },
+  }, async ({ baselines, output, timeoutMs }, extra) => {
+    try { return matrixResponse(await (await getRenderer()).diffMatrix(baselines, control(extra, timeoutMs)), output); }
+    catch (error) { return failure(error); }
   });
 
   server.registerTool("capture_recipe", {

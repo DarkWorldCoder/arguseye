@@ -69,6 +69,10 @@ export async function run(): Promise<void> {
   const checked = await api.runChecks();
   assert.equal(checked.expectations![0].status, "passed", "panel checks run through fresh shared-engine verification");
   assert.equal(checked.expectations![1].status, "passed", "panel observes enabled controls through the shared renderer");
+  const matrix = await api.runMatrix();
+  assert.equal(matrix.coverage.executed, 4, "panel verifies mobile/desktop in light/dark through the shared engine");
+  assert.equal(matrix.coverage.failed, 0);
+  assert.equal((await api.runMatrix(true)).coverage.compared, 4);
   const checkDirectory = mkdtempSync(path.join(tmpdir(), "arguseye-panel-check-"));
   const checkFile = vscode.Uri.file(path.join(checkDirectory, "card.json"));
   try {

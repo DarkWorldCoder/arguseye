@@ -166,3 +166,35 @@ Use MCP `inspection: {accessibility: true, sources: true}` or CLI `shot --access
 Error evidence includes original TypeScript/JSX locations where the native transform preserves a trustworthy source map. Vite mode uses its actual transform maps. Native SFC and Solid compiler chains, rewritten barrels and package chunks can lack composed maps; those references remain explicitly unmapped. Element evidence distinguishes exact mapped positions from an owning component file and from elements with no trustworthy reference. It never invents a source line from a component name.
 
 Vue prop inspection reads imported type declarations, literal macro defaults and ordinary runtime prop declarations. Static `defineEmits` and `defineSlots` names are returned alongside limitations. React inspection retains TypeScript parameter props and literal defaults. Computed declarations and complex type-level behavior require source review. Vue compilation uses the same approved roots and unsaved type buffers as metadata inspection.
+
+## Viewport, theme and state matrices (unreleased)
+
+A desktop screenshot does not cover the mobile or dark-mode version of a component. `render_matrix` checks **1–12 explicitly selected cases** in one queued job; there is no automatic Cartesian expansion. Cases require a unique ID, numeric viewport and light/dark theme. Optional case props, actions, readiness and expectations **replace** those target defaults. Each case starts in fresh component state.
+
+```json
+{
+  "target": { "file": "src/PricingCard.tsx", "exportName": "PricingCard", "props": { "title": "Starter", "price": 9 } },
+  "cases": [
+    { "id": "phone-light", "viewport": { "width": 390, "height": 844 }, "theme": "light" },
+    { "id": "desktop-dark", "viewport": { "width": 1280, "height": 800 }, "theme": "dark", "props": { "title": "A longer team plan name", "price": 99 } }
+  ]
+}
+```
+
+Pass this object to MCP `render_matrix`, or save it as `matrix.json`:
+
+```sh
+node dist/cli.mjs matrix matrix.json --root /path/to/project --out /tmp/arguseye-baseline --json
+# Edit the component, then compare in a separate process:
+node dist/cli.mjs matrix-diff --baseline /tmp/arguseye-baseline --root /path/to/project --out /tmp/arguseye-comparison --json
+```
+
+These commands are **development source APIs**, not part of published 0.0.21. Use the development build until a release contains them. Output directories must be new, so a comparison cannot overwrite its own baseline. They contain PNGs and resolved input/context evidence, which may include private data; review before sharing or committing.
+
+For MCP comparisons pass `render_matrix_diff` a `baselines` array of `{id, captureId}` from the first report. Inputs come exclusively from the saved capture, including resolved usage props, viewport, theme, actions and checks. The summary format is the matrix default; request `output: "both"` for per-case images or before/after/highlighted diff images. Ordinary render output defaults remain unchanged.
+
+Every report lists requested, executed, compared, passed, changed, unchanged, failed, incomplete, not-run and not-compared counts. A failed behavioral expectation remains failed even when pixels match. Missing/evicted baselines remain **not-compared**, never unchanged. Cancellation and the total execution deadline (default and maximum **30 seconds**, excluding queue time) preserve completed cells and mark the rest not-run. Source edits observed during the batch make the aggregate incomplete; graph growth alone does not. This detects local source changes registered by the preview server, not remote data mutations.
+
+Successful pixels retain all existing unresolved-input, font, asset, provider and framework warnings. The top-level `complete` describes evidence coverage and context, not correctness; failed expectations can have complete evidence. Visual differences require human or agent review. These remain isolated renders, not full-page integration tests, and unselected combinations remain untested. Existing session caps (4 pages, 64 captures, 64 MiB retained PNGs) still apply. A comparison pins only its requested baselines for the current job; future requests can find them evicted.
+
+In VS Code open **Checks → Check viewports** to capture mobile/desktop × light/dark using the selected component, current props/usage, unsaved buffers and explicit checks. **Compare viewports** replays those same baseline inputs. Results show per-case status, images and expandable structured evidence; the live preview's interactive state is separate. Cancel through the VS Code notification. Matrix work has a total budget separate from the unchanged 100 ms single warm-render gate.

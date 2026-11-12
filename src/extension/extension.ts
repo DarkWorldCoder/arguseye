@@ -11,6 +11,8 @@ import { createUsageIndex } from "../usages/createUsageIndex.js";
 import type { Usage } from "../usages/findUsages.js";
 import type { Renderer, RenderResult } from "../agent/createRenderer.js";
 import type { DiffResult } from "../agent/compareCaptures.js";
+import type { MatrixReport } from "../agent/renderMatrix.js";
+import { matrixEvidence } from "../agent/renderEvidence.js";
 import { diffEvidence } from "../agent/renderEvidence.js";
 import { VIEWPORTS } from "../agent/viewports.js";
 import { propsSchema, sampleProps, type PropSchema } from "../props/propsSchema.js";
@@ -67,6 +69,8 @@ export type PreviewApi = {
   compareChanges(): Promise<DiffResult>;
   setChecks(inputs: unknown): Promise<void>;
   runChecks(): Promise<RenderResult>;
+  /** Verifies the selected component at mobile/desktop widths in light/dark. */
+  runMatrix(compare?: boolean): Promise<MatrixReport>;
   saveRegressionCheck(uri?: vscode.Uri): Promise<void>;
   runRegressionCheck(uri?: vscode.Uri): Promise<RenderResult | undefined>;
 };
@@ -99,6 +103,7 @@ class PreviewPanel implements vscode.Disposable {
   private servers = new Map<string, Promise<PreviewServer>>();
   private shownRoot: string | undefined;
   private shownGeneration: number | undefined;
+  private matrixBaseline?: { file: string; exportName?: string; cases: Array<{ id: string; captureId?: string }> };
   private current: PreviewStatus | undefined;
   private state: PanelState | undefined;
   private statusChanged = new vscode.EventEmitter<PreviewStatus>();
@@ -122,6 +127,7 @@ class PreviewPanel implements vscode.Disposable {
     compareChanges: () => this.compareChanges(),
     setChecks: (inputs) => this.setChecks(inputs),
     runChecks: () => this.runChecks(),
+    runMatrix: (compare) => this.runMatrix(compare),
     saveRegressionCheck: (uri) => this.saveRegressionCheck(uri),
     runRegressionCheck: (uri) => this.runRegressionCheck(uri),
     waitForStatus: (matches, timeoutMs) =>
@@ -377,6 +383,29 @@ class PreviewPanel implements vscode.Disposable {
     return result;
   }
 
+  private async runMatrix(compare = false): Promise<MatrixReport> {
+    if (!this.state) throw new Error("Open a preview first.");
+    const state = this.state;
+    const renderer = await this.verificationRenderer();
+    if (compare && (!this.matrixBaseline || this.matrixBaseline.file !== state.file || this.matrixBaseline.exportName !== state.exportName)) throw new Error("Capture this component's viewport matrix before comparing changes.");
+    const report = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: compare ? "Comparing viewport cases" : "Checking mobile/desktop in light/dark", cancellable: true }, async (progress, token) => {
+      const controller = new AbortController();
+      const subscription = token.onCancellationRequested(() => controller.abort());
+      if (token.isCancellationRequested) controller.abort();
+      const control = { signal: controller.signal, onProgress: this.verificationProgress() };
+      progress.report({ message: "Fresh component state for each case" });
+      try {
+        return compare ? await renderer.diffMatrix(this.matrixBaseline!.cases, control) : await renderer.renderMatrix({
+          target: { ...state.checks, file: state.file, engine: state.engine, profile: state.profile, templateResolved: true, exportName: state.exportName, props: state.props, usage: state.usage },
+          cases: (["mobile", "desktop"] as const).flatMap((preset) => (["light", "dark"] as const).map((theme) => ({ id: `${preset}-${theme}`, viewport: VIEWPORTS[preset], theme }))),
+        }, control);
+      } finally { subscription.dispose(); }
+    });
+    if (!compare) this.matrixBaseline = { file: state.file, exportName: state.exportName, cases: report.cells.map((cell) => ({ id: cell.id, captureId: cell.render?.captureId })) };
+    if (this.state?.file === state.file) await this.panel?.webview.postMessage({ type: "matrix", evidence: matrixEvidence(report), cases: report.cells.map((cell) => ({ id: cell.id, status: cell.status, images: cell.diff ? [cell.diff.before.png, cell.diff.after.png, cell.diff.diffPng].map((png) => "data:image/png;base64," + png.toString("base64")) : cell.render ? ["data:image/png;base64," + cell.render.png.toString("base64")] : [] })) });
+    return report;
+  }
+
   private async showCheckResult(result: RenderResult): Promise<void> {
     const checks = [...(result.readiness ?? []), ...(result.expectations ?? [])];
     const message = `${path.basename(result.target.file)}: ${checks.filter((c) => c.status === "passed").length}/${checks.length} checks passed; ${result.complete ? "complete" : "incomplete"} evidence. ` + [...result.errors, ...result.warnings, ...checks.filter((c) => c.status !== "passed").map((c) => c.message ?? c.status)].join("; ");
@@ -430,6 +459,7 @@ class PreviewPanel implements vscode.Disposable {
       if (message.type === "viewport") return act(this.setViewport(message.preset));
       if (message.type === "theme") return act(this.setTheme(message.theme));
       if (message.type === "capture") return act(Promise.resolve().then(() => message.checks === undefined ? undefined : this.setChecks(JSON.parse(message.checks))).then(() => this.captureBaseline()));
+      if (message.type === "matrix") return act(Promise.resolve().then(() => this.setChecks(JSON.parse(message.checks))).then(() => this.runMatrix(!!message.compare)));
       if (message.type === "compare") return act(this.compareChanges());
       if (message.type === "run-checks") return act(Promise.resolve().then(() => this.setChecks(JSON.parse(message.value))).then(() => this.runChecks()));
       if (message.type === "save-check") return act(Promise.resolve().then(() => this.setChecks(JSON.parse(message.value))).then(() => this.saveRegressionCheck()));
@@ -556,7 +586,7 @@ function webviewHtml(origin: string, pageUrl: string): string {
   <p>Add a readiness condition or expectation, then run it in fresh state. The interactive preview keeps its state.</p>
   <label for="checkInput">Checks JSON (ready, expectations, actions)</label>
   <textarea id="checkInput" spellcheck="false">{"expectations": []}</textarea>
-  <button id="runChecks">Run checks</button> <button id="saveCheck">Save regression check</button> <button id="openCheck">Run saved check</button>
+  <button id="runChecks">Run checks</button> <button id="captureMatrix">Check viewports</button> <button id="compareMatrix" disabled title="Replays captured props, usage, viewports, themes and checks">Compare viewports</button> <button id="saveCheck">Save regression check</button> <button id="openCheck">Run saved check</button>
 </details>
 <div id="main">
   <div id="stage"><div id="frameBox"><iframe id="preview" title="Component preview" src="${pageUrl}" allow="clipboard-read; clipboard-write"></iframe></div></div>
@@ -606,6 +636,19 @@ addEventListener("message", (event) => {
   }
   else if (data?.type === "show") { statusChip.textContent = "Rendering preview"; frame.contentWindow.postMessage({ type: "cp:show", target: data.target }, "*"); }
   else if (data?.type === "checks") { document.getElementById("checkInput").value = JSON.stringify(data.checks, null, 2); checkFile = data.file; }
+  else if (data?.type === "matrix") {
+    statusChip.textContent = renderedStatus;
+    document.getElementById("compareMatrix").disabled = false;
+    const host = document.getElementById("verification"); host.replaceChildren();
+    const summary = document.createElement("p");
+    summary.textContent = data.evidence.status + ": " + data.evidence.coverage.executed + "/" + data.evidence.coverage.requested + " cases executed; " + data.evidence.coverage.compared + " compared. Only mobile/desktop, light/dark are checked. " + data.evidence.warnings.join("; "); host.append(summary);
+    for (const cell of data.cases) {
+      const heading = document.createElement("h3"); heading.textContent = cell.id + ": " + cell.status; host.append(heading);
+      const grid = document.createElement("div"); grid.className = "images"; if (cell.images.length === 1) grid.style.gridTemplateColumns = "minmax(0,1fr)";
+      cell.images.forEach((src, index) => { const figure = document.createElement("figure"), caption = document.createElement("figcaption"), img = document.createElement("img"); caption.textContent = cell.images.length === 1 ? "Capture" : ["Before", "After", "Changed pixels"][index]; img.alt = cell.id + " " + caption.textContent; img.src = src; figure.append(caption, img); grid.append(figure); }); host.append(grid);
+    }
+    const details = document.createElement("details"), title = document.createElement("summary"), evidence = document.createElement("pre"); title.textContent = "Case inputs, checks and warnings"; evidence.style.whiteSpace = "pre-wrap"; evidence.textContent = JSON.stringify(data.evidence, null, 2); details.append(title, evidence); host.append(details);
+  }
   else if (data?.type === "verification") {
     statusChip.textContent = renderedStatus;
     const host = document.getElementById("verification"); host.replaceChildren();
@@ -631,6 +674,8 @@ document.getElementById("viewport").onchange = (event) => vscode.postMessage({ t
 document.getElementById("theme").onchange = (event) => vscode.postMessage({ type: "theme", theme: event.target.value });
 document.getElementById("capture").onclick = () => vscode.postMessage({ type: "capture", checks: document.getElementById("checkInput").value });
 document.getElementById("compare").onclick = () => vscode.postMessage({ type: "compare" });
+document.getElementById("captureMatrix").onclick = () => vscode.postMessage({ type: "matrix", checks: document.getElementById("checkInput").value });
+document.getElementById("compareMatrix").onclick = () => vscode.postMessage({ type: "matrix", compare: true, checks: document.getElementById("checkInput").value });
 document.getElementById("runChecks").onclick = () => vscode.postMessage({ type: "run-checks", value: document.getElementById("checkInput").value });
 document.getElementById("saveCheck").onclick = () => vscode.postMessage({ type: "save-check", value: document.getElementById("checkInput").value });
 document.getElementById("openCheck").onclick = () => vscode.postMessage({ type: "open-check" });

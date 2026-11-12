@@ -81,7 +81,7 @@ it("continues a bounded audit without repeating components and rejects malformed
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "capture_recipe", "describe_props", "inspect_project", "list_usages", "render_component", "render_diff", "render_recipe", "render_usages"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "capture_recipe", "describe_props", "inspect_project", "list_usages", "render_component", "render_diff", "render_matrix", "render_matrix_diff", "render_recipe", "render_usages"]);
   });
 
   it("distinguishes static inspection from rendering project code with possible external effects", async () => {
@@ -272,4 +272,24 @@ it("paginates usage renders and returns structured per-usage evidence", async ()
   expect((next.structuredContent as any).nextCursor).toBe("2");
   const last = await client.callTool({ name: "render_usages", arguments: { ...args, cursor: "3" } });
   expect((last.structuredContent as any).nextCursor).toBeNull();
+});
+
+it("exposes compact matrix evidence and baseline comparisons with machine-readable contracts", async () => {
+  const tools = await client.listTools();
+  expect(tools.tools.find((tool) => tool.name === "render_matrix")?.outputSchema).toBeDefined();
+  const rendered = await client.callTool({ name: "render_matrix", arguments: {
+    target: { file: "components/MatrixCard.tsx", exportName: "MatrixCard", props: { title: "A real small-screen check" } },
+    cases: [{ id: "phone-dark", viewport: { width: 390, height: 844 }, theme: "dark" }],
+  } });
+  expect(rendered.isError).toBe(false);
+  const report = rendered.structuredContent as any;
+  expect(report.coverage).toMatchObject({ requested: 1, executed: 1 });
+  expect(report.cells[0].render.png).toBeUndefined();
+  expect((rendered.content as Content).some((item) => item.type === "image")).toBe(false);
+  const compared = await client.callTool({ name: "render_matrix_diff", arguments: { baselines: [{ id: "phone-dark", captureId: report.cells[0].render.captureId }], output: "both" } });
+  expect((compared.structuredContent as any).cells[0].status).toBe("unchanged");
+  expect((compared.content as Content).filter((item) => item.type === "image")).toHaveLength(3);
+  const expired = await client.callTool({ name: "render_matrix_diff", arguments: { baselines: [{ id: "unknown", captureId: "expired-case" }] } });
+  expect(expired.isError).toBe(true);
+  expect((expired.structuredContent as any).cells[0].status).toBe("not-compared");
 });

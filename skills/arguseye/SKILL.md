@@ -17,6 +17,14 @@ Read `readiness` and `expectations` outcomes (`passed`, `failed`, `not-run`) eve
 
 `capture_recipe {captureId}` exports version-1 JSON inputs; `render_recipe {recipe}` replays them against current source. Browser storage and network bodies are omitted by default. An omission list blocks replay: review and explicitly restore inputs rather than silently clearing it. Props and other content may still be private. Saving a recipe does not approve a baseline or make sampled/runtime inputs complete. The CLI equivalents are `shot --checks checks.json --save-recipe card.arguseye.json` and `check card.arguseye.json --json`.
 
+## Viewport/theme/state checks (development source only)
+
+Published 0.0.21 does not include these tools. For an edit that could affect responsive layout or theming, use `render_matrix {target:{file,exportName,props},cases:[{id,viewport:{width,height},theme}]}`. Choose only relevant cases (1–12); do not claim every device/state was tested. Optional case props/actions/ready/expectations replace target defaults. Default summary avoids image tokens; request both when visual review is needed.
+
+Save each returned case ID and captureId. After edits call `render_matrix_diff {baselines:[{id,captureId}]}`. It reuses exact resolved baseline inputs; do not silently change them when comparing. Read coverage, sourceConsistent, errors, checks, unresolved inputs and warnings before assessing pixels. Missing/evicted baselines are not-compared; cancelled/timed-out work retains completed cases and marks the rest not-run. Failed checks are distinct from changed pixels. Rerun after edits stop if sourceConsistent is false. Total execution is bounded to 30 seconds; use smaller batches for expensive cases. Existing 64-capture/64-MiB retention still applies.
+
+CLI: `arguseye matrix matrix.json --out NEW_DIR --json`, followed by `arguseye matrix-diff --baseline DIR --out ANOTHER_NEW_DIR --json`. Captures contain project data; review before sharing. These are isolated renders using the project's installed packages, not application integration tests or proof of correctness.
+
 ## When to use it
 - After editing a component: render it again; the result says what changed (`changes`) since the last render of the same target.
 - For a shared component: inspect relevant call-site variants with `render_usages`, following pagination when broader coverage is needed. Use `usage` plus `in_context: true` to reconstruct its parent elements.

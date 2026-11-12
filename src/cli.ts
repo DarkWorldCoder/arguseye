@@ -1,10 +1,11 @@
+import { matrixRequestSchema, matrixBaselinesSchema, type MatrixRequest } from "./agent/renderMatrix.js";
 import { parseViewport } from "./agent/viewports.js";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { saveCapture, loadCapture, saveDiff } from "./agent/captureFiles.js";
-import { renderEvidence, diffEvidence } from "./agent/renderEvidence.js";
+import { renderEvidence, diffEvidence, matrixEvidence } from "./agent/renderEvidence.js";
 import { createRenderer } from "./agent/createRenderer.js";
 import { createMcpServer } from "./agent/mcpServer.js";
 import { createPreviewServer } from "./server/createPreviewServer.js";
@@ -37,6 +38,11 @@ const HELP = `arguseye: inspect components and verify UI edits, no application s
 
   arguseye diff --baseline DIR --out DIR [--json] [--root DIR]
       Compare current source against a saved baseline; writes before/after/diff PNGs and JSON
+
+  arguseye matrix FILE.json --out DIR [--json] [--root DIR]
+      Run explicit viewport/theme/state cases and save replayable captures in a new directory
+  arguseye matrix-diff --baseline DIR --out DIR [--json] [--root DIR]
+      Compare saved cases with their original inputs; missing captures remain not-compared
 
   arguseye check RECIPE.json [--out PNG] [--json] [--root DIR]
       Replay saved readiness/actions/expectations against current source; nonzero exit on failed or incomplete checks
@@ -144,6 +150,46 @@ if (values.help || !command) {
     console.log(values.json ? JSON.stringify(diffEvidence(result)) : `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels; evidence in ${values.out}`);
     process.exitCode = result.status === "incomplete" || result.after.expectations?.some((c) => c.status !== "passed") ? 1 : 0;
   } finally { await renderer.close(); }
+} else if (command === "matrix" || command === "matrix-diff") {
+  let renderer: Awaited<ReturnType<typeof createRenderer>> | undefined;
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  process.on("SIGINT", cancel); process.on("SIGTERM", cancel);
+  try {
+    if (!values.out) throw new Error("Matrix requires --out with a new output directory.");
+    if (command === "matrix" && !file) throw new Error("Matrix requires a JSON plan file.");
+    if (command === "matrix-diff" && !values.baseline) throw new Error("Matrix comparison requires --baseline with a saved matrix directory.");
+    const readJson = async (filename: string) => {
+      if ((await stat(filename)).size > 1_048_576) throw new Error(`Matrix manifest "${filename}" exceeds 1 MiB`);
+      return JSON.parse(await readFile(filename, "utf8"));
+    };
+    const request = command === "matrix" ? matrixRequestSchema.parse(await readJson(file ?? "")) as MatrixRequest : undefined;
+    const manifest = command === "matrix-diff" ? await readJson(path.join(values.baseline ?? "", "matrix.json")) : undefined;
+    const baselines = manifest ? matrixBaselinesSchema.parse(manifest.cells.map((cell: { id: string }) => ({ id: cell.id }))) : [];
+    await mkdir(values.out); // Never overwrite a baseline directory while comparing it.
+    renderer = await createRenderer({ root, buildMode });
+    const control = { signal: controller.signal, timeoutMs: values["timeout-ms"] ? Number(values["timeout-ms"]) : undefined };
+    if (manifest) for (const cell of baselines) {
+      const old = manifest.cells.find((item: { id: string }) => item.id === cell.id);
+      if (old.render?.captureId || old.diff?.after?.captureId) {
+        try { cell.captureId = renderer.restoreCapture(await loadCapture(path.join(values.baseline!, cell.id))); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      }
+    }
+    const report = request ? await renderer.renderMatrix(request, control) : await renderer.diffMatrix(baselines, control);
+    for (const cell of report.cells) {
+      if (cell.render) await saveCapture(path.join(values.out, cell.id), cell.render);
+      if (cell.diff) await saveDiff(path.join(values.out, cell.id), cell.diff);
+    }
+    const evidence = matrixEvidence(report);
+    await writeFile(path.join(values.out, "matrix.json"), JSON.stringify(evidence, null, 2));
+    console.log(values.json ? JSON.stringify(evidence) : `${report.status}: ${report.coverage.executed}/${report.coverage.requested} cases executed, ${report.coverage.compared} compared; ${report.coverage.notRun} not run. Evidence in ${values.out}\n${report.cells.map((cell) => `${cell.id}: ${cell.status}`).join("\n")}`);
+    process.exitCode = !report.complete || report.coverage.failed ? 1 : 0;
+  } catch (error) {
+    const message = `Matrix: ${(error as Error).message}`;
+    if (values.json) console.log(JSON.stringify({ schemaVersion: 1, errors: [message] })); else console.error(message);
+    process.exitCode = 1;
+  } finally { process.off("SIGINT", cancel); process.off("SIGTERM", cancel); await renderer?.close(); }
 } else if (command === "check" && file) {
   let renderer: Awaited<ReturnType<typeof createRenderer>> | undefined;
   try {

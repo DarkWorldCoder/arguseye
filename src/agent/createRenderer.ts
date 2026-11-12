@@ -1,3 +1,4 @@
+import { createMatrixRun, matrixCell, matrixRequestSchema, matrixBaselinesSchema, type MatrixRequest, type MatrixReport } from "./renderMatrix.js";
 import { locateTarget, runChecks, validateChecks, actionsSchema, type RenderCondition, type CheckEvidence } from "./renderChecks.js";
 import { createRenderRecipe, readRenderRecipe, type RenderRecipe } from "./renderRecipe.js";
 import { fileFromUrl } from "../server/fileUrl.js";
@@ -152,6 +153,10 @@ export type Renderer = {
   /** Renders one bounded page from a single usage-index query. */
   renderUsages(request: RenderRequest & { offset?: number; limit?: number }, control?: RenderControl): Promise<{ results: Array<RenderResult & { usage: string }>; total: number; nextOffset: number | null }>;
   diff(baselineId: string, control?: RenderControl): Promise<DiffResult>;
+  /** Checks up to twelve explicit contexts as one serialized, bounded job. */
+  renderMatrix(request: MatrixRequest, control?: RenderControl): Promise<MatrixReport>;
+  /** Replays matching immutable baselines; missing IDs remain explicitly untested. */
+  diffMatrix(baselines: Array<{ id: string; captureId?: string }>, control?: RenderControl): Promise<MatrixReport>;
   /** Imports a persisted CLI capture into this renderer's bounded session cache. */
   restoreCapture(capture: RenderResult): string;
   /** Exports selected baseline inputs as a portable local regression check. */
@@ -188,7 +193,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     try { job.onProgress({ file, phase, message }); } catch { /* A disconnected observer must not break the render. */ }
   };
   let closing = false;
-  const serial = <T>(work: () => Promise<T>, control: RenderControl = {}): Promise<T> => {
+  const serial = <T>(work: () => Promise<T>, control: RenderControl = {}, onInterrupted?: (error: Error) => T): Promise<T> => {
     const timeout = control.timeoutMs ?? 30000;
     if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120000) return Promise.reject(new Error("Render deadline must be between 1 and 120000 ms"));
     const result = queue.then(async () => {
@@ -211,7 +216,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       try {
         if (control.signal?.aborted) abort();
         return await Promise.race([interrupted, jobs.run(job, async () => { guard(); return work(); })]);
-      } finally { job.active = false; clearTimeout(timer); control.signal?.removeEventListener("abort", abort); }
+      } catch (error) { if (stopped && onInterrupted) return onInterrupted(stopped); throw error; } finally { job.active = false; clearTimeout(timer); control.signal?.removeEventListener("abort", abort); }
     });
     queue = result.catch(() => {}); return result;
   };
@@ -405,8 +410,55 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if ((capture.build?.mode ?? "native") !== (server.build?.mode ?? "native")) throw new Error(`Baseline uses ${capture.build?.mode ?? "native"} compilation; create a renderer with the same buildMode before comparing.`);
       return remember(capture);
     },
-    diff: (baselineId, control) => serial(async () => {
-      const before = captures.get(baselineId);
+    diff: (baselineId, control) => serial(() => diffOne(baselineId), control),
+    renderMatrix: (request, control) => {
+      const { target, cases } = matrixRequestSchema.parse(request) as MatrixRequest;
+      return matrixJob(cases.map((cell) => cell.id), async (index) => {
+        const { id, ...context } = cases[index];
+        return matrixCell(id, await renderWithProvider({ ...target, ...context }));
+      }, control);
+    },
+    diffMatrix: (input, control) => {
+      const baselines = matrixBaselinesSchema.parse(input);
+      // Snapshot the requested baselines before new captures can evict them within this job.
+      return matrixJob(baselines.map((cell) => cell.id), async (index, saved) => {
+        const { id, captureId } = baselines[index];
+        const before = captureId ? saved.get(captureId) : undefined;
+        if (!before) return { id, status: "not-compared", errors: [`Missing or expired baseline "${captureId ?? id}". Render this case again to establish a baseline.`] };
+        const diff = await diffOne(captureId!, before);
+        return matrixCell(id, diff.after, diff);
+      }, control, baselines.map((cell) => cell.captureId).filter((id): id is string => !!id));
+    },
+    async close() {
+      closing = true;
+      await queue;
+      captures.clear(); lastResults.clear(); pages.clear();
+      await browser.close();
+      if (!options.server) await server.close();
+    },
+  };
+
+  async function matrixJob(ids: string[], execute: (index: number, saved: Map<string, RenderResult>) => Promise<import("./renderMatrix.js").MatrixCell>, control?: RenderControl, baselineIds: string[] = []): Promise<MatrixReport> {
+    if (control?.timeoutMs !== undefined && control.timeoutMs > 30000) throw new Error("Matrix deadline must be between 1 and 30000 ms");
+    let run: ReturnType<typeof createMatrixRun> | undefined;
+    let revision = "";
+    const revisionState = () => JSON.stringify(server.syncDisk());
+    return serial(async () => {
+      await server.ready();
+      run = createMatrixRun(ids);
+      revision = revisionState();
+      const saved = new Map(baselineIds.flatMap((id) => captures.has(id) ? [[id, captures.get(id)!] as const] : []));
+      for (let index = 0; index < ids.length; index++) {
+        guard();
+        try { run.record(index, await execute(index, saved)); }
+        catch (error) { guard(); run.record(index, { id: ids[index], status: "failed", errors: [(error as Error).message] }); }
+      }
+      return run.finish(revision === revisionState());
+    }, control, (error) => (run ?? createMatrixRun(ids)).finish(!run || revision === revisionState(), new Error(error.message.replace(/; no capture was saved\./, "; remaining cases were not completed and earlier captures are retained."))));
+  }
+
+  async function diffOne(baselineId: string, saved?: RenderResult): Promise<DiffResult> {
+      const before = saved ?? captures.get(baselineId);
       if (!before) throw new Error(`Unknown or expired baseline "${baselineId}"; render the component again to capture a new baseline.`);
       // Same props, parent box, frame, actions and storage as the baseline. The usage is replayed only for its
       // ancestors (in-context), so a baseline without context still compares after its call site moved.
@@ -423,15 +475,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (after.captureId && captures.has(after.captureId)) { captures.set(after.captureId, { ...structuredClone(after), png: Buffer.from(after.png) }); trim(); }
       const page = await pages.get(pageKey(before.target.file, before.viewport, await classicOf(before.target.file)))!;
       return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
-    }, control),
-    async close() {
-      closing = true;
-      await queue;
-      captures.clear(); lastResults.clear(); pages.clear();
-      await browser.close();
-      if (!options.server) await server.close();
-    },
-  };
+  }
 
   /**
    * Compound components (Radix, shadcn) throw "`Tooltip` must be used within `TooltipProvider`" when rendered alone.
