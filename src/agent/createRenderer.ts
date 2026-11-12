@@ -450,6 +450,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const saved = new Map(baselineIds.flatMap((id) => captures.has(id) ? [[id, captures.get(id)!] as const] : []));
       for (let index = 0; index < ids.length; index++) {
         guard();
+        run.begin(index);
         try { run.record(index, await execute(index, saved)); }
         catch (error) { guard(); run.record(index, { id: ids[index], status: "failed", errors: [(error as Error).message] }); }
       }

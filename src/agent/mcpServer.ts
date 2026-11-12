@@ -41,6 +41,7 @@ const target = {
   export: z.string().optional().describe('Export to render; defaults to "default"'),
 };
 const output = z.enum(["image", "summary", "both"]).optional().describe("Return images, compact evidence, or both (default)");
+const matrixOutputFormat = z.enum(["image", "summary", "both"]).default("summary").describe("Return compact summary (default), images, or both for each explicitly requested case");
 const fixtureSchema = z.object({
   now: z.string().optional(), randomSeed: z.number().int().min(0).max(0xffffffff).optional(), locale: z.string().optional(), timezoneId: z.string().optional(),
   reducedMotion: z.enum(["reduce", "no-preference"]).optional().describe("Static verification defaults to reduce. Use no-preference to inspect the normal-motion state; this does not automatically scroll or finish scroll-triggered reveals."),
@@ -158,7 +159,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
   server.registerTool("render_matrix", {
     annotations: EXECUTES_CODE, outputSchema: toolOutputSchema(matrixOutputSchema),
     description: "Check up to 12 explicitly named viewport/theme/prop/state cases for one component as a single bounded job (30 seconds maximum). Default output is token-cheap summary; each case returns captureId, checks, context and coverage. props and check/action arrays replace target defaults. No unselected combinations are tested.",
-    inputSchema: { ...matrixRequestSchema.shape, output, timeoutMs: z.number().int().min(1).max(30000).optional() },
+    inputSchema: { ...matrixRequestSchema.shape, output: matrixOutputFormat, timeoutMs: z.number().int().min(1).max(30000).optional() },
   }, async ({ target, cases, output, timeoutMs }, extra) => {
     try { return matrixResponse(await (await getRenderer()).renderMatrix({ target, cases } as import("./renderMatrix.js").MatrixRequest, control(extra, timeoutMs)), output); }
     catch (error) { return failure(error); }
@@ -166,7 +167,7 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
   server.registerTool("render_matrix_diff", {
     annotations: EXECUTES_CODE, outputSchema: toolOutputSchema(matrixOutputSchema),
     description: "Compare current source using each named baseline's immutable resolved inputs. Missing/evicted baselines are not-compared, never unchanged. Capture IDs belong to this session and remain subject to its existing retention limits. A changed result is review evidence, not a correctness verdict.",
-    inputSchema: { baselines: matrixBaselinesSchema, output, timeoutMs: z.number().int().min(1).max(30000).optional() },
+    inputSchema: { baselines: matrixBaselinesSchema, output: matrixOutputFormat, timeoutMs: z.number().int().min(1).max(30000).optional() },
   }, async ({ baselines, output, timeoutMs }, extra) => {
     try { return matrixResponse(await (await getRenderer()).diffMatrix(baselines, control(extra, timeoutMs)), output); }
     catch (error) { return failure(error); }

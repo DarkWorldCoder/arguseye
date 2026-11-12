@@ -38,11 +38,14 @@ export function createMatrixRun(ids: string[]) {
   const start = performance.now();
   const cells: MatrixCell[] = ids.map((id) => ({ id, status: "not-run", errors: [] }));
   let finished = false;
+  let active: number | undefined;
   return {
-    record(index: number, cell: MatrixCell) { if (!finished) cells[index] = cell; },
+    begin(index: number) { active = index; },
+    record(index: number, cell: MatrixCell) { if (!finished) { cells[index] = cell; active = undefined; } },
     finish(sourceConsistent: boolean, error?: Error): MatrixReport {
       finished = true;
-      const coverage = { requested: ids.length, executed: cells.filter((cell) => !!cell.render || cell.status === "failed").length, compared: cells.filter((cell) => !!cell.diff).length, passed: 0, changed: 0, unchanged: 0, failed: 0, incomplete: 0, notRun: 0, notCompared: 0 };
+      if (error && active !== undefined) cells[active] = { id: ids[active], status: "incomplete", errors: [error.message] };
+      const coverage = { requested: ids.length, executed: cells.filter((cell) => !!cell.render || cell.status === "failed" || cell.status === "incomplete").length, compared: cells.filter((cell) => !!cell.diff).length, passed: 0, changed: 0, unchanged: 0, failed: 0, incomplete: 0, notRun: 0, notCompared: 0 };
       for (const cell of cells) {
         if (cell.status === "not-run") coverage.notRun++;
         else if (cell.status === "not-compared") coverage.notCompared++;
@@ -52,7 +55,7 @@ export function createMatrixRun(ids: string[]) {
       return { cells: [...cells], coverage, complete, sourceConsistent, ms: performance.now() - start,
         status: !complete ? "incomplete" : coverage.failed ? "failed" : coverage.changed ? "changed" : "passed",
         warnings: sourceConsistent ? [] : ["Source changed during the matrix. These cases do not verify one source revision; rerun after edits stop."],
-        errors: [...(error ? [error.message] : []), ...cells.flatMap((cell) => cell.errors)] };
+        errors: [...new Set([...(error ? [error.message] : []), ...cells.flatMap((cell) => cell.errors)])] };
     },
   };
 }

@@ -1,5 +1,7 @@
 # Arguseye: the next verification features
 
+2026-11-12 status: bounded explicit viewport/theme/prop/state matrices are implemented in development through the shared renderer, MCP, persisted CLI captures and VS Code. See [the current contract](../rendering.md#viewport-theme-and-state-matrices-unreleased) and [research/validation record](viewport-matrix-2026-11-12.md). Published 0.0.21 does not contain these APIs. The plan below is historical; affected-target planning and later stages remain proposals.
+
 Research date: 6 November 2026. Source inspected: `78102c4bd8bd0d211bd54f7966dd83da875745a6`, version 0.0.21. This document proposes work; it does not describe newly implemented support. No runtime dependency was installed, third-party implementation copied, or new benchmark executed during this research.
 
 ## Recommendation

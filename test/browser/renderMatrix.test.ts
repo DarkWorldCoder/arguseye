@@ -76,14 +76,14 @@ it("never calls an absent or evicted baseline unchanged, including eviction duri
 it("preserves completed cases on cancellation and lets the next queued render finish", async () => {
   const cancel = new AbortController();
   let starts = 0;
-  const matrix = renderer.renderMatrix({ target: { file: card, exportName: "MatrixCard", props: {} }, cases }, {
+  const matrix = renderer.renderMatrix({ target: { file: card, exportName: "MatrixCard", props: {} }, cases: [...cases, { ...cases[0], id: "later" }] }, {
     signal: cancel.signal, onProgress: ({ phase }) => { if (phase === "source" && ++starts === 2) cancel.abort(); },
   });
   const next = renderer.render({ file: card, exportName: "MatrixCard", props: { title: "Next queued render" } });
   const report = await matrix;
-  expect(report.cells.map((cell) => cell.status)).toEqual(["passed", "not-run"]);
+  expect(report.cells.map((cell) => cell.status)).toEqual(["passed", "incomplete", "not-run"]);
   expect(report.errors.join()).toMatch(/cancelled/);
-  expect(report.coverage).toMatchObject({ executed: 1, notRun: 1 });
+  expect(report.coverage).toMatchObject({ executed: 2, incomplete: 1, notRun: 1 });
   expect((await next).snapshot).toContain("Next queued render");
 });
 
@@ -105,7 +105,7 @@ it("rejects ambiguous/oversized plans before rendering and bounds total runtime"
   expect(() => renderer.renderMatrix({ target: { file: card }, cases: Array.from({ length: 13 }, (_, i) => ({ ...cases[0], id: `case-${i}` })) })).toThrow();
   const report = await renderer.renderMatrix({ target: { file: card, exportName: "MatrixCard", actions: [{ wait: 1000 }] }, cases }, { timeoutMs: 100 });
   expect(report.complete).toBe(false);
-  expect(report.coverage.notRun).toBe(2);
+  expect(report.coverage).toMatchObject({ executed: 1, incomplete: 1, notRun: 1 });
   expect(report.errors.join()).toMatch(/timed out/);
 });
 

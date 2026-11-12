@@ -277,6 +277,7 @@ it("paginates usage renders and returns structured per-usage evidence", async ()
 it("exposes compact matrix evidence and baseline comparisons with machine-readable contracts", async () => {
   const tools = await client.listTools();
   expect(tools.tools.find((tool) => tool.name === "render_matrix")?.outputSchema).toBeDefined();
+  expect((tools.tools.find((tool) => tool.name === "render_matrix")!.inputSchema.properties!.output as any).default).toBe("summary");
   const rendered = await client.callTool({ name: "render_matrix", arguments: {
     target: { file: "components/MatrixCard.tsx", exportName: "MatrixCard", props: { title: "A real small-screen check" } },
     cases: [{ id: "phone-dark", viewport: { width: 390, height: 844 }, theme: "dark" }],

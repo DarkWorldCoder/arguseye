@@ -11,7 +11,7 @@
 
 An agent edits a pricing card or form and needs to review mobile/desktop, light/dark, or explicit content states without starting the application. Previously each context required a separate render and manual bookkeeping of baselines. A bounded matrix now serializes 1–12 caller-selected contexts and returns independent captures, checks and coverage. Matching baseline comparison uses recorded inputs rather than current guessed props.
 
-The implementation shares the existing engine through MCP, persisted CLI directories and VS Code's four-context preset. It does not infer design intent or declare a visual difference a bug. Missing providers, sampled/runtime props, fonts/assets and framework limitations remain visible. Source changes registered during a batch make it incomplete. Completed evidence survives cancellation, pending cases remain not-run, and absent baselines remain not-compared. Existing session budgets and the ordinary single-render timing limit remain unchanged.
+The implementation shares the existing engine through MCP, persisted CLI directories and VS Code's four-context preset. It does not infer design intent or declare a visual difference a bug. Missing providers, sampled/runtime props, fonts/assets and framework limitations remain visible. Source changes registered during a batch make it incomplete. Completed evidence survives cancellation, interrupted cases remain incomplete, untouched cases remain not-run, and absent baselines remain not-compared. Existing session budgets and the ordinary single-render timing limit remain unchanged.
 
 ## Useful follow-on areas (not implemented here)
 
@@ -30,3 +30,7 @@ See [the development contract](../rendering.md#viewport-theme-and-state-matrices
 - Both Geeker cases correctly remained incomplete because a computed Vite `__APP_INFO__` define and the virtual SVG registration module were approximated. Matching pixels did not clear those warnings.
 - Local evidence: `/tmp/arguseye-geeker-matrix-baseline/matrix.json`, `/tmp/arguseye-geeker-matrix-comparison/matrix.json`; per-case capture/diff PNGs are adjacent. No application server was started.
 - Windows/macOS execution, public package installation and registry publication were not performed for this unreleased slice.
+
+Final refinement also passed the full 352-test/50-file suite, type checking, build and actual VS Code integration. The bundled CLI's documented four-case example passed in a fresh process; changing only the mobile padding produced exactly two changed mobile cases and two unchanged desktop cases. The temporary fixture edit was restored. Before and comparison evidence are in `/tmp/arguseye-four-case-baseline` and `/tmp/arguseye-four-case-comparison`.
+
+Interruption reporting distinguishes a started/incomplete case from untouched/not-run cases. The MCP schema explicitly advertises summary as the default. The installed MCP SDK suppresses replies after client cancellation; its tool deadline is the supported way to obtain returned partial MCP evidence.

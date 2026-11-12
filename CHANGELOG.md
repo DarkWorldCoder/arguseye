@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Distinguish interrupted matrix work from untouched cases and advertise compact summary output as the matrix MCP default.
 - Verify up to 12 explicitly named viewport/theme/prop/state cases through MCP, persisted CLI captures and VS Code. Compare immutable matching inputs; report missing baselines, source edits, cancelled cases and behavioral failures explicitly. Matrix work has a 30-second total budget and retains existing session caps.
 
 - Check enabled/disabled controls through the shared readiness/expectation and saved-replay contracts, including native disabled fields, fieldsets and inherited ARIA-disabled state. Reject conflicting locator strategies before rendering instead of silently ignoring fields.
