@@ -312,7 +312,11 @@ export class ModuleGraph {
     let file = resolved;
     if (this.rootAlias) {
       // Use the selected workspace's identity for app modules, matching editor buffers and version queries.
-      const relative = path.relative(this.rootAlias.canonical, resolved);
+      let relative = path.relative(this.rootAlias.canonical, resolved);
+      // Windows' resolver can retain DOS short names while Node expands them (RUNNER~1 vs runneradmin).
+      if (relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) {
+        try { relative = path.relative(this.rootAlias.canonical, realpathSync.native(resolved)); } catch {}
+      }
       if (relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative)) file = path.resolve(this.rootAlias.selected, relative);
     }
     const query = this.query(file);
