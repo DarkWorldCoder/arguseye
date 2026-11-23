@@ -2,6 +2,8 @@
 
 ## 0.0.22 (2026-11-23)
 
+- Preserve the selected workspace path for app imports so unsaved provider edits remain visible through folder aliases, including macOS temporary paths.
+
 - Replay persisted captures across base/head checkouts using saved project-relative targets and fixed inputs. Retain baseline provenance and context gaps; reject targets outside permitted roots.
 - Add `--fail-on-change` to CLI `diff` and `matrix-diff`. Save comparison artifacts before failing changed evidence. Failed baseline expectations remain failures even when the head repairs them.
 - Add a read-only pull-request workflow for registered React cases, with per-case artifacts, plan identity and coverage. Automatic selection from modified files remains planned.

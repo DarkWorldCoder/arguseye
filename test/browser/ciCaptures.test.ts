@@ -59,13 +59,16 @@ it("compares actual nested auth/theme providers and reports broken head setup as
   const setup = 'import {Auth,Theme} from "./contexts"; export default function Setup({children}){return <Auth.Provider value="Ada"><Theme.Provider value="dark">{children}</Theme.Provider></Auth.Provider>}';
   const renderers: Awaited<ReturnType<typeof createRenderer>>[] = [];
   try {
-    for (const root of roots) {
+    for (const [index, root] of roots.entries()) {
       await cp(fixture, root, { recursive: true, filter: (file) => path.basename(file) !== "node_modules" });
       await symlink(path.join(fixture, "node_modules"), path.join(root, "node_modules"), "junction");
       await writeFile(path.join(root, "contexts.tsx"), 'import {createContext} from "react"; export const Auth=createContext(null); export const Theme=createContext("light");');
       await writeFile(path.join(root, "components/ProviderCard.tsx"), 'import {useContext} from "react"; import {Auth,Theme} from "../contexts"; export default function Card(){const user=useContext(Auth); if(!user) throw new Error("Missing auth provider"); return <h1>{user} in {useContext(Theme)} theme</h1>}');
       await writeFile(path.join(root, "arguseye.setup.tsx"), setup);
-      renderers.push(await createRenderer({ root }));
+      const alias = root + "-workspace";
+      await symlink(root, alias, "junction");
+      roots[index] = alias;
+      renderers.push(await createRenderer({ root: alias }));
     }
     const baseline = await renderers[0].render({ file: "components/ProviderCard.tsx", props: {}, viewport: { width: 390, height: 844 } });
     expect(baseline.complete).toBe(true);
@@ -79,6 +82,9 @@ it("compares actual nested auth/theme providers and reports broken head setup as
     const changed = await renderers[1].diffMatrix([{ id: "auth", captureId }]);
     expect(changed.cells[0].status).toBe("changed");
     expect(changed.cells[0].render!.snapshot).toContain("Grace in dark theme");
+    const timings: number[] = [];
+    for (let i = 0; i < 20; i++) timings.push((await renderers[1].render({ file: "components/ProviderCard.tsx", props: {}, viewport: { width: 390, height: 844 } })).ms);
+    expect(timings.sort((a, b) => a - b)[18]).toBeLessThanOrEqual(100);
     renderers[1].server.updateBuffer(setupFile, 'export default function Setup({children}){return children}');
     const broken = await renderers[1].diffMatrix([{ id: "auth", captureId }]);
     expect(broken.cells[0].status).toBe("failed");
