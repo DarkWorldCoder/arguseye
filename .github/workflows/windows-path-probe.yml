@@ -1,0 +1,34 @@
+name: Windows path probe
+on:
+  push:
+    branches: [codex/windows-path-probe]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Inspect project junction identities
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import os from 'node:os';
+          import path from 'node:path';
+          import {ResolverFactory} from 'oxc-resolver';
+          const directory=fs.mkdtempSync(path.join(os.tmpdir(),'arguseye-path-probe-'));
+          const root=path.join(directory,'head'), alias=root+'-workspace';
+          fs.mkdirSync(path.join(root,'components'),{recursive:true});
+          fs.writeFileSync(path.join(root,'contexts.tsx'),'export const Auth=1');
+          fs.symlinkSync(root,alias,'junction');
+          const resolver=new ResolverFactory({extensions:['.tsx','.ts','.js'],conditionNames:['browser','import','module','default']});
+          const canonical=fs.realpathSync.native(alias);
+          const resolved=resolver.resolveFileSync(path.join(alias,'components','Card.tsx'),'../contexts').path;
+          console.log(JSON.stringify({temporary:os.tmpdir(),root,alias,canonical,resolved,realResolved:fs.realpathSync.native(resolved),relative:path.relative(canonical,resolved)},null,2));
+          NODE
