@@ -57,3 +57,9 @@ Machine: local Linux x64, Intel Core i5-1235U, 12 available logical CPUs, Node 2
 The Open VSX publisher page was also inspected in Chrome: it still displayed Log In, including after following its existing sign-in link. No packages or permissions were changed. Public availability still requires an authenticated publisher check; no upload success is inferred.
 
 These changes have no version bump or release tag. New Windows/macOS execution and public registry publication must be established independently for a subsequent release.
+
+## Fresh CI at 82ad1ff
+
+[Full CI](https://github.com/DarkWorldCoder/arguseye/actions/runs/42556623776) passed, including its VS Code integration. [Native conformance](https://github.com/DarkWorldCoder/arguseye/actions/runs/42556623800) passed on macOS, but Linux failed its unchanged React live-edit notification limit: 204.86 ms against 100 ms. Linux enabled-check warm p95 was 39 ms over 20 renders; plain warm p95 was 33 ms. macOS enabled-check p95 was 30 ms and React notification was 75 ms. These are scoped hosted-runner observations, not portable product guarantees.
+
+Linux browser phases were prepared=456.2, received=458.6, imported=462.6 and applied=463.6 ms. Actual visible mutation time was not recorded, so neither browser-side work nor notification transport can be established as the cause of the remaining gap. The follow-up diagnostic records the MutationObserver's own browser timestamp as Vue already does, alongside Node notification time. Browser-prepared to visible-mutation is an upper bound because preparation precedes the Node-side edit start. The existing Node notification gate and 50 ms physical-pixels target are unchanged. A later pass must not be described as proof of a runtime fix.

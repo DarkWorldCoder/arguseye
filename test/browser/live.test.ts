@@ -38,13 +38,14 @@ describe("live updates from unsaved edits", () => {
     for (let i = 0; i < 3; i++) await page.getByRole("button").click();
 
     let notify!: (time: number) => void;
+    let browserApplied: number | undefined;
     const applied = new Promise<number>((resolve) => { notify = resolve; });
-    await page.exposeFunction("recordVisibleEdit", () => notify(performance.now()));
+    await page.exposeFunction("recordVisibleEdit", (at: number) => { browserApplied = at; notify(performance.now()); });
     const browserPrepared = await page.evaluate(() => {
       const observer = new MutationObserver(() => {
         const button = document.querySelector("button");
         if (button?.textContent === "Buy now (3)" && button.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
-          observer.disconnect(); (window as any).recordVisibleEdit();
+          observer.disconnect(); (window as any).recordVisibleEdit(performance.now());
         }
       });
       observer.observe(document.getElementById("root")!, { subtree: true, childList: true, characterData: true });
@@ -70,7 +71,7 @@ describe("live updates from unsaved edits", () => {
       applied: (window as any).__CP__.lastUpdateApplied,
       resources: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("ProductCard.tsx")).map((entry) => ({ start: entry.startTime, end: (entry as PerformanceResourceTiming).responseEnd, duration: entry.duration })),
     }));
-    console.log("React update phases", JSON.stringify({ buffer: updated - started, bufferCpuMs: (cpu.user + cpu.system) / 1000, browserPrepared, ...browserPhases }));
+    console.log("React update phases", JSON.stringify({ buffer: updated - started, bufferCpuMs: (cpu.user + cpu.system) / 1000, browserPrepared, browserApplied, browserMutationUpperBoundMs: browserApplied === undefined ? undefined : browserApplied - browserPrepared, notificationMs: ms, ...browserPhases }));
 
     expect(ms).toBeGreaterThanOrEqual(0);
     expect(ms).toBeLessThan(100);
