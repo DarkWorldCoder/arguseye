@@ -1,5 +1,55 @@
 # Reproducible and bounded verification
 
+<a id="readiness-expectations-and-saved-checks"></a>
+
+## Readiness, expectations and saved checks (0.0.22+)
+
+These APIs require version 0.0.22 or later. They use the same engine from MCP, CLI and VS Code.
+
+`ready` conditions run after actions and before asset settling. `expectations` run after settling, immediately before capture. A condition has a strict `target`, a `state`, an optional expected `value` and `timeoutMs` (default 2000, maximum 5000). Each list allows 20 conditions; the whole render retains its execution deadline. Actions allow at most 50 single-verb steps. Plain renders do not poll conditions.
+
+States are `visible`, `hidden`, `attached`, `detached`, `text`, `count`, `checked`, `expanded`, `focused` and `enabled`. Text uses normalized whitespace and exact equality, with a maximum expected length of 2000 characters. Count needs a nonnegative integer; checked/expanded/enabled need a boolean. Other states do not take a value. `enabled: false` verifies a disabled control; an absent control does not pass. Enabled checks use [Playwright’s enabled-state semantics](https://playwright.dev/docs/actionability#enabled), including native disabled fields, disabled fieldsets and ARIA-disabled ancestors. They do not prove that a control is visible, unobstructed or will complete an action. Single-element conditions reject ambiguous matches; count intentionally observes multiple matches. Hidden succeeds for an absent or non-visible element. These visibility checks observe layout bounds and CSS visibility; they do not prove contrast, lack of occlusion or product correctness.
+
+```json
+{
+  "ready": [{"target":{"testId":"load-state"},"state":"text","value":"Ready to review","timeoutMs":1000}],
+  "expectations": [{"target":{"role":"button","name":"Save","exact":true},"state":"count","value":2}]
+}
+```
+
+Results carry separate `readiness` and `expectations` arrays with `passed`, `failed` or `not-run`, observed values, elapsed milliseconds and a failure reason. Readiness timeout preserves the available PNG and makes evidence incomplete. Render/action failures or failed readiness prevent dependent expectations from claiming a pass. A failed expectation is a measured result, so it can coexist with `complete: true` and `errors: []`; it is not a runtime exception. MCP marks that result as an error and CLI exits nonzero. Check outcomes describe the observation time, not a guarantee the UI can never change afterward.
+
+Baselines replay their readiness, actions and expectations. Comparisons expose `expectationsChanged`; a changed expectation outcome is not reported as unchanged merely because the PNG and accessibility snapshot match. Existing environment/context completeness checks still apply.
+
+### Save and replay regression inputs
+
+After `render_component`, call `capture_recipe` with its `captureId`. Save the returned version-1 JSON locally, then pass it to `render_recipe` to check current source in a fresh verification render. Exporting a recipe does not approve a baseline, certify a passing result or include comparison images.
+
+CLI example, using a project's existing ProductCard and an explicitly authored checks document:
+
+```sh
+arguseye shot components/ProductCard.tsx --export ProductCard --props '{"title":"Desk","price":3}' --checks checks.json --save-recipe card.arguseye.json --output summary --json
+arguseye check card.arguseye.json --json --capture-dir ./baseline
+# Edit source, then compare against the same saved inputs and checks:
+arguseye diff --baseline ./baseline --out ./comparison --json
+```
+
+`checks.json` accepts only `ready`, `expectations` and `actions`. `--save-recipe` refuses to overwrite an existing file. Recipes use project-relative targets, retain sampled/unresolved input provenance and replay current source. Their recorded source revision describes the original capture; it does not make future source equivalent. Unknown versions, outside-project paths and JSON over 1 MiB fail before replay.
+
+Browser storage and network fixture bodies are omitted by default, and nonempty `omittedInputs` blocks replay. Review contents before selecting `includeBrowserInputs: true` (MCP) or `--include-browser-inputs` (CLI), or explicitly repair the inputs before clearing the omission list. Props, selectors, URLs, diagnostics and screenshots can still contain private data; this is not automatic anonymization. Existing realpath/file-access rules also apply to loaded source.
+
+VS Code's **Regression checks** section accepts the same JSON. **Run checks** shows a fresh captured image and outcomes while preserving interactive preview state. **Save regression check** uses a file dialog, and **Run saved check** replays a selected JSON file. Baseline capture uses configured checks; comparison replays the baseline's inputs. See the matrix section for bounded viewport/state runs. Source picking, backend reconstruction and arbitrary JavaScript readiness callbacks remain outside this contract.
+
+## Interaction targets
+
+Actions and checks require exactly one locator strategy: role (with optional name), text, label, placeholder, testId, selector or name alone. Combining strategies is rejected before rendering rather than silently ignoring fields. Actions require an unambiguous target. Multiple matching buttons or labels return a strict-target error instead of silently choosing the first. Refine the selector, accessible name or test ID before retrying.
+
+Targets default to the component root. Set `scope: "capture"` explicitly to search the isolated preview document, including body-level dialogs and menus rendered through portals. This does not reach the surrounding VS Code UI or another browser page.
+
+```json
+{"actions":[{"click":{"role":"button","name":"Open dialog","exact":true}},{"click":{"role":"button","name":"Confirm","scope":"capture"}}]}
+```
+
 <a id="unreleased-render-evidence"></a>
 <a id="render-evidence"></a>
 
@@ -118,3 +168,39 @@ Use MCP `inspection: {accessibility: true, sources: true}` or CLI `shot --access
 Error evidence includes original TypeScript/JSX locations where the native transform preserves a trustworthy source map. Vite mode uses its actual transform maps. Native SFC and Solid compiler chains, rewritten barrels and package chunks can lack composed maps; those references remain explicitly unmapped. Element evidence distinguishes exact mapped positions from an owning component file and from elements with no trustworthy reference. It never invents a source line from a component name.
 
 Vue prop inspection reads imported type declarations, literal macro defaults and ordinary runtime prop declarations. Static `defineEmits` and `defineSlots` names are returned alongside limitations. React inspection retains TypeScript parameter props and literal defaults. Computed declarations and complex type-level behavior require source review. Vue compilation uses the same approved roots and unsaved type buffers as metadata inspection.
+
+<a id="viewport-theme-and-state-matrices"></a>
+
+## Viewport, theme and state matrices (0.0.22+)
+
+A desktop screenshot does not cover the mobile or dark-mode version of a component. `render_matrix` checks **1–12 explicitly selected cases** in one queued job; there is no automatic Cartesian expansion. Cases require a unique ID (1–64 letters, digits, underscores or hyphens), numeric viewport (each dimension 1–4096) and light/dark theme. Optional case props, actions, readiness and expectations **replace** those target defaults. Each case starts in fresh component state.
+
+```json
+{
+  "target": { "file": "src/PricingCard.tsx", "exportName": "PricingCard", "props": { "title": "Starter", "price": 9 } },
+  "cases": [
+    { "id": "phone-light", "viewport": { "width": 390, "height": 844 }, "theme": "light" },
+    { "id": "desktop-dark", "viewport": { "width": 1280, "height": 800 }, "theme": "dark", "props": { "title": "A longer team plan name", "price": 99 } }
+  ]
+}
+```
+
+Pass this object to MCP `render_matrix`, or save it as `matrix.json`:
+
+```sh
+node dist/cli.mjs matrix matrix.json --root /path/to/project --out /tmp/arguseye-baseline --json
+# Edit the component, then compare in a separate process:
+node dist/cli.mjs matrix-diff --baseline /tmp/arguseye-baseline --root /path/to/project --out /tmp/arguseye-comparison --json
+```
+
+For CI, add `--fail-on-change` to `diff` or `matrix-diff` to return exit code 1 for complete visual, dimension, accessibility-text or expectation changes. Failed or incomplete comparisons already fail. Artifacts are saved before applying the change policy. New captures can replay their project-relative target in a different checkout with `--root`; all other saved evidence and input values retain their original provenance. See [cross-checkout CI usage and the pull-request workflow](ci.md).
+
+These commands require version 0.0.22 or later. Output directories must be new, so a comparison cannot overwrite its own baseline. They contain PNGs and resolved input/context evidence, which may include private data; review before sharing or committing.
+
+For MCP comparisons pass `render_matrix_diff` a `baselines` array of `{id, captureId}` from the first report. Inputs come exclusively from the saved capture, including resolved usage props, viewport, theme, actions and checks. The summary format is the matrix default; request `output: "both"` for per-case images or before/after/highlighted diff images. Ordinary render output defaults remain unchanged.
+
+Every report lists requested, executed, compared, passed, changed, unchanged, failed, incomplete, not-run and not-compared counts. A failed behavioral expectation remains failed even when pixels match. Missing/evicted baselines remain **not-compared**, never unchanged. Cancellation and the total execution deadline (default and maximum **30 seconds**, excluding queue time) preserve completed cells, mark a started but interrupted case incomplete, and leave untouched cases not-run. The executed count includes interrupted render attempts. Source edits observed during the batch make the aggregate incomplete; graph growth alone does not. This detects local source changes registered by the preview server, not remote data mutations. The MCP SDK suppresses responses after client-initiated cancellation; use the tool's `timeoutMs` when you need a returned partial report. CLI, VS Code and direct renderer cancellation can return their partial evidence.
+
+Successful pixels retain all existing unresolved-input, font, asset, provider and framework warnings. The top-level `complete` describes evidence coverage and context, not correctness; failed expectations can have complete evidence. Visual differences require human or agent review. These remain isolated renders, not full-page integration tests, and unselected combinations remain untested. Existing session caps (4 pages, 64 captures, 64 MiB retained PNGs) still apply. A comparison pins only its requested baselines for the current job; future requests can find them evicted.
+
+In VS Code open **Checks → Check viewports** to capture mobile/desktop × light/dark using the selected component, current props/usage, unsaved buffers and explicit checks. **Compare viewports** replays those same baseline inputs. Results show per-case status, images and expandable structured evidence; the live preview's interactive state is separate. Cancel through the VS Code notification. Matrix work has a total budget separate from the unchanged 100 ms single warm-render gate.

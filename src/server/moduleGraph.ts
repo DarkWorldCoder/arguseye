@@ -4,7 +4,8 @@ import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import { createVueCompiler } from "./createVueCompiler.js";
 import { createSvelteCompiler } from "./createSvelteCompiler.js";
 import { readFile } from "node:fs/promises";
-import { join as pathJoin } from "node:path";
+import { realpathSync } from "node:fs";
+import path, { join as pathJoin } from "node:path";
 import type { ResolverFactory } from "oxc-resolver";
 import { transform } from "oxc-transform";
 import { init, parse } from "es-module-lexer";
@@ -28,6 +29,7 @@ const SCRIPT_EXT = /\.(?:(m|c)?(j|t)sx?|vue|svelte|html)$/;
 /** Turns project files into browser ESM the preview page can import directly. */
 export class ModuleGraph {
   private resolver: ResolverFactory = createResolver();
+  private rootAlias?: { canonical: string; selected: string };
   /** Aliases from the project's vite.config (tsconfig paths are handled by the resolver). */
   readonly vite: ViteConfig;
   /** SvelteKit's `$lib`, `kit.alias` and env prefix, when the project uses Kit. */
@@ -63,6 +65,11 @@ export class ModuleGraph {
     private root: string,
     sourceFs?: { fileExists(file: string): boolean; readFile(file: string): string },
   ) {
+    const selected = path.resolve(root);
+    try {
+      const canonical = realpathSync.native(selected);
+      if (canonical !== selected) this.rootAlias = { canonical, selected };
+    } catch { /* Missing roots retain their existing project diagnostics. */ }
     this.vite = readViteConfig(root);
     this.kit = readKitConfig(root);
     this.vue = createVueCompiler(root, css, sourceFs);
@@ -296,14 +303,24 @@ export class ModuleGraph {
     // SvelteKit's $env modules come from the project's env files, generated per page.
     if (this.kit.kit && specifier.startsWith("$env/")) return `/@sveltekit-env?m=${encodeURIComponent(specifier)}`;
     const aliased = isShim(importer) ? undefined : applyAlias(this.vite.aliases, specifier) ?? applyAlias(this.kit.aliases, specifier);
-    const { path, error } = this.resolver.resolveFileSync(from, aliased ?? specifier);
-    if (!path) throw new Error(`Cannot resolve "${specifier}" from ${importer.replaceAll("\\", "/")}: ${error}`);
-    if (/[\\/]node_modules[\\/]/.test(path) && !isStylesheet(path)) {
+    const { path: resolved, error } = this.resolver.resolveFileSync(from, aliased ?? specifier);
+    if (!resolved) throw new Error(`Cannot resolve "${specifier}" from ${importer.replaceAll("\\", "/")}: ${error}`);
+    if (/[\\/]node_modules[\\/]/.test(resolved) && !isStylesheet(resolved)) {
       this.deps.add(specifier);
       return `/@deps/${specifier}.js`;
     }
-    const query = this.query(path);
-    return SCRIPT_EXT.test(path) ? `${fileUrl(path)}${query}` : `${fileUrl(path)}?import&${query.slice(1)}`;
+    let file = resolved;
+    if (this.rootAlias) {
+      // Use the selected workspace's identity for app modules, matching editor buffers and version queries.
+      let relative = path.relative(this.rootAlias.canonical, resolved);
+      // Windows' resolver can retain DOS short names while Node expands them (RUNNER~1 vs runneradmin).
+      if (relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) {
+        try { relative = path.relative(this.rootAlias.canonical, realpathSync.native(resolved)); } catch {}
+      }
+      if (relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative)) file = path.resolve(this.rootAlias.selected, relative);
+    }
+    const query = this.query(file);
+    return SCRIPT_EXT.test(file) ? `${fileUrl(file)}${query}` : `${fileUrl(file)}?import&${query.slice(1)}`;
   }
 }
 

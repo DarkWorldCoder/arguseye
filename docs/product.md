@@ -1,5 +1,9 @@
 # Product: why Arguseye exists
 
+Version 0.0.22 adds strict action targets, explicit readiness/expectations (including enabled/disabled controls), saved regression recipes, MCP replay tools, CLI checks and VS Code check controls. See [the verification contract](rendering.md#readiness-expectations-and-saved-checks). Bounded viewport/theme/state matrices expose per-case captures, checks and comparisons through MCP, CLI and VS Code. Automatic impact analysis remains planned.
+
+Version 0.0.22 CI support adds saved-baseline relocation between project checkouts and `--fail-on-change` for CLI comparisons, plus a pull-request workflow for the registered React fixture matrix. See [the CI workflow and limits](ci.md). It runs explicit cases; automatic selection from modified files remains a proposal.
+
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 
 Version scope: 0.0.18 skips inferred JSX wrappers with unresolved runtime inputs, preserves explicit incomplete-context evidence, and refreshes repaired layout chains. Version 0.0.16 adds native Node/Python/PHP/Ruby template previews, JSON context profiles, template right-click actions and explicit failed-font evidence. It retains 0.0.15’s plain-script widgets, project-owned Next.js browser polyfills, explicit reduced-motion evidence for static captures and bounded image decoding. It includes 0.0.14's project inspection, explicit setup, revised MCP/boundary contracts, project Vite compatibility, deterministic fixtures, session controls, optional inspection and HTML/Web Components. Older 0.0.12 installations do not contain these additions. See [conformance and explicit limits](conformance.md); registry availability is verified separately from source and package checks.

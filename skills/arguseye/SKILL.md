@@ -7,6 +7,24 @@ description: Preview React (incl. React Router and Remix), browser-renderable Ne
 
 Render component source in Chromium with the project's packages, styles, assets and statically reconstructable layouts. Inspect a cropped PNG, accessibility snapshot, resolved inputs, warnings and errors. The application server and authored stories are unnecessary; project dependencies and a compatible Chromium browser are still required. Startup and warm render times vary with the project; read the returned timings.
 
+## State verification (0.0.22+)
+
+Check the advertised tool schema first; these APIs require 0.0.22 or later. If available, use `ready` for caller-authored pre-capture conditions and `expectations` for explicit behavior checks. Targets must be unambiguous; `scope: "capture"` explicitly searches the isolated document including body-level portals. Never retry an ambiguous action by guessing the first result.
+
+Use `{ "target": { "role": "button", "name": "Submit" }, "state": "enabled", "value": true }` to check whether a control is enabled, or `false` to check disabled state. This does not establish clickability or action success. Use exactly one locator strategy; only role may be combined with name.
+
+Read `readiness` and `expectations` outcomes (`passed`, `failed`, `not-run`) even when `errors` is empty. Readiness failure preserves an image with incomplete evidence; render/action failures prevent dependent checks from claiming a pass. A failed expectation is distinct from a runtime error or a visual-review decision. `render_diff` replays checks and exposes `expectationsChanged`, including identical-image changes.
+
+`capture_recipe {captureId}` exports version-1 JSON inputs; `render_recipe {recipe}` replays them against current source. Browser storage and network bodies are omitted by default. An omission list blocks replay: review and explicitly restore inputs rather than silently clearing it. Props and other content may still be private. Saving a recipe does not approve a baseline or make sampled/runtime inputs complete. The CLI equivalents are `shot --checks checks.json --save-recipe card.arguseye.json` and `check card.arguseye.json --json`.
+
+## Viewport/theme/state checks (0.0.22+)
+
+These tools require 0.0.22 or later. For an edit that could affect responsive layout or theming, use `render_matrix {target:{file,exportName,props},cases:[{id,viewport:{width,height},theme}]}`. Choose only relevant cases (1–12); do not claim every device/state was tested. Optional case props/actions/ready/expectations replace target defaults. Default summary avoids image tokens; request both when visual review is needed.
+
+Save each returned case ID and captureId. After edits call `render_matrix_diff {baselines:[{id,captureId}]}`. It reuses exact resolved baseline inputs; do not silently change them when comparing. Read coverage, sourceConsistent, errors, checks, unresolved inputs and warnings before assessing pixels. Missing/evicted baselines are not-compared; cancelled/timed-out work retains completed cases, marks interrupted work incomplete and leaves untouched cases not-run. Failed checks are distinct from changed pixels. Rerun after edits stop if sourceConsistent is false. MCP client cancellation suppresses the response at the transport; use the tool deadline to receive a partial report. Total execution is bounded to 30 seconds; use smaller batches for expensive cases. Existing 64-capture/64-MiB retention still applies.
+
+CLI: `arguseye matrix matrix.json --out NEW_DIR --json`, followed by `arguseye matrix-diff --baseline DIR --out ANOTHER_NEW_DIR --json`. Add `--fail-on-change` to `diff` or `matrix-diff` when changes must fail CI after saving evidence. Version-2 captures can relocate their target under another `--root` while preserving saved input values. Captures contain project data; review before sharing. These are isolated renders using the project's installed packages, not application integration tests or proof of correctness.
+
 ## When to use it
 - After editing a component: render it again; the result says what changed (`changes`) since the last render of the same target.
 - For a shared component: inspect relevant call-site variants with `render_usages`, following pagination when broader coverage is needed. Use `usage` plus `in_context: true` to reconstruct its parent elements.

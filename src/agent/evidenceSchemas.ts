@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { conditionSchema } from "./renderChecks.js";
 
 const common = { schemaVersion: z.literal(1), errors: z.array(z.string()) };
 const record = z.record(z.string(), z.unknown());
 const viewport = z.object({ width: z.number(), height: z.number() });
 const region = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() });
+const check = z.object({ condition: conditionSchema, status: z.enum(["passed", "failed", "not-run"]), ms: z.number(), observed: z.object({ count: z.number() }).passthrough().optional(), message: z.string().optional() });
 
 /** Reports project prerequisites even when rendering cannot start. */
 export const projectOutputSchema = z.object({
@@ -24,6 +26,7 @@ export const renderOutputSchema = z.object({
   target: z.object({ file: z.string(), exportName: z.string(), props: record }).passthrough(),
   viewport, sourceRevision: z.string(), unresolved: z.array(z.string()), warnings: z.array(z.string()),
   complete: z.boolean(), snapshot: z.string(), ms: z.number(), reloaded: z.boolean(),
+  readiness: z.array(check).optional(), expectations: z.array(check).optional(),
   diagnostics: z.array(z.object({ code: z.string(), severity: z.enum(["error", "warning"]), phase: z.enum(["render", "inputs", "context", "assets"]), file: z.string(), message: z.string(), recovery: z.string() })).optional(),
   scrollCapture: z.object({ selector: z.string().optional(), visited: z.array(z.object({ x: z.number(), y: z.number() })), complete: z.boolean(), restored: z.boolean(), ms: z.number(), reason: z.string().optional() }).optional(),
   styleInspection: z.object({ scope: z.string(), selector: z.string().optional(), total: z.number(), inspected: z.number(), limit: z.number(), complete: z.boolean(), ms: z.number(), reason: z.string().optional(), note: z.string() }).optional(),
@@ -39,7 +42,7 @@ export const renderOutputSchema = z.object({
 /** Declares immutable before/after evidence without embedding PNG bytes. */
 export const diffOutputSchema = z.object({
   ...common, status: z.enum(["unchanged", "changed", "incomplete"]), before: renderOutputSchema, after: renderOutputSchema,
-  changedPixels: z.number(), changedPercent: z.number(), changedRegion: region.nullable(), snapshotChanged: z.boolean(),
+  changedPixels: z.number(), changedPercent: z.number(), changedRegion: region.nullable(), snapshotChanged: z.boolean(), expectationsChanged: z.boolean(),
   dimensions: z.object({ before: viewport, after: viewport }), newErrors: z.array(z.string()), resolvedErrors: z.array(z.string()), newWarnings: z.array(z.string()), resolvedWarnings: z.array(z.string()), environmentChanges: z.array(z.string()),
 }).passthrough();
 
@@ -58,4 +61,12 @@ export const auditOutputSchema = z.object({
   complete: z.number(), incomplete: z.number(),
   entries: z.array(z.object({ file: z.string(), status: z.enum(["ok", "error", "empty", "skipped"]), complete: z.boolean().optional(), unresolved: z.array(z.string()).optional() }).passthrough()),
   topErrors: z.array(z.object({ message: z.string(), count: z.number() })),
+});
+
+/** Matrix coverage stays explicit even when a case has no usable render or baseline. */
+export const matrixOutputSchema = z.object({
+  schemaVersion: z.literal(1), status: z.enum(["passed", "changed", "failed", "incomplete"]), complete: z.boolean(),
+  ms: z.number(), sourceConsistent: z.boolean(), warnings: z.array(z.string()), errors: z.array(z.string()),
+  coverage: z.object({ requested: z.number(), executed: z.number(), compared: z.number(), passed: z.number(), changed: z.number(), unchanged: z.number(), failed: z.number(), incomplete: z.number(), notRun: z.number(), notCompared: z.number() }),
+  cells: z.array(z.object({ id: z.string(), status: z.enum(["passed", "changed", "unchanged", "failed", "incomplete", "not-run", "not-compared"]), errors: z.array(z.string()), render: renderOutputSchema.optional(), diff: diffOutputSchema.optional() })),
 });

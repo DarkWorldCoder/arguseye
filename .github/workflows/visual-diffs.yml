@@ -1,0 +1,62 @@
+name: Component visual diffs
+on:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      CI: 'true'
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tool
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: base
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: head
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build one tool and install one browser for both revisions
+        working-directory: tool
+        run: |
+          npm ci
+          npm run build
+          npx playwright-core install --with-deps chromium
+      - name: Install the real fixture packages in each checkout
+        run: |
+          npm ci --prefix base/test/fixtures/react-app
+          npm ci --prefix head/test/fixtures/react-app
+      - name: Capture base inputs
+        run: |
+          mkdir -p evidence
+          cp base/test/fixtures/react-app/arguseye-matrix.json evidence/plan.json
+          node tool/dist/cli.mjs matrix evidence/plan.json --root base/test/fixtures/react-app --out evidence/base --json > evidence/base-command.json
+      - name: Compare head using the saved base inputs
+        if: ${{ !cancelled() }}
+        run: |
+          node tool/dist/cli.mjs matrix-diff --baseline evidence/base --root head/test/fixtures/react-app --out evidence/head --fail-on-change --json > evidence/head-command.json
+      - name: Write coverage and revision summary
+        if: ${{ always() }}
+        run: node tool/scripts/summarizeVisualDiff.mjs evidence >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: component-visual-diffs
+          path: evidence/
+          if-no-files-found: warn

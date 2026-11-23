@@ -23,6 +23,24 @@ afterAll(async () => close?.());
 
 type Content = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 
+it("exports and replays regression checks with explicit failed outcomes in text and structured evidence", async () => {
+  const rendered = await client.callTool({ name: "render_component", arguments: {
+    file: "components/VerificationPanel.tsx", export: "VerificationPanel", props: {}, output: "summary",
+    expectations: [{ target: { role: "button", name: "Save", exact: true }, state: "count", value: 3, timeoutMs: 20 },
+      { target: { role: "button", name: "Open dialog", exact: true }, state: "enabled", value: true }],
+  } });
+  expect(rendered.isError).toBe(true);
+  expect((rendered.structuredContent as any).errors).toEqual([]);
+  expect((rendered.content as Content)[0].text).toContain("1 failed");
+  const saved = await client.callTool({ name: "capture_recipe", arguments: { captureId: (rendered.structuredContent as any).captureId } });
+  expect(saved.isError).toBeFalsy();
+  const replay = await client.callTool({ name: "render_recipe", arguments: { recipe: (saved.structuredContent as any).recipe, output: "summary" } });
+  expect(replay.isError).toBe(true);
+  expect((replay.structuredContent as any).expectations[0].status).toBe("failed");
+  expect((replay.structuredContent as any).expectations[1]).toMatchObject({ status: "passed", observed: { enabled: true } });
+  expect((replay.content as Content)[0].text).toContain("1 failed");
+});
+
 it("reports real render phases when the client requests progress", async () => {
   const progress: Array<{ progress: number; message?: string }> = [];
   const result = await client.callTool({ name: "render_component", arguments: { file: "components/ProductCard.tsx", export: "ProductCard", props: { title: "Progress", price: 3 }, output: "summary", capturePolicy: { scroll: {} }, inspection: { layout: true, fonts: true } } }, undefined, { onprogress: (event) => { progress.push(event); } });
@@ -63,13 +81,13 @@ it("continues a bounded audit without repeating components and rejects malformed
 describe("MCP tools (what a coding agent calls)", () => {
   it("offers render, usage and blast-radius tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "describe_props", "inspect_project", "list_usages", "render_component", "render_diff", "render_usages"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["audit_components", "capture_recipe", "describe_props", "inspect_project", "list_usages", "render_component", "render_diff", "render_matrix", "render_matrix_diff", "render_recipe", "render_usages"]);
   });
 
   it("distinguishes static inspection from rendering project code with possible external effects", async () => {
     const { tools } = await client.listTools();
     for (const tool of tools) {
-      const staticTool = ["describe_props", "list_usages", "inspect_project"].includes(tool.name);
+      const staticTool = ["capture_recipe", "describe_props", "list_usages", "inspect_project"].includes(tool.name);
       expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: staticTool, idempotentHint: staticTool, destructiveHint: !staticTool, openWorldHint: !staticTool });
     }
   });
@@ -254,4 +272,25 @@ it("paginates usage renders and returns structured per-usage evidence", async ()
   expect((next.structuredContent as any).nextCursor).toBe("2");
   const last = await client.callTool({ name: "render_usages", arguments: { ...args, cursor: "3" } });
   expect((last.structuredContent as any).nextCursor).toBeNull();
+});
+
+it("exposes compact matrix evidence and baseline comparisons with machine-readable contracts", async () => {
+  const tools = await client.listTools();
+  expect(tools.tools.find((tool) => tool.name === "render_matrix")?.outputSchema).toBeDefined();
+  expect((tools.tools.find((tool) => tool.name === "render_matrix")!.inputSchema.properties!.output as any).default).toBe("summary");
+  const rendered = await client.callTool({ name: "render_matrix", arguments: {
+    target: { file: "components/MatrixCard.tsx", exportName: "MatrixCard", props: { title: "A real small-screen check" } },
+    cases: [{ id: "phone-dark", viewport: { width: 390, height: 844 }, theme: "dark" }],
+  } });
+  expect(rendered.isError).toBe(false);
+  const report = rendered.structuredContent as any;
+  expect(report.coverage).toMatchObject({ requested: 1, executed: 1 });
+  expect(report.cells[0].render.png).toBeUndefined();
+  expect((rendered.content as Content).some((item) => item.type === "image")).toBe(false);
+  const compared = await client.callTool({ name: "render_matrix_diff", arguments: { baselines: [{ id: "phone-dark", captureId: report.cells[0].render.captureId }], output: "both" } });
+  expect((compared.structuredContent as any).cells[0].status).toBe("unchanged");
+  expect((compared.content as Content).filter((item) => item.type === "image")).toHaveLength(3);
+  const expired = await client.callTool({ name: "render_matrix_diff", arguments: { baselines: [{ id: "unknown", captureId: "expired-case" }] } });
+  expect(expired.isError).toBe(true);
+  expect((expired.structuredContent as any).cells[0].status).toBe("not-compared");
 });

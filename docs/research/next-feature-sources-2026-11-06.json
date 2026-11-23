@@ -1,0 +1,112 @@
+{
+  "researchedOn": "2026-11-06",
+  "projectVersion": "0.0.21",
+  "sourceCommit": "78102c4bd8bd0d211bd54f7966dd83da875745a6",
+  "method": [
+    "local source inspection",
+    "Agent Reach Exa web search",
+    "connected GitHub repository metadata and selected source/license reads",
+    "official documentation"
+  ],
+  "implementationStatus": "proposal only; no runtime packages installed or third-party implementation copied",
+  "repositories": [
+    {
+      "repo": "microsoft/playwright",
+      "url": "https://github.com/microsoft/playwright",
+      "license": "Apache-2.0",
+      "archived": false,
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "storybookjs/storybook",
+      "url": "https://github.com/storybookjs/storybook",
+      "license": "MIT",
+      "archived": false,
+      "defaultBranch": "next"
+    },
+    {
+      "repo": "mswjs/msw",
+      "url": "https://github.com/mswjs/msw",
+      "license": "MIT",
+      "archived": false,
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "vitest-dev/vitest",
+      "url": "https://github.com/vitest-dev/vitest",
+      "license": "MIT",
+      "archived": false,
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "benjitaylor/agentation",
+      "url": "https://github.com/benjitaylor/agentation",
+      "license": "NOASSERTION",
+      "archived": false,
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "histoire-dev/histoire",
+      "url": "https://github.com/histoire-dev/histoire",
+      "license": "MIT",
+      "archived": false,
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "fwouts/previewjs",
+      "url": "https://github.com/fwouts/previewjs",
+      "license": "NOASSERTION",
+      "archived": true,
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "reg-viz/reg-suit",
+      "url": "https://github.com/reg-viz/reg-suit",
+      "license": "MIT",
+      "archived": false,
+      "defaultBranch": "master"
+    },
+    {
+      "repo": "mswjs/playwright",
+      "url": "https://github.com/mswjs/playwright",
+      "license": "MIT",
+      "archived": false,
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "antfu-collective/vite-plugin-inspect",
+      "url": "https://github.com/antfu-collective/vite-plugin-inspect",
+      "license": "MIT",
+      "archived": false,
+      "defaultBranch": "main"
+    }
+  ],
+  "licenseNotes": {
+    "agentation": "Verified LICENSE: PolyForm Shield 1.0.0; reference only for this plan",
+    "previewjs": "Archived; root LICENSE says individual packages are MIT or AGPL-3.0; inspect actual package before reuse"
+  },
+  "primarySources": [
+    "https://storybook.js.org/docs/ai/mcp/overview",
+    "https://playwright.dev/docs/locators#strictness",
+    "https://playwright.dev/docs/test-assertions",
+    "https://playwright.dev/docs/actionability",
+    "https://playwright.dev/docs/codegen",
+    "https://playwright.dev/docs/test-snapshots",
+    "https://playwright.dev/docs/api/class-tracing",
+    "https://histoire.dev/guide/visual-testing",
+    "https://histoire.dev/guide/mcp",
+    "https://github.com/mswjs/playwright",
+    "https://vitest.dev/guide/browser/component-testing",
+    "https://chromedevtools.github.io/devtools-protocol/tot/CSS/#method-getMatchedStylesForNode",
+    "https://modelcontextprotocol.io/specification/2025-11-25/server/resources",
+    "https://docs.daily.dev/content-guidelines/",
+    "https://docs.daily.dev/content-moderation/"
+  ],
+  "limits": [
+    "No competitor installed or benchmarked in this research turn",
+    "No new runtime failure reproduced; strict targeting limitations were observed in source",
+    "No universal framework support or client compatibility claim",
+    "MSW adapter integration remains untested",
+    "Daily.dev needs eligible maker-written content; not automatic generated promotion"
+  ]
+}

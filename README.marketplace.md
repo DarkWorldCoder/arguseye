@@ -1,5 +1,7 @@
 # Arguseye — component previews beside your code
 
+Version 0.0.22 adds viewport/theme matrix capture and comparison, regression-check controls, explicit readiness/expectations (including enabled/disabled controls), saved JSON recipes and CLI comparisons across checkouts. See the [rendering contract](https://github.com/DarkWorldCoder/arguseye/blob/main/docs/rendering.md#readiness-expectations-and-saved-checks) and [CI examples](https://github.com/DarkWorldCoder/arguseye/blob/main/docs/ci.md). Automatic selection from modified files remains planned.
+
 Preview React, browser-renderable Next.js, Vue 3, and Svelte components (including React Router and Remix browser components) from your project without starting the app or writing stories. Inspect unsaved edits, choose real usage props, and compare a change against a saved baseline.
 
 <p align="center"><img src="https://darkworldcoder.github.io/arguseye/assets/vscode-panel.png" alt="Actual VS Code screenshot showing component source beside the Arguseye preview, with export, usage, viewport, props and baseline controls" width="1000"></p>

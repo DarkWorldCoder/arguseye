@@ -10,6 +10,21 @@ beforeAll(async () => { renderer = await createRenderer({ root }); });
 afterAll(async () => renderer?.close());
 
 describe("putting a component into a state before capture", () => {
+  it("rejects ambiguous actions and lets callers explicitly target captured portals", async () => {
+    const file = path.join(root, "components/VerificationPanel.tsx");
+    const ambiguous = await renderer.render({ file, exportName: "VerificationPanel", props: {}, actions: [{ click: { role: "button", name: "Save", exact: true } }] });
+    expect(ambiguous.errors.join("\n")).toMatch(/ambiguous|strict mode violation/i);
+    expect(ambiguous.actionsApplied).toBe(0);
+    const portal = await renderer.render({ file, exportName: "VerificationPanel", props: {}, actions: [
+      { click: { role: "button", name: "Open dialog", exact: true } },
+      { click: { role: "button", name: "Confirm", scope: "capture" } },
+    ] });
+    expect(portal.errors).toEqual([]);
+    expect(portal.actionsApplied).toBe(2);
+    expect(portal.snapshot).toContain("confirmed");
+    expect(portal.snapshot).not.toContain('dialog "Review"');
+  });
+
   it("runs click, fill and press actions on the warm page, then captures that state", async () => {
     const result = await renderer.render({
       file: menu, exportName: "Menu", props: { items },

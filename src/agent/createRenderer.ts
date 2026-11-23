@@ -1,3 +1,7 @@
+import { createMatrixRun, matrixCell, matrixRequestSchema, matrixBaselinesSchema, type MatrixRequest, type MatrixReport } from "./renderMatrix.js";
+import type { PersistedCapture } from "./captureFiles.js";
+import { locateTarget, runChecks, validateChecks, actionsSchema, type RenderCondition, type CheckEvidence } from "./renderChecks.js";
+import { createRenderRecipe, readRenderRecipe, type RenderRecipe } from "./renderRecipe.js";
 import { fileFromUrl } from "../server/fileUrl.js";
 import { inspectRender, errorLocations, type AccessibilityEvidence, type ElementEvidence, type ErrorLocation, type InspectionRequest } from "./inspectRender.js";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -9,7 +13,7 @@ import { routeFor, routePath } from "../project/routeFor.js";
 import { defaultRouteFile } from "../project/appContext.js";
 import path from "node:path";
 import { compareCaptures, type DiffResult } from "./compareCaptures.js";
-import { chromium, type Browser, type CDPSession, type Locator, type Page } from "playwright-core";
+import { chromium, type Browser, type CDPSession, type Page } from "playwright-core";
 import { createPreviewServer, type PreviewServer } from "../server/createPreviewServer.js";
 import { createResolver } from "../server/resolver.js";
 import type { Frame, PreviewTarget } from "../server/page.js";
@@ -17,7 +21,7 @@ import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
 import { propsSchema, sampleProps, componentMetadata, type PropSchema } from "../props/propsSchema.js";
 import { listExports, pickExport } from "../project/pickExport.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { frameworkOf } from "../project/framework.js";
 import { classicKind } from "../project/classicKind.js";
 import { FileAccessError } from "../server/createFileAccess.js";
@@ -40,6 +44,9 @@ export type RenderRequest = PreviewTarget & {
   frame?: Frame;
   /** Steps run on the rendered component before capture, to reach a state (open, filled, hovered). */
   actions?: Action[];
+  /** Caller-defined readiness before capture and separately reported behavioral expectations. */
+  ready?: RenderCondition[];
+  expectations?: RenderCondition[];
   /** Storage seeded before the component mounts (logged-in, feature flags); cleared again afterwards. */
   storage?: { local?: Record<string, string>; session?: Record<string, string> };
 };
@@ -50,7 +57,8 @@ export type Action = {
   press?: string; wait?: number; scroll?: { y?: number; x?: number };
   value?: string;
 };
-export type Target = { role?: string; name?: string; text?: string; label?: string; placeholder?: string; testId?: string; selector?: string; exact?: boolean };
+/** Strict targets default to the root; capture explicitly searches the isolated document including portals. */
+export type Target = { role?: string; name?: string; text?: string; label?: string; placeholder?: string; testId?: string; selector?: string; exact?: boolean; scope?: "root" | "capture" };
 
 /** Observed capture identity detects known cross-machine differences, not every rendering variable. */
 export type CaptureEnvironment = { browserName: "chromium"; browserVersion: string; platform: string; arch: string; osRelease: string; deviceScaleFactor: number; toolVersion: string };
@@ -61,6 +69,8 @@ export type RenderResult = {
   /** Native template engine identity, actual dependencies and unresolved context. */
   template?: import("../server/createTemplateRenderer.js").TemplateEvidence;
   fixtureProvenance?: FixtureProvenance;
+  readiness?: CheckEvidence[];
+  expectations?: CheckEvidence[];
   scrollCapture?: ScrollEvidence;
   build?: PreviewServer["build"];
   accessibility?: AccessibilityEvidence;
@@ -73,7 +83,7 @@ export type RenderResult = {
   /** Immutable baseline id, absent when rendering failed. */
   captureId?: string;
   /** What was rendered and how; a diff replays the same request against the current source. */
-  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures" | "inspection" | "capturePolicy" | "engine" | "profile" | "templateResolved">;
+  target: { file: string; exportName: string; props: Record<string, unknown> } & Pick<RenderRequest, "usage" | "inContext" | "frame" | "actions" | "storage" | "theme" | "fixtures" | "inspection" | "capturePolicy" | "engine" | "profile" | "templateResolved" | "ready" | "expectations">;
   viewport: { width: number; height: number };
   sourceRevision: string;
   unresolved: string[];
@@ -118,6 +128,7 @@ export type Changes = {
   /** Where the pixels changed, in the new image. */
   changedRegion: { x: number; y: number; width: number; height: number } | null;
   snapshotChanged: boolean;
+  expectationsChanged?: boolean;
   /** Accessibility-tree lines removed (-) and added (+) since the previous render. */
   snapshotDiff: string;
   newErrors: string[];
@@ -143,8 +154,16 @@ export type Renderer = {
   /** Renders one bounded page from a single usage-index query. */
   renderUsages(request: RenderRequest & { offset?: number; limit?: number }, control?: RenderControl): Promise<{ results: Array<RenderResult & { usage: string }>; total: number; nextOffset: number | null }>;
   diff(baselineId: string, control?: RenderControl): Promise<DiffResult>;
+  /** Checks up to twelve explicit contexts as one serialized, bounded job. */
+  renderMatrix(request: MatrixRequest, control?: RenderControl): Promise<MatrixReport>;
+  /** Replays matching immutable baselines; missing IDs remain explicitly untested. */
+  diffMatrix(baselines: Array<{ id: string; captureId?: string }>, control?: RenderControl): Promise<MatrixReport>;
   /** Imports a persisted CLI capture into this renderer's bounded session cache. */
-  restoreCapture(capture: RenderResult): string;
+  restoreCapture(capture: PersistedCapture): string;
+  /** Exports selected baseline inputs as a portable local regression check. */
+  recipe(captureId: string, options?: { includeBrowserInputs?: boolean }): RenderRecipe;
+  /** Replays validated explicit inputs in fresh verification state, retaining their original provenance. */
+  renderRecipe(recipe: unknown, control?: RenderControl): Promise<RenderResult>;
   listUsages(file: string, exportName?: string): Promise<Usage[]>;
   /** What the component accepts, from its TypeScript type, plus sample props that satisfy the required ones. */
   describeProps(file: string, exportName?: string): Promise<{ props: PropSchema[]; sample: Record<string, unknown>; metadata?: Awaited<ReturnType<typeof componentMetadata>> }>;
@@ -175,7 +194,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     try { job.onProgress({ file, phase, message }); } catch { /* A disconnected observer must not break the render. */ }
   };
   let closing = false;
-  const serial = <T>(work: () => Promise<T>, control: RenderControl = {}): Promise<T> => {
+  const serial = <T>(work: () => Promise<T>, control: RenderControl = {}, onInterrupted?: (error: Error) => T): Promise<T> => {
     const timeout = control.timeoutMs ?? 30000;
     if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120000) return Promise.reject(new Error("Render deadline must be between 1 and 120000 ms"));
     const result = queue.then(async () => {
@@ -198,7 +217,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       try {
         if (control.signal?.aborted) abort();
         return await Promise.race([interrupted, jobs.run(job, async () => { guard(); return work(); })]);
-      } finally { job.active = false; clearTimeout(timer); control.signal?.removeEventListener("abort", abort); }
+      } catch (error) { if (stopped && onInterrupted) return onInterrupted(stopped); throw error; } finally { job.active = false; clearTimeout(timer); control.signal?.removeEventListener("abort", abort); }
     });
     queue = result.catch(() => {}); return result;
   };
@@ -360,6 +379,24 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     describeProps,
     ready: () => prewarmed,
     render: (request, control) => serial(() => renderWithProvider(request), control),
+    recipe: (id, recipeOptions) => {
+      const capture = captures.get(id);
+      if (!capture) throw new Error(`Unknown or expired capture "${id}"; render again before saving a regression check.`);
+      return createRenderRecipe(options.root, capture, recipeOptions?.includeBrowserInputs);
+    },
+    renderRecipe: (value, control) => serial(async () => {
+      const { recipe, request } = readRenderRecipe(options.root, value);
+      const result = await renderWithProvider(request);
+      result.propsSource = recipe.provenance.propsSource;
+      result.unresolved = unique([...recipe.provenance.unresolved, ...result.unresolved]);
+      result.warnings = unique([...recipe.provenance.inputWarnings, ...result.warnings]);
+      if (result.propsSource === "sample" && !result.warnings.some((w) => w.startsWith("Sample props"))) result.warnings.push("Sample props were replayed from a saved check; these are not real application data.");
+      result.complete &&= !result.unresolved.length && !result.warnings.length;
+      result.diagnostics = renderDiagnostics(result);
+      if (result.changes && !result.complete) result.changes.status = "incomplete";
+      if (result.captureId && captures.has(result.captureId)) { captures.set(result.captureId, { ...structuredClone(result), png: Buffer.from(result.png) }); trim(); }
+      return result;
+    }, control),
     renderUsages: (request, control) => serial(async () => {
       const { offset = 0, limit = 12, ...target } = request;
       server.assertAccess(path.resolve(options.root, target.file));
@@ -372,10 +409,70 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     }, control),
     restoreCapture: (capture) => {
       if ((capture.build?.mode ?? "native") !== (server.build?.mode ?? "native")) throw new Error(`Baseline uses ${capture.build?.mode ?? "native"} compilation; create a renderer with the same buildMode before comparing.`);
-      return remember(capture);
+      let file = capture.target.file;
+      if (capture.captureOrigin) {
+        const { projectRoot, targetFile } = capture.captureOrigin;
+        if (!path.isAbsolute(projectRoot) || !targetFile || targetFile.includes("\\") || targetFile.includes("\0") || targetFile.split("/").includes("..") || path.isAbsolute(targetFile) || /^[A-Za-z]:/.test(targetFile)) throw new Error(`Baseline target must be project-relative: ${targetFile}`);
+        if (path.resolve(projectRoot, targetFile) !== path.resolve(capture.target.file)) throw new Error(`Baseline target does not match its saved origin: ${capture.target.file}`);
+        file = path.resolve(options.root, targetFile);
+      } else {
+        const relative = path.relative(path.resolve(options.root), file);
+        if (path.isAbsolute(relative) || relative === ".." || relative.startsWith(".." + path.sep)) throw new Error(`Legacy baseline target "${file}" cannot move between checkouts; capture a new baseline with --root and --capture-dir.`);
+      }
+      server.assertAccess(file);
+      if (!statSync(file).isFile()) throw new Error(`Baseline target is not a file: ${file}`);
+      return remember({ ...capture, target: { ...capture.target, file } });
     },
-    diff: (baselineId, control) => serial(async () => {
-      const before = captures.get(baselineId);
+    diff: (baselineId, control) => serial(() => diffOne(baselineId), control),
+    renderMatrix: (request, control) => {
+      const { target, cases } = matrixRequestSchema.parse(request) as MatrixRequest;
+      return matrixJob(cases.map((cell) => cell.id), async (index) => {
+        const { id, ...context } = cases[index];
+        return matrixCell(id, await renderWithProvider({ ...target, ...context }));
+      }, control);
+    },
+    diffMatrix: (input, control) => {
+      const baselines = matrixBaselinesSchema.parse(input);
+      // Snapshot the requested baselines before new captures can evict them within this job.
+      return matrixJob(baselines.map((cell) => cell.id), async (index, saved) => {
+        const { id, captureId } = baselines[index];
+        const before = captureId ? saved.get(captureId) : undefined;
+        if (!before) return { id, status: "not-compared", errors: [`Missing or expired baseline "${captureId ?? id}". Render this case again to establish a baseline.`] };
+        const diff = await diffOne(captureId!, before);
+        return matrixCell(id, diff.after, diff);
+      }, control, baselines.map((cell) => cell.captureId).filter((id): id is string => !!id));
+    },
+    async close() {
+      closing = true;
+      await queue;
+      captures.clear(); lastResults.clear(); pages.clear();
+      await browser.close();
+      if (!options.server) await server.close();
+    },
+  };
+
+  async function matrixJob(ids: string[], execute: (index: number, saved: Map<string, RenderResult>) => Promise<import("./renderMatrix.js").MatrixCell>, control?: RenderControl, baselineIds: string[] = []): Promise<MatrixReport> {
+    if (control?.timeoutMs !== undefined && control.timeoutMs > 30000) throw new Error("Matrix deadline must be between 1 and 30000 ms");
+    let run: ReturnType<typeof createMatrixRun> | undefined;
+    let revision = "";
+    const revisionState = () => JSON.stringify(server.syncDisk());
+    return serial(async () => {
+      await server.ready();
+      run = createMatrixRun(ids);
+      revision = revisionState();
+      const saved = new Map(baselineIds.flatMap((id) => captures.has(id) ? [[id, captures.get(id)!] as const] : []));
+      for (let index = 0; index < ids.length; index++) {
+        guard();
+        run.begin(index);
+        try { run.record(index, await execute(index, saved)); }
+        catch (error) { guard(); run.record(index, { id: ids[index], status: "failed", errors: [(error as Error).message] }); }
+      }
+      return run.finish(revision === revisionState());
+    }, control, (error) => (run ?? createMatrixRun(ids)).finish(!run || revision === revisionState(), new Error(error.message.replace(/; no capture was saved\./, "; remaining cases were not completed and earlier captures are retained."))));
+  }
+
+  async function diffOne(baselineId: string, saved?: RenderResult): Promise<DiffResult> {
+      const before = saved ?? captures.get(baselineId);
       if (!before) throw new Error(`Unknown or expired baseline "${baselineId}"; render the component again to capture a new baseline.`);
       // Same props, parent box, frame, actions and storage as the baseline. The usage is replayed only for its
       // ancestors (in-context), so a baseline without context still compares after its call site moved.
@@ -392,15 +489,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (after.captureId && captures.has(after.captureId)) { captures.set(after.captureId, { ...structuredClone(after), png: Buffer.from(after.png) }); trim(); }
       const page = await pages.get(pageKey(before.target.file, before.viewport, await classicOf(before.target.file)))!;
       return compareCaptures(page, { ...structuredClone(before), png: Buffer.from(before.png) }, after);
-    }, control),
-    async close() {
-      closing = true;
-      await queue;
-      captures.clear(); lastResults.clear(); pages.clear();
-      await browser.close();
-      if (!options.server) await server.close();
-    },
-  };
+  }
 
   /**
    * Compound components (Radix, shadcn) throw "`Tooltip` must be used within `TooltipProvider`" when rendered alone.
@@ -422,9 +511,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     return second;
   }
 
-  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], storage, fixtures, inspection, capturePolicy, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
+  async function render({ viewport = { width: 1280, height: 800 }, usage, inContext, frame, actions = [], ready, expectations, storage, fixtures, inspection, capturePolicy, ...rest }: RenderRequest, resolved?: Usage, provider?: string): Promise<RenderResult> {
       guard();
       validateFixtures(fixtures);
+      validateChecks("ready", ready); validateChecks("expectations", expectations);
+      if (!Array.isArray(actions) || actions.length) {
+        const validated = actionsSchema.safeParse(actions);
+        if (!validated.success) throw new Error(`Invalid actions: ${validated.error.message}`);
+      }
       if (capturePolicy !== undefined && (!capturePolicy || typeof capturePolicy !== "object" || Array.isArray(capturePolicy))) throw new Error("Capture policy must be a JSON object.");
       if (capturePolicy?.scroll !== undefined) validateScrollPolicy(capturePolicy.scroll);
       const started = performance.now();
@@ -534,8 +628,14 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (actions.length) progress(rest.file, "actions", "Applying preview actions");
       const actionsApplied = await runActions(page, actions, errors);
       if (actions.length) pointerDirty.add(page);
+      const renderFailed = (ready?.length || expectations?.length) && (errors.length || await page.evaluate(() => !!(window as any).__CP__?.errors?.length));
+      const prerequisites = actionsApplied < actions.length ? "Preview actions did not complete." : renderFailed ? "The component did not render successfully." : undefined;
+      if (ready?.length) progress(rest.file, "settle", "Waiting for requested preview state");
+      const readiness = ready ? await runChecks(page, ready, guard, prerequisites) : undefined;
+      const notReady = readiness?.some((check) => check.status !== "passed");
 
       const warnings: string[] = server.warnings(rest.file);
+      if (notReady) warnings.push("Requested readiness incomplete: " + readiness!.filter((check) => check.status !== "passed").map((check) => check.message).join("; "));
       if (unresolved.length) warnings.push("Runtime usage inputs were not evaluated: " + unresolved.join(", "));
       if (propsSource === "sample" && !layout) warnings.push("Sample props were generated from types; these are not real application data.");
       if (layout) warnings.push(`Rendered as the app uses it: the layout chain down to ${path.relative(options.root, rest.file)} (providers, elements, <html>/<body> classes) around ${JSON.stringify(target.props!.children)}.`);
@@ -620,6 +720,9 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       if (settled.assets.length) warnings.push("Assets did not settle: " + settled.assets.join(", "));
       if (settled.pendingFrames) warnings.push("Animation-frame callbacks remain pending; capture stability is not established.");
       if (settled.infiniteWebAnimation) warnings.push("Infinite web animation paused at its first frame for verification; its running state was not captured.");
+      if (expectations?.length) progress(rest.file, "inspect", "Checking explicit expectations");
+      const failedBeforeCapture = expectations?.length && (errors.length || await page.evaluate(() => !!(window as any).__CP__?.errors?.length));
+      const expectationResults = expectations ? await runChecks(page, expectations, guard, prerequisites ?? (notReady ? "Readiness checks did not pass." : failedBeforeCapture ? "The component did not render successfully." : undefined)) : undefined;
       marks.push(performance.now());
       progress(rest.file, "capture", "Capturing preview");
       const { box, inPage, runtimeWarnings, portals, canvases, empty, environment, deviceScaleFactor, rootIntact, scheduledTimers } = await page.evaluate(() => {
@@ -710,6 +813,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       const result: RenderResult = {
         ...(template ? { template } : {}), ...(traversal ? { scrollCapture: traversal } : {}),
         png, snapshot, scheduledTimers, ...inspectionResult, ...(locations.length ? { errorLocations: locations } : {}), environment: { ...environment, capture: { ...captureRuntime, deviceScaleFactor }, clock: fixtures?.now !== undefined ? "fixed" : "system", random: fixtures?.randomSeed !== undefined ? "seeded" : "runtime" }, build: server.build ?? { mode: "native", executesVitePlugins: false }, ...(evidence ? { fixtureProvenance: structuredClone(evidence) } : {}), errors: allErrors, ms: Math.round(performance.now() - started), reloaded, propsSource, contextApplied,
+        ...(readiness ? { readiness } : {}), ...(expectationResults ? { expectations: expectationResults } : {}),
         ...(portals ? { portals } : {}),
         ...(canvases.length ? { canvases } : {}),
         ...(failedRequests.length ? { failedRequests: unique(failedRequests).slice(0, 10) } : {}),
@@ -721,7 +825,7 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
         target: structuredClone({
           file: rest.file, exportName: rest.exportName ?? "default", props,
           ...(target.engine ? { engine: target.engine, profile: target.profile, templateResolved: true } : {}),
-          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}), ...(inspection ? { inspection } : {}), ...(capturePolicy ? { capturePolicy } : {}),
+          ...(usage ? { usage } : {}), ...(inContext ? { inContext } : {}), ...(frame ? { frame } : {}), ...(actions.length ? { actions } : {}), ...(ready ? { ready } : {}), ...(expectations ? { expectations } : {}), ...(storage ? { storage } : {}), ...(rest.theme ? { theme: rest.theme } : {}), ...(fixtures ? { fixtures } : {}), ...(inspection ? { inspection } : {}), ...(capturePolicy ? { capturePolicy } : {}),
         }), viewport: { ...viewport },
         sourceRevision: server.sourceRevision(), unresolved, warnings: unique(warnings), complete: !allErrors.length && !warnings.length,
       };
@@ -730,12 +834,12 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
       }
       result.diagnostics = renderDiagnostics(result);
       if (png.byteLength <= limits.pngBytes && !allErrors.length) result.captureId = remember(result);
-      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, storage, rest.theme, fixtures, inspection, capturePolicy]);
+      const signature = JSON.stringify([rest.file, rest.exportName ?? "default", props, viewport, target.context, frame, actions, ready, expectations, storage, rest.theme, fixtures, inspection, capturePolicy]);
       const previous = lastResults.get(signature);
       if (previous) {
         const diff = await compareCaptures(page, { ...structuredClone(previous), png: Buffer.from(previous.png) }, result);
         result.changes = {
-          status: diff.status, changedPercent: diff.changedPercent, changedPixels: diff.changedPixels, changedRegion: diff.changedRegion, snapshotChanged: diff.snapshotChanged,
+          status: diff.status, changedPercent: diff.changedPercent, changedPixels: diff.changedPixels, changedRegion: diff.changedRegion, snapshotChanged: diff.snapshotChanged, expectationsChanged: diff.expectationsChanged,
           snapshotDiff: lineDiff(previous.snapshot, result.snapshot), newErrors: diff.newErrors, resolvedErrors: diff.resolvedErrors,
           newWarnings: diff.newWarnings, resolvedWarnings: diff.resolvedWarnings, environmentChanges: diff.environmentChanges,
         };
@@ -759,7 +863,6 @@ function lineDiff(before: string, after: string): string {
 
 /** Runs the requested steps inside #root; stops at the first failure and records it as a readable error. */
 async function runActions(page: Page, actions: Action[], errors: string[]): Promise<number> {
-  const root = page.locator("#root");
   const TIMEOUT = 2000;
   let applied = 0;
   for (const [index, action] of actions.entries()) {
@@ -767,7 +870,7 @@ async function runActions(page: Page, actions: Action[], errors: string[]): Prom
     try {
       const verb = (["click", "dblclick", "hover", "fill", "type", "check", "uncheck", "select", "focus"] as const).find((v) => action[v]);
       if (verb) {
-        const target = locate(root, action[verb]!);
+        const target = locateTarget(page, action[verb]!);
         if (verb === "fill") await target.fill(action.value ?? "", { timeout: TIMEOUT });
         else if (verb === "type") await target.pressSequentially(action.value ?? "", { timeout: TIMEOUT });
         else if (verb === "select") await target.selectOption(action.value ?? "", { timeout: TIMEOUT });
@@ -779,7 +882,7 @@ async function runActions(page: Page, actions: Action[], errors: string[]): Prom
         else await target.click({ timeout: TIMEOUT });
       } else if (action.press) await page.keyboard.press(action.press);
       else if (action.scroll) await page.evaluate((s) => window.scrollTo({ left: s.x ?? 0, top: s.y ?? 0 }), action.scroll);
-      else if (action.wait) await page.waitForTimeout(Math.min(action.wait, 5000));
+      else if (action.wait !== undefined) await page.waitForTimeout(Math.min(action.wait, 5000));
       else throw new Error("unknown action");
       applied++;
     } catch (error) {
@@ -789,17 +892,6 @@ async function runActions(page: Page, actions: Action[], errors: string[]): Prom
     }
   }
   return applied;
-}
-
-function locate(root: Locator, t: Target): Locator {
-  if (t.selector) return root.locator(t.selector).first();
-  if (t.testId) return root.getByTestId(t.testId).first();
-  if (t.label) return root.getByLabel(t.label, { exact: t.exact }).first();
-  if (t.placeholder) return root.getByPlaceholder(t.placeholder, { exact: t.exact }).first();
-  if (t.role) return root.getByRole(t.role as any, { name: t.name, exact: t.exact }).first();
-  if (t.text) return root.getByText(t.text, { exact: t.exact }).first();
-  if (t.name) return root.getByText(t.name, { exact: t.exact }).first();
-  throw new Error("target needs role, text, label, placeholder, testId or selector");
 }
 
 function describeAction(a: Action): string {

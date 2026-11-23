@@ -40,7 +40,19 @@ If Arguseye saves you a dev-server restart, [a star](https://github.com/DarkWorl
   <a href="#performance-and-boundaries">Performance & boundaries</a>
 </p>
 
-## In development
+## Verification in 0.0.22
+
+**Viewport verification:** select up to 12 explicit viewport/theme/state cases, capture each, and compare the same saved inputs after an edit. MCP returns compact per-case evidence; CLI saves replayable directories; VS Code checks mobile/desktop in light/dark. Missing baselines, cancelled cases and unresolved inputs remain visible. See [matrix examples and limits](docs/rendering.md#viewport-theme-and-state-matrices). Requires 0.0.22 or later.
+
+**CI comparisons:** replay saved cases across base/head checkouts and use `--fail-on-change` to fail CI after writing visual and accessibility-text difference evidence. The [pull-request workflow](docs/ci.md) exercises the React fixture with fixed base inputs. It runs registered cases; automatic changed-file selection remains future work. Requires 0.0.22 or later.
+
+Try the included four-case example from a built source checkout with fixture dependencies installed:
+
+```sh
+node dist/cli.mjs matrix test/fixtures/react-app/arguseye-matrix.json --root test/fixtures/react-app --out /tmp/arguseye-matrix
+```
+
+**State verification:** explicit readiness conditions, strict actions (including explicit portal scope), behavioral expectations and portable regression recipes now share the MCP, CLI and VS Code engine. Enabled/disabled control checks include fieldset and ARIA state; conflicting locator strategies are rejected before rendering. Failed checks remain visible even when pixels match. See [the verification contract and examples](docs/rendering.md#readiness-expectations-and-saved-checks); these APIs require 0.0.22 or later.
 
 Version **0.0.21** fixes Smarty compilation across clock boundaries and supports project-owned Smarty configuration, including unsaved helper and partial edits. See the [native template setup contract](docs/templates.md).
 

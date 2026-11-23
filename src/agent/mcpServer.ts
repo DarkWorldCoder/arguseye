@@ -1,6 +1,7 @@
+import { matrixRequestSchema, matrixBaselinesSchema, type MatrixReport } from "./renderMatrix.js";
 import path from "node:path";
 import { VIEWPORTS, parseViewport } from "./viewports.js";
-import { renderEvidence, diffEvidence } from "./renderEvidence.js";
+import { renderEvidence, diffEvidence, matrixEvidence } from "./renderEvidence.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
@@ -10,7 +11,9 @@ import { inspectProject } from "../project/inspectProject.js";
 import { audit } from "./audit.js";
 import { packageVersion } from "../packageVersion.js";
 import { FileAccessError } from "../server/createFileAccess.js";
-import { toolOutputSchema, projectOutputSchema, renderOutputSchema, diffOutputSchema, propsOutputSchema, usagesOutputSchema, usageRendersOutputSchema, auditOutputSchema } from "./evidenceSchemas.js";
+import { conditionsSchema, actionsSchema } from "./renderChecks.js";
+import { recipeSchema } from "./renderRecipe.js";
+import { toolOutputSchema, matrixOutputSchema, projectOutputSchema, renderOutputSchema, diffOutputSchema, propsOutputSchema, usagesOutputSchema, usageRendersOutputSchema, auditOutputSchema } from "./evidenceSchemas.js";
 
 /** Sent to the agent when it connects: when to reach for these tools, so it uses them without being asked. */
 const INSTRUCTIONS = `Arguseye shows you UI you cannot otherwise see: it renders React (incl. browser-compatible Next.js, React Router, Remix), Vue, Svelte, Preact and Solid components from source with project packages and supported layout, provider, style and font context. Missing inputs and runtime approximations remain explicit. No application server or authored stories are required.
@@ -19,7 +22,9 @@ Use it whenever you create or change a UI component, its styles or its props:
 - Call inspect_project if setup or rendering fails: it checks the selected project and installed framework packages without starting a browser or executing project config.
 - After the edit, call render_component on the file (pass usage from list_usages for real props). Read errors first, then the accessibility snapshot, then the image.
 - Before saying a UI change is done, render it again and read \`changes\`; for a shared component, render_usages checks every call site.
+- For responsive or theme-sensitive edits, use render_matrix with 1–12 named explicit contexts, then render_matrix_diff with matching case/capture IDs. Default summary is compact. Read coverage and unresolved inputs: not-run or not-compared is never unchanged.
 - Use theme "dark" when the app has a dark mode, viewport "mobile" for responsive work, actions to open menus, dialogs or tabs.
+- Use ready for explicit pre-capture state and expectations for caller-defined checks. Read passed/failed/not-run outcomes even when errors is empty. capture_recipe exports resolved regression inputs; render_recipe replays them against current source. Browser input omissions require explicit repair before replay.
 - After a refactor or dependency upgrade, audit_components renders everything once and lists what broke.
 Rendering runs trusted project code in a browser. Project code and actions can contact external services or change application state; rendering is not an offline sandbox. Missing context, sampled props and unsettled assets remain limitations even when pixels render.`;
 
@@ -36,6 +41,7 @@ const target = {
   export: z.string().optional().describe('Export to render; defaults to "default"'),
 };
 const output = z.enum(["image", "summary", "both"]).optional().describe("Return images, compact evidence, or both (default)");
+const matrixOutputFormat = z.enum(["image", "summary", "both"]).default("summary").describe("Return compact summary (default), images, or both for each explicitly requested case");
 const fixtureSchema = z.object({
   now: z.string().optional(), randomSeed: z.number().int().min(0).max(0xffffffff).optional(), locale: z.string().optional(), timezoneId: z.string().optional(),
   reducedMotion: z.enum(["reduce", "no-preference"]).optional().describe("Static verification defaults to reduce. Use no-preference to inspect the normal-motion state; this does not automatically scroll or finish scroll-triggered reveals."),
@@ -96,13 +102,15 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
     const errors = result.errors.length
       ? `errors:\n${result.errors.map((e) => `- ${tidy(e)}`).join("\n")}`
       : "errors: none";
+    const checks = [...(result.readiness ?? []), ...(result.expectations ?? [])];
+    const checkText = checks.length ? `checks: ${checks.filter((c) => c.status === "passed").length} passed, ${checks.filter((c) => c.status === "failed").length} failed, ${checks.filter((c) => c.status === "not-run").length} not run\n${checks.filter((c) => c.status !== "passed").map((c) => c.message).join("\n")}` : "";
     const logged = (result.console ?? []).map((l) => "console.error: " + tidy(l)).join("\n");
     const inspection = [
       ...(result.errorLocations ?? []).filter((r) => r.original).slice(0, 5).map((r) => `original source: ${rel(r.original!.file)}:${r.original!.line}:${r.original!.column}`),
       ...(result.accessibility ? [`${result.accessibility.engine}: ${result.accessibility.violations.length} violations; ${result.accessibility.incomplete.length} checks need review (${result.accessibility.ms} ms)`, ...result.accessibility.violations.slice(0, 10).map((r) => `${r.id}: ${r.help} ${JSON.stringify(r.nodes[0]?.target ?? [])}`)] : []),
     ].join("\n");
     const recovery = [...new Set((result.diagnostics ?? []).map((d) => d.recovery))].slice(0, 3).map((step) => "next: " + step).join("\n");
-    return `${head.join(" · ")}\n${errors}\n${logged ? logged + "\n" : ""}${inspection ? inspection + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}${result.unresolved.length ? "\nunresolved: " + result.unresolved.join("; ") : ""}${recovery ? "\n" + recovery : ""}\n${result.snapshot}`;
+    return `${head.join(" · ")}\n${errors}\n${checkText ? checkText + "\n" : ""}${logged ? logged + "\n" : ""}${inspection ? inspection + "\n" : ""}${result.warnings.map((w) => "warning: " + w).join("\n")}${result.unresolved.length ? "\nunresolved: " + result.unresolved.join("; ") : ""}${recovery ? "\n" + recovery : ""}\n${result.snapshot}`;
   }
 
   /** Short stacks with project-relative paths instead of preview-server URLs. */
@@ -133,6 +141,65 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
     structuredContent: { schemaVersion: 1, errors: [(error as Error).message], diagnostics: [{ code: error instanceof FileAccessError ? "ACCESS_DENIED" : "TOOL_FAILED", severity: "error", phase: "request", message: (error as Error).message }] },
   });
 
+  function matrixResponse(report: MatrixReport, format = "summary") {
+    const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
+    for (const cell of report.cells) {
+      if (format !== "image") content.push({ type: "text", text: `${cell.id}: ${cell.status}${cell.render?.captureId ? `; captureId: ${cell.render.captureId}` : ""}${cell.errors.length ? "\n" + cell.errors.join("\n") : ""}` });
+      if (format !== "summary") {
+        content.push({ type: "text", text: cell.id });
+        for (const [label, png] of cell.diff ? [["Before", cell.diff.before.png], ["After", cell.diff.after.png], ["Changed pixels", cell.diff.diffPng]] as const : cell.render ? [["Render", cell.render.png]] as const : []) {
+          content.push({ type: "text", text: label }, { type: "image", data: png.toString("base64"), mimeType: "image/png" });
+        }
+      }
+    }
+    if (format !== "image") content.unshift({ type: "text", text: `${report.status}: ${report.coverage.executed}/${report.coverage.requested} executed; ${report.coverage.compared} compared; ${report.coverage.notRun} not run. ${report.warnings.join(" ")} Visual changes require review; these are isolated renders, not application integration tests.` });
+    return { isError: !report.complete || report.coverage.failed > 0, content, structuredContent: matrixEvidence(report) };
+  }
+
+  server.registerTool("render_matrix", {
+    annotations: EXECUTES_CODE, outputSchema: toolOutputSchema(matrixOutputSchema),
+    description: "Check up to 12 explicitly named viewport/theme/prop/state cases for one component as a single bounded job (30 seconds maximum). Default output is token-cheap summary; each case returns captureId, checks, context and coverage. props and check/action arrays replace target defaults. No unselected combinations are tested.",
+    inputSchema: { ...matrixRequestSchema.shape, output: matrixOutputFormat, timeoutMs: z.number().int().min(1).max(30000).optional() },
+  }, async ({ target, cases, output, timeoutMs }, extra) => {
+    try { return matrixResponse(await (await getRenderer()).renderMatrix({ target, cases } as import("./renderMatrix.js").MatrixRequest, control(extra, timeoutMs)), output); }
+    catch (error) { return failure(error); }
+  });
+  server.registerTool("render_matrix_diff", {
+    annotations: EXECUTES_CODE, outputSchema: toolOutputSchema(matrixOutputSchema),
+    description: "Compare current source using each named baseline's immutable resolved inputs. Missing/evicted baselines are not-compared, never unchanged. Capture IDs belong to this session and remain subject to its existing retention limits. A changed result is review evidence, not a correctness verdict.",
+    inputSchema: { baselines: matrixBaselinesSchema, output: matrixOutputFormat, timeoutMs: z.number().int().min(1).max(30000).optional() },
+  }, async ({ baselines, output, timeoutMs }, extra) => {
+    try { return matrixResponse(await (await getRenderer()).diffMatrix(baselines, control(extra, timeoutMs)), output); }
+    catch (error) { return failure(error); }
+  });
+
+  server.registerTool("capture_recipe", {
+    annotations: READ_ONLY,
+    description: "Export a captured render as portable JSON regression inputs. Browser storage and network bodies are omitted by default and omissions block replay. Review props and image/source context before sharing; this does not approve a baseline or write project files.",
+    inputSchema: { captureId: z.string(), includeBrowserInputs: z.boolean().optional().describe("Explicitly include browser storage and network fixture bodies. Review for secrets before saving or sharing.") },
+    outputSchema: toolOutputSchema(z.object({ schemaVersion: z.literal(1), errors: z.array(z.string()), recipe: recipeSchema })),
+  }, async (args) => {
+    try {
+      const recipe = (await getRenderer()).recipe(args.captureId, { includeBrowserInputs: args.includeBrowserInputs });
+      return { content: [{ type: "text" as const, text: JSON.stringify(recipe) }], structuredContent: { schemaVersion: 1, errors: [], recipe } };
+    } catch (error) { return failure(error); }
+  });
+
+  server.registerTool("render_recipe", {
+    annotations: EXECUTES_CODE,
+    description: "Replay saved regression inputs against current project source in fresh verification state. Returns readiness and expectation outcomes separately from runtime errors. Original source provenance is retained; this does not approve visual changes or start the application.",
+    inputSchema: { recipe: recipeSchema, output, timeoutMs: deadline }, outputSchema: toolOutputSchema(renderOutputSchema),
+  }, async (args, extra) => {
+    try {
+      const result = await (await getRenderer()).renderRecipe(args.recipe, control(extra, args.timeoutMs));
+      return { isError: result.errors.length > 0 || [...(result.readiness ?? []), ...(result.expectations ?? [])].some((c) => c.status !== "passed"),
+        content: [
+          ...(args.output === "summary" ? [] : [{ type: "image" as const, data: result.png.toString("base64"), mimeType: "image/png" }]),
+          ...(args.output === "image" ? [] : [{ type: "text" as const, text: describe({ ...result.target, viewport: result.viewport }, result) }]),
+        ], structuredContent: renderEvidence(result) };
+    } catch (error) { return failure(error); }
+  });
+
   server.registerTool("inspect_project", {
     annotations: READ_ONLY, outputSchema: toolOutputSchema(projectOutputSchema),
     description: "Diagnose the selected project before rendering: actual installed framework versions, native compiler limits and actionable missing-package/config diagnostics. Does not launch Chromium, execute project configuration or test full-app fidelity.",
@@ -156,19 +223,21 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
         usage: z.string().optional().describe('Usage id from list_usages, e.g. "app/page.tsx:9"'),
         in_context: z.boolean().optional().describe("With usage: render inside the call site's JSX ancestors, so the parent's size, layout and background apply (the capture is the parent box)"),
         frame: z.object({ width: z.number(), height: z.number(), background: z.string().optional(), padding: z.number().optional() }).optional().describe("Render inside a stand-in parent box of this size and background"),
-        actions: z.array(z.record(z.string(), z.unknown())).optional().describe('Steps before capture, e.g. [{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"},{"hover":{"text":"Save"}},{"press":"Enter"},{"wait":300}]. Targets: role+name, text, label, placeholder, testId, selector.'),
+        actions: actionsSchema.optional().describe('Steps before capture, e.g. [{"click":{"role":"button","name":"Open"}},{"fill":{"label":"Email"},"value":"a@b.c"},{"press":"Enter"}]. Targets: role+name, text, label, placeholder, testId, selector. Targets must be unambiguous. Default scope is root; scope:"capture" explicitly includes body-level portals in the isolated preview document.'),
         storage: z.object({ local: z.record(z.string(), z.string()).optional(), session: z.record(z.string(), z.string()).optional() }).optional().describe("localStorage/sessionStorage seeded before mount (auth tokens, flags); cleared after"),
         inspection: z.object({ accessibility: z.boolean().optional(), sources: z.boolean().optional(), layout: z.boolean().optional(), fonts: z.boolean().optional(), selector: z.string().min(1).max(2000).optional() }).optional().describe("Optional axe/source inspection and bounded DOM layout/actual used-font evidence. selector focuses DOM/source/font evidence within the captured scope and enables layout; axe retains the full captured scope. Adds separately reported analysis cost; observations do not establish correctness or accessibility conformance."),
         fixtures: fixtureSchema, timeoutMs: deadline,
+        ready: conditionsSchema.optional().describe("Explicit pre-capture readiness conditions. At most 20 checks, each bounded to 5 seconds; timeout preserves the PNG with incomplete evidence."),
+        expectations: conditionsSchema.optional().describe("Explicit behavioral expectations, reported as passed/failed/not-run separately from render errors. A matching screenshot does not override failed expectations."),
         props: z.record(z.string(), z.unknown()).optional().describe("Props to render with (merged over the usage's props). For a classic-script widget: its config, exposed as window.__ARGUSEYE_WIDGET_CONFIG__; data-* keys become attributes of its <script> tag"),
         ...look,
       },
     },
     async (args, extra) => {
       try {
-        const request = { engine: args.engine, profile: args.profile, file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions as any, storage: args.storage, fixtures: args.fixtures, inspection: args.inspection, capturePolicy: args.capturePolicy, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
+        const request = { engine: args.engine, profile: args.profile, file: abs(args.file), exportName: args.export, usage: args.usage, inContext: args.in_context, frame: args.frame, actions: args.actions, ready: args.ready, expectations: args.expectations, storage: args.storage, fixtures: args.fixtures, inspection: args.inspection, capturePolicy: args.capturePolicy, props: args.props, viewport: viewport(args.viewport), theme: args.theme };
         const { result, content } = await renderContent(request, args.output, control(extra, args.timeoutMs));
-        return { isError: result.errors.length > 0, content, structuredContent: renderEvidence(result) };
+        return { isError: result.errors.length > 0 || [...(result.readiness ?? []), ...(result.expectations ?? [])].some((c) => c.status !== "passed"), content, structuredContent: renderEvidence(result) };
       } catch (error) {
         return failure(error);
       }
@@ -185,9 +254,9 @@ export async function createMcpServer(options: { root: string; warmup?: boolean;
       const result = await (await getRenderer()).diff(args.baselineId, control(extra, args.timeoutMs));
       const content = [
         ...(args.output === "summary" ? [] : [result.before.png, result.after.png, result.diffPng].map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }))),
-        ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\ncontext: before ${result.before.complete ? "complete" : "incomplete"}, after ${result.after.complete ? "complete" : "incomplete"}\n${[...new Set([...result.after.warnings, ...result.newWarnings])].join("\n")}\n${result.resolvedWarnings.map((w) => "resolved warning: " + w).join("\n")}\n${result.newErrors.join("\n")}` }]),
+        ...(args.output === "image" ? [] : [{ type: "text" as const, text: `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels${result.changedRegion ? ` in ${result.changedRegion.width}x${result.changedRegion.height} at ${result.changedRegion.x},${result.changedRegion.y}` : ""}; accessibility changed: ${result.snapshotChanged}; expectations changed: ${result.expectationsChanged}\nbaselineId: ${args.baselineId}; captureId: ${result.after.captureId ?? "none"}\ncontext: before ${result.before.complete ? "complete" : "incomplete"}, after ${result.after.complete ? "complete" : "incomplete"}\n${[...new Set([...result.after.warnings, ...result.newWarnings])].join("\n")}\n${result.resolvedWarnings.map((w) => "resolved warning: " + w).join("\n")}\n${result.newErrors.join("\n")}` }]),
       ];
-      return { isError: result.after.errors.length > 0, content, structuredContent: diffEvidence(result) };
+      return { isError: result.after.errors.length > 0 || [...(result.after.readiness ?? []), ...(result.after.expectations ?? [])].some((c) => c.status !== "passed"), content, structuredContent: diffEvidence(result) };
     } catch (error) { return failure(error); }
   });
 

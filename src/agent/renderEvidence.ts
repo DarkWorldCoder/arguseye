@@ -8,3 +8,10 @@ export function renderEvidence({ png: _png, ...evidence }: RenderResult) { retur
 export function diffEvidence({ before, after, diffPng: _png, ...evidence }: DiffResult) {
   return { schemaVersion: 1 as const, errors: after.errors, ...evidence, before: renderEvidence(before), after: renderEvidence(after) };
 }
+
+/** Compact batch metadata omits buffers and avoids duplicating a comparison's after evidence. */
+export function matrixEvidence(report: import("./renderMatrix.js").MatrixReport) {
+  return { schemaVersion: 1 as const, ...report, cells: report.cells.map(({ render, diff, ...cell }) => ({ ...cell,
+    ...(diff ? { diff: diffEvidence(diff) } : render ? { render: renderEvidence(render) } : {}),
+  })) };
+}
