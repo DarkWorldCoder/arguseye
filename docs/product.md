@@ -1,6 +1,8 @@
 # Product: why Arguseye exists
 
-Unreleased state-verification work adds strict action targets, explicit readiness/expectations (including enabled/disabled controls), saved regression recipes, MCP replay tools, CLI checks and VS Code check controls. See [the development contract](rendering.md#readiness-expectations-and-saved-checks-unreleased). Unreleased bounded viewport/theme/state matrices now expose the same per-case captures, checks and comparisons through MCP, CLI and VS Code. Published 0.0.21 does not contain these APIs; impact analysis and later roadmap features remain proposals.
+Version 0.0.22 adds strict action targets, explicit readiness/expectations (including enabled/disabled controls), saved regression recipes, MCP replay tools, CLI checks and VS Code check controls. See [the verification contract](rendering.md#readiness-expectations-and-saved-checks). Bounded viewport/theme/state matrices expose per-case captures, checks and comparisons through MCP, CLI and VS Code. Automatic impact analysis remains planned.
+
+Version 0.0.22 CI support adds saved-baseline relocation between project checkouts and `--fail-on-change` for CLI comparisons, plus a pull-request workflow for the registered React fixture matrix. See [the CI workflow and limits](ci.md). It runs explicit cases; automatic selection from modified files remains a proposal.
 
 Arguseye is eyes for coding agents and developers: see a component, change it, and inspect the consequences without starting the application or writing stories.
 

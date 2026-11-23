@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.0.22 (2026-11-23)
+
+- Replay persisted captures across base/head checkouts using saved project-relative targets and fixed inputs. Retain baseline provenance and context gaps; reject targets outside permitted roots.
+- Add `--fail-on-change` to CLI `diff` and `matrix-diff`. Save comparison artifacts before failing changed evidence. Failed baseline expectations remain failures even when the head repairs them.
+- Add a read-only pull-request workflow for registered React cases, with per-case artifacts, plan identity and coverage. Automatic selection from modified files remains planned.
 
 - Distinguish interrupted matrix work from untouched cases and advertise compact summary output as the matrix MCP default.
 - Verify up to 12 explicitly named viewport/theme/prop/state cases through MCP, persisted CLI captures and VS Code. Compare immutable matching inputs; report missing baselines, source edits, cancelled cases and behavioral failures explicitly. Matrix work has a 30-second total budget and retains existing session caps.
@@ -10,7 +14,7 @@
 - Reject ambiguous action targets instead of clicking the first match; explicit `scope: "capture"` includes body-level portals in the isolated preview.
 - Add bounded readiness and behavioral expectations with passed/failed/not-run evidence, preserved failure screenshots, cancellation and baseline replay. Comparisons report changed expectation outcomes even for identical pixels and accessibility text.
 - Save versioned project-relative regression recipes and replay them through MCP, CLI and VS Code. Browser storage and network bodies require explicit export; omissions prevent silent incomplete replay. Recipes retain sampled/unresolved input provenance and never approve baselines automatically.
-- Add VS Code regression-check controls and CLI `check`, `shot --checks` and `--save-recipe`. These features are not published under 0.0.21; impact workflows remain planned.
+- Add VS Code regression-check controls and CLI `check`, `shot --checks` and `--save-recipe`. These features require 0.0.22; automatic impact selection remains planned.
 
 ## 0.0.21 — 2026-11-06
 

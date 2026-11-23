@@ -30,7 +30,7 @@ Vue projects use their own Vue 3 runtime and `vue/compiler-sfc`. Server-only Nex
 
 ## VS Code extension (the human panel)
 
-Marketplace listing: [**Arguseye**](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye). Compatible editors can install a platform-specific VSIX; an Open VSX release has not been verified. To install a local build: `npm run package` then `code --install-extension arguseye-*.vsix`.
+Marketplace listing: [**Arguseye**](https://marketplace.visualstudio.com/items?itemName=ayushniroula.arguseye). Compatible editors can install a platform-specific VSIX; the [Open VSX listing](https://open-vsx.org/extension/ayushniroula/arguseye) provides native builds for compatible editors. To install a local build: `npm run package` then `code --install-extension arguseye-*.vsix`.
 
 ## Skill only (no MCP)
 

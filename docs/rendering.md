@@ -1,8 +1,10 @@
 # Reproducible and bounded verification
 
-## Readiness, expectations and saved checks (unreleased)
+<a id="readiness-expectations-and-saved-checks"></a>
 
-These additions are in the state-verification development branch, not the published 0.0.21 package. They use the same engine from MCP, CLI and VS Code.
+## Readiness, expectations and saved checks (0.0.22+)
+
+These APIs require version 0.0.22 or later. They use the same engine from MCP, CLI and VS Code.
 
 `ready` conditions run after actions and before asset settling. `expectations` run after settling, immediately before capture. A condition has a strict `target`, a `state`, an optional expected `value` and `timeoutMs` (default 2000, maximum 5000). Each list allows 20 conditions; the whole render retains its execution deadline. Actions allow at most 50 single-verb steps. Plain renders do not poll conditions.
 
@@ -36,7 +38,7 @@ arguseye diff --baseline ./baseline --out ./comparison --json
 
 Browser storage and network fixture bodies are omitted by default, and nonempty `omittedInputs` blocks replay. Review contents before selecting `includeBrowserInputs: true` (MCP) or `--include-browser-inputs` (CLI), or explicitly repair the inputs before clearing the omission list. Props, selectors, URLs, diagnostics and screenshots can still contain private data; this is not automatic anonymization. Existing realpath/file-access rules also apply to loaded source.
 
-VS Code's **Regression checks** section accepts the same JSON. **Run checks** shows a fresh captured image and outcomes while preserving interactive preview state. **Save regression check** uses a file dialog, and **Run saved check** replays a selected JSON file. Baseline capture uses configured checks; comparison replays the baseline's inputs. This milestone does not include matrix runs, source picking, a backend reconstruction system or arbitrary JavaScript readiness callbacks.
+VS Code's **Regression checks** section accepts the same JSON. **Run checks** shows a fresh captured image and outcomes while preserving interactive preview state. **Save regression check** uses a file dialog, and **Run saved check** replays a selected JSON file. Baseline capture uses configured checks; comparison replays the baseline's inputs. See the matrix section for bounded viewport/state runs. Source picking, backend reconstruction and arbitrary JavaScript readiness callbacks remain outside this contract.
 
 ## Interaction targets
 
@@ -167,7 +169,9 @@ Error evidence includes original TypeScript/JSX locations where the native trans
 
 Vue prop inspection reads imported type declarations, literal macro defaults and ordinary runtime prop declarations. Static `defineEmits` and `defineSlots` names are returned alongside limitations. React inspection retains TypeScript parameter props and literal defaults. Computed declarations and complex type-level behavior require source review. Vue compilation uses the same approved roots and unsaved type buffers as metadata inspection.
 
-## Viewport, theme and state matrices (unreleased)
+<a id="viewport-theme-and-state-matrices"></a>
+
+## Viewport, theme and state matrices (0.0.22+)
 
 A desktop screenshot does not cover the mobile or dark-mode version of a component. `render_matrix` checks **1–12 explicitly selected cases** in one queued job; there is no automatic Cartesian expansion. Cases require a unique ID (1–64 letters, digits, underscores or hyphens), numeric viewport (each dimension 1–4096) and light/dark theme. Optional case props, actions, readiness and expectations **replace** those target defaults. Each case starts in fresh component state.
 
@@ -189,7 +193,9 @@ node dist/cli.mjs matrix matrix.json --root /path/to/project --out /tmp/arguseye
 node dist/cli.mjs matrix-diff --baseline /tmp/arguseye-baseline --root /path/to/project --out /tmp/arguseye-comparison --json
 ```
 
-These commands are **development source APIs**, not part of published 0.0.21. Use the development build until a release contains them. Output directories must be new, so a comparison cannot overwrite its own baseline. They contain PNGs and resolved input/context evidence, which may include private data; review before sharing or committing.
+For CI, add `--fail-on-change` to `diff` or `matrix-diff` to return exit code 1 for complete visual, dimension, accessibility-text or expectation changes. Failed or incomplete comparisons already fail. Artifacts are saved before applying the change policy. New captures can replay their project-relative target in a different checkout with `--root`; all other saved evidence and input values retain their original provenance. See [cross-checkout CI usage and the pull-request workflow](ci.md).
+
+These commands require version 0.0.22 or later. Output directories must be new, so a comparison cannot overwrite its own baseline. They contain PNGs and resolved input/context evidence, which may include private data; review before sharing or committing.
 
 For MCP comparisons pass `render_matrix_diff` a `baselines` array of `{id, captureId}` from the first report. Inputs come exclusively from the saved capture, including resolved usage props, viewport, theme, actions and checks. The summary format is the matrix default; request `output: "both"` for per-case images or before/after/highlighted diff images. Ordinary render output defaults remain unchanged.
 

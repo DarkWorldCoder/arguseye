@@ -1,6 +1,6 @@
 # Arguseye — component previews beside your code
 
-Development branch: viewport/theme matrix capture and comparison, regression-check controls, explicit readiness/expectations (including enabled/disabled controls) and saved JSON recipes are unreleased. Published 0.0.21 does not contain them. See the [development rendering contract](https://github.com/DarkWorldCoder/arguseye/blob/feat/state-verification/docs/rendering.md#readiness-expectations-and-saved-checks-unreleased); branch availability is separate from Marketplace publication.
+Version 0.0.22 adds viewport/theme matrix capture and comparison, regression-check controls, explicit readiness/expectations (including enabled/disabled controls), saved JSON recipes and CLI comparisons across checkouts. See the [rendering contract](https://github.com/DarkWorldCoder/arguseye/blob/main/docs/rendering.md#readiness-expectations-and-saved-checks) and [CI examples](https://github.com/DarkWorldCoder/arguseye/blob/main/docs/ci.md). Automatic selection from modified files remains planned.
 
 Preview React, browser-renderable Next.js, Vue 3, and Svelte components (including React Router and Remix browser components) from your project without starting the app or writing stories. Inspect unsaved edits, choose real usage props, and compare a change against a saved baseline.
 
