@@ -6,14 +6,16 @@ Thanks for helping agents see. This page is the short version; the rules every c
 
 ```bash
 git clone https://github.com/DarkWorldCoder/arguseye && cd arguseye
-npm install
-for d in test/fixtures/*/; do (cd "$d" && npm install); done
+npm ci
+node scripts/installFixtures.mjs
 npx playwright-core install chromium-headless-shell   # or have Chrome installed
 npm test              # unit + headless browser tests
 npm run test:vscode   # the panel in a real VS Code (downloads one on first run)
 ```
 
 Node 22 or newer. Linux, macOS and Windows should all work; the native pieces (oxc, Rolldown, Lightning CSS) ship binaries for each.
+
+The full fixture suite also needs Python 3.12, PHP 8.3 with Composer, and Ruby 3.3 with Bundler 4.0.23. Make their executables available before running the fixture installer. Tests use one worker so unit compilation does not compete with the browser timing measurements; the 100 ms assertions remain unchanged.
 
 ## How changes land
 
