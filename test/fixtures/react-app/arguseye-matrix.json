@@ -1,0 +1,14 @@
+{
+  "target": {
+    "file": "components/MatrixCard.tsx",
+    "exportName": "MatrixCard",
+    "props": { "title": "Starter" },
+    "expectations": [{ "target": { "role": "button", "name": "Count 0" }, "state": "visible" }]
+  },
+  "cases": [
+    { "id": "mobile-light", "viewport": { "width": 390, "height": 844 }, "theme": "light" },
+    { "id": "mobile-dark", "viewport": { "width": 390, "height": 844 }, "theme": "dark", "props": { "title": "A longer team plan name on a narrow screen" } },
+    { "id": "desktop-light", "viewport": { "width": 1280, "height": 800 }, "theme": "light" },
+    { "id": "desktop-dark", "viewport": { "width": 1280, "height": 800 }, "theme": "dark" }
+  ]
+}
