@@ -1,34 +1,39 @@
-name: Windows path probe
+name: Uncommitted release patch validation
 on:
   push:
     branches: [codex/windows-path-probe]
 permissions:
   contents: read
 jobs:
-  probe:
-    runs-on: windows-latest
+  full-suite:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Apply exact candidate patch
+        shell: python
+        run: |
+          import base64, hashlib, pathlib, subprocess
+          subprocess.run(['git','apply','-'], input=base64.b64decode('ZGlmZiAtLWdpdCBhL3NyYy9zZXJ2ZXIvbW9kdWxlR3JhcGgudHMgYi9zcmMvc2VydmVyL21vZHVsZUdyYXBoLnRzCmluZGV4IDU2ZjllY2IuLmExN2VjOTYgMTAwNjQ0Ci0tLSBhL3NyYy9zZXJ2ZXIvbW9kdWxlR3JhcGgudHMKKysrIGIvc3JjL3NlcnZlci9tb2R1bGVHcmFwaC50cwpAQCAtMzEyLDcgKzMxMiwxMSBAQCBleHBvcnQgY2xhc3MgTW9kdWxlR3JhcGggewogICAgIGxldCBmaWxlID0gcmVzb2x2ZWQ7CiAgICAgaWYgKHRoaXMucm9vdEFsaWFzKSB7CiAgICAgICAvLyBVc2UgdGhlIHNlbGVjdGVkIHdvcmtzcGFjZSdzIGlkZW50aXR5IGZvciBhcHAgbW9kdWxlcywgbWF0Y2hpbmcgZWRpdG9yIGJ1ZmZlcnMgYW5kIHZlcnNpb24gcXVlcmllcy4KLSAgICAgIGNvbnN0IHJlbGF0aXZlID0gcGF0aC5yZWxhdGl2ZSh0aGlzLnJvb3RBbGlhcy5jYW5vbmljYWwsIHJlc29sdmVkKTsKKyAgICAgIGxldCByZWxhdGl2ZSA9IHBhdGgucmVsYXRpdmUodGhpcy5yb290QWxpYXMuY2Fub25pY2FsLCByZXNvbHZlZCk7CisgICAgICAvLyBXaW5kb3dzJyByZXNvbHZlciBjYW4gcmV0YWluIERPUyBzaG9ydCBuYW1lcyB3aGlsZSBOb2RlIGV4cGFuZHMgdGhlbSAoUlVOTkVSfjEgdnMgcnVubmVyYWRtaW4pLgorICAgICAgaWYgKHJlbGF0aXZlID09PSAiLi4iIHx8IHJlbGF0aXZlLnN0YXJ0c1dpdGgoIi4uIiArIHBhdGguc2VwKSB8fCBwYXRoLmlzQWJzb2x1dGUocmVsYXRpdmUpKSB7CisgICAgICAgIHRyeSB7IHJlbGF0aXZlID0gcGF0aC5yZWxhdGl2ZSh0aGlzLnJvb3RBbGlhcy5jYW5vbmljYWwsIHJlYWxwYXRoU3luYy5uYXRpdmUocmVzb2x2ZWQpKTsgfSBjYXRjaCB7fQorICAgICAgfQogICAgICAgaWYgKHJlbGF0aXZlICE9PSAiLi4iICYmICFyZWxhdGl2ZS5zdGFydHNXaXRoKCIuLiIgKyBwYXRoLnNlcCkgJiYgIXBhdGguaXNBYnNvbHV0ZShyZWxhdGl2ZSkpIGZpbGUgPSBwYXRoLnJlc29sdmUodGhpcy5yb290QWxpYXMuc2VsZWN0ZWQsIHJlbGF0aXZlKTsKICAgICB9CiAgICAgY29uc3QgcXVlcnkgPSB0aGlzLnF1ZXJ5KGZpbGUpOwo='), check=True)
+          actual=hashlib.sha256(pathlib.Path('src/server/moduleGraph.ts').read_bytes()).hexdigest()
+          assert actual == 'be6097bae6887817ba0c6579a632286e0e3d69b9175bef428f49d192ad662ac9', actual
+          print('Verified candidate moduleGraph.ts SHA-256: '+actual)
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Inspect project junction identities
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import os from 'node:os';
-          import path from 'node:path';
-          import {ResolverFactory} from 'oxc-resolver';
-          const directory=fs.mkdtempSync(path.join(os.tmpdir(),'arguseye-path-probe-'));
-          const root=path.join(directory,'head'), alias=root+'-workspace';
-          fs.mkdirSync(path.join(root,'components'),{recursive:true});
-          fs.writeFileSync(path.join(root,'contexts.tsx'),'export const Auth=1');
-          fs.symlinkSync(root,alias,'junction');
-          const resolver=new ResolverFactory({extensions:['.tsx','.ts','.js'],conditionNames:['browser','import','module','default']});
-          const canonical=fs.realpathSync.native(alias);
-          const resolved=resolver.resolveFileSync(path.join(alias,'components','Card.tsx'),'../contexts').path;
-          console.log(JSON.stringify({temporary:os.tmpdir(),root,alias,canonical,resolved,realResolved:fs.realpathSync.native(resolved),relative:path.relative(canonical,resolved)},null,2));
-          NODE
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler: '4.0.23'
+      - run: node scripts/installFixtures.mjs
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm test
