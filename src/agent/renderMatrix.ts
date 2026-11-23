@@ -30,7 +30,7 @@ export type MatrixReport = {
 };
 /** Groups evidence without mistaking failed behavioral expectations for render exceptions. */
 export function matrixCell(id: string, render: RenderResult, diff?: DiffResult): MatrixCell {
-  const failed = render.errors.length || [...(render.readiness ?? []), ...(render.expectations ?? [])].some((check) => check.status === "failed");
+  const failed = (diff ? [diff.before, render] : [render]).some((capture) => capture.errors.length || [...(capture.readiness ?? []), ...(capture.expectations ?? [])].some((check) => check.status === "failed"));
   return { id, status: failed ? "failed" : !render.complete || diff?.status === "incomplete" ? "incomplete" : diff?.status ?? "passed", errors: [...render.errors], render, ...(diff ? { diff } : {}) };
 }
 /** Holds only this batch's results, preserving completed cases when the outer job is interrupted. */

@@ -1,4 +1,5 @@
 import { createMatrixRun, matrixCell, matrixRequestSchema, matrixBaselinesSchema, type MatrixRequest, type MatrixReport } from "./renderMatrix.js";
+import type { PersistedCapture } from "./captureFiles.js";
 import { locateTarget, runChecks, validateChecks, actionsSchema, type RenderCondition, type CheckEvidence } from "./renderChecks.js";
 import { createRenderRecipe, readRenderRecipe, type RenderRecipe } from "./renderRecipe.js";
 import { fileFromUrl } from "../server/fileUrl.js";
@@ -20,7 +21,7 @@ import { createUsageIndex } from "../usages/createUsageIndex.js";
 import { type Usage } from "../usages/findUsages.js";
 import { propsSchema, sampleProps, componentMetadata, type PropSchema } from "../props/propsSchema.js";
 import { listExports, pickExport } from "../project/pickExport.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { frameworkOf } from "../project/framework.js";
 import { classicKind } from "../project/classicKind.js";
 import { FileAccessError } from "../server/createFileAccess.js";
@@ -158,7 +159,7 @@ export type Renderer = {
   /** Replays matching immutable baselines; missing IDs remain explicitly untested. */
   diffMatrix(baselines: Array<{ id: string; captureId?: string }>, control?: RenderControl): Promise<MatrixReport>;
   /** Imports a persisted CLI capture into this renderer's bounded session cache. */
-  restoreCapture(capture: RenderResult): string;
+  restoreCapture(capture: PersistedCapture): string;
   /** Exports selected baseline inputs as a portable local regression check. */
   recipe(captureId: string, options?: { includeBrowserInputs?: boolean }): RenderRecipe;
   /** Replays validated explicit inputs in fresh verification state, retaining their original provenance. */
@@ -408,7 +409,19 @@ export async function createRenderer(options: { root: string; server?: PreviewSe
     }, control),
     restoreCapture: (capture) => {
       if ((capture.build?.mode ?? "native") !== (server.build?.mode ?? "native")) throw new Error(`Baseline uses ${capture.build?.mode ?? "native"} compilation; create a renderer with the same buildMode before comparing.`);
-      return remember(capture);
+      let file = capture.target.file;
+      if (capture.captureOrigin) {
+        const { projectRoot, targetFile } = capture.captureOrigin;
+        if (!path.isAbsolute(projectRoot) || !targetFile || targetFile.includes("\\") || targetFile.includes("\0") || targetFile.split("/").includes("..") || path.isAbsolute(targetFile) || /^[A-Za-z]:/.test(targetFile)) throw new Error(`Baseline target must be project-relative: ${targetFile}`);
+        if (path.resolve(projectRoot, targetFile) !== path.resolve(capture.target.file)) throw new Error(`Baseline target does not match its saved origin: ${capture.target.file}`);
+        file = path.resolve(options.root, targetFile);
+      } else {
+        const relative = path.relative(path.resolve(options.root), file);
+        if (path.isAbsolute(relative) || relative === ".." || relative.startsWith(".." + path.sep)) throw new Error(`Legacy baseline target "${file}" cannot move between checkouts; capture a new baseline with --root and --capture-dir.`);
+      }
+      server.assertAccess(file);
+      if (!statSync(file).isFile()) throw new Error(`Baseline target is not a file: ${file}`);
+      return remember({ ...capture, target: { ...capture.target, file } });
     },
     diff: (baselineId, control) => serial(() => diffOne(baselineId), control),
     renderMatrix: (request, control) => {

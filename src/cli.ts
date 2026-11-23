@@ -36,12 +36,13 @@ const HELP = `arguseye: inspect components and verify UI edits, no application s
       --capture-policy FILE.json configures traversal limits; --layout --fonts inspects geometry and actual fonts
       --inspect-selector CSS focuses DOM/source/font inspection within the captured scope and enables layout
 
-  arguseye diff --baseline DIR --out DIR [--json] [--root DIR]
+  arguseye diff --baseline DIR --out DIR [--fail-on-change] [--json] [--root DIR]
       Compare current source against a saved baseline; writes before/after/diff PNGs and JSON
+      --fail-on-change returns exit code 1 for visual or accessibility-text changes, after saving evidence
 
   arguseye matrix FILE.json --out DIR [--json] [--root DIR]
       Run explicit viewport/theme/state cases and save replayable captures in a new directory
-  arguseye matrix-diff --baseline DIR --out DIR [--json] [--root DIR]
+  arguseye matrix-diff --baseline DIR --out DIR [--fail-on-change] [--json] [--root DIR]
       Compare saved cases with their original inputs; missing captures remain not-compared
 
   arguseye check RECIPE.json [--out PNG] [--json] [--root DIR]
@@ -83,6 +84,7 @@ const { positionals, values } = parseArgs({
     output: { type: "string", default: "both" },
     "capture-dir": { type: "string" },
     baseline: { type: "string" },
+    "fail-on-change": { type: "boolean" },
     limit: { type: "string" },
     cursor: { type: "string" },
     fixtures: { type: "string" },
@@ -105,6 +107,7 @@ const [command, file] = positionals;
 const root = path.resolve(values.root!);
 const buildMode = values["build-mode"] as "native" | "vite";
 if (!["native", "vite"].includes(buildMode)) throw new Error(`Unknown build mode "${buildMode}"`);
+if (values["fail-on-change"] && command !== "diff" && command !== "matrix-diff") throw new Error("--fail-on-change requires diff or matrix-diff.");
 
 if (values.help || !command) {
   console.log(HELP);
@@ -148,7 +151,7 @@ if (values.help || !command) {
     const result = await renderer.diff(renderer.restoreCapture(baseline));
     await saveDiff(values.out, result);
     console.log(values.json ? JSON.stringify(diffEvidence(result)) : `${result.status}: ${result.changedPercent.toFixed(2)}% changed pixels; evidence in ${values.out}`);
-    process.exitCode = result.status === "incomplete" || result.after.expectations?.some((c) => c.status !== "passed") ? 1 : 0;
+    process.exitCode = result.status === "incomplete" || [result.before, result.after].some((capture) => capture.errors.length || [...(capture.readiness ?? []), ...(capture.expectations ?? [])].some((c) => c.status !== "passed")) || (values["fail-on-change"] && result.status === "changed") ? 1 : 0;
   } finally { await renderer.close(); }
 } else if (command === "matrix" || command === "matrix-diff") {
   let renderer: Awaited<ReturnType<typeof createRenderer>> | undefined;
@@ -178,13 +181,13 @@ if (values.help || !command) {
     }
     const report = request ? await renderer.renderMatrix(request, control) : await renderer.diffMatrix(baselines, control);
     for (const cell of report.cells) {
-      if (cell.render) await saveCapture(path.join(values.out, cell.id), cell.render);
+      if (cell.render) await saveCapture(path.join(values.out, cell.id), cell.render, root);
       if (cell.diff) await saveDiff(path.join(values.out, cell.id), cell.diff);
     }
     const evidence = matrixEvidence(report);
     await writeFile(path.join(values.out, "matrix.json"), JSON.stringify(evidence, null, 2));
     console.log(values.json ? JSON.stringify(evidence) : `${report.status}: ${report.coverage.executed}/${report.coverage.requested} cases executed, ${report.coverage.compared} compared; ${report.coverage.notRun} not run. Evidence in ${values.out}\n${report.cells.map((cell) => `${cell.id}: ${cell.status}`).join("\n")}`);
-    process.exitCode = !report.complete || report.coverage.failed ? 1 : 0;
+    process.exitCode = !report.complete || report.coverage.failed || (values["fail-on-change"] && report.coverage.changed > 0) ? 1 : 0;
   } catch (error) {
     const message = `Matrix: ${(error as Error).message}`;
     if (values.json) console.log(JSON.stringify({ schemaVersion: 1, errors: [message] })); else console.error(message);
@@ -199,7 +202,7 @@ if (values.help || !command) {
     renderer = await createRenderer({ root, buildMode });
     const result = await renderer.renderRecipe(value, { timeoutMs: values["timeout-ms"] ? Number(values["timeout-ms"]) : undefined });
     if (values.out) await writeFile(values.out, result.png);
-    if (values["capture-dir"]) await saveCapture(values["capture-dir"], result);
+    if (values["capture-dir"]) await saveCapture(values["capture-dir"], result, root);
     const checks = [...(result.readiness ?? []), ...(result.expectations ?? [])];
     console.log(values.json ? JSON.stringify({ ...renderEvidence(result), ...(values.out ? { image: path.resolve(values.out) } : {}) }) : `${checks.filter((c) => c.status === "passed").length}/${checks.length} checks passed · ${result.complete ? "complete" : "incomplete"} evidence\n${checks.filter((c) => c.status !== "passed").map((c) => c.message).join("\n")}\n${result.errors.join("\n")}`);
     process.exitCode = result.errors.length || !result.complete || checks.some((c) => c.status !== "passed") ? 1 : 0;
@@ -252,7 +255,7 @@ if (values.help || !command) {
         viewport: { width, height },
       }, { timeoutMs: values["timeout-ms"] ? Number(values["timeout-ms"]) : undefined });
       if (!["image", "summary", "both"].includes(values.output!)) throw new Error(`Unknown output "${values.output}"`);
-      if (values["capture-dir"]) await saveCapture(values["capture-dir"], result);
+      if (values["capture-dir"]) await saveCapture(values["capture-dir"], result, root);
       if (values["save-recipe"]) {
         if (!result.captureId) throw new Error("Cannot save a regression check from a failed render; fix the reported errors first.");
         await writeFile(values["save-recipe"], JSON.stringify(renderer.recipe(result.captureId, { includeBrowserInputs: values["include-browser-inputs"] }), null, 2) + "\n", { flag: "wx" });
